@@ -28,17 +28,17 @@ const TESTIMONIALS = [
 export function Testimonials() {
   return (
     <section className="bg-[var(--bg)] px-6 py-24 lg:px-[160px]">
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-14">
+      <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-14">
         <div className="flex flex-col items-center gap-4 text-center">
-          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.4px] text-[var(--accent-dark)]">
+          <p className="text-[13px] font-semibold uppercase tracking-[1.2px] text-[var(--accent)]">
             CLIENT NOTES
-          </span>
-          <h2 className="max-w-[640px] text-[28px] font-bold tracking-tight text-[var(--ink)] lg:text-[34px]">
+          </p>
+          <h2 className="max-w-[640px] text-[28px] font-semibold tracking-tight text-[var(--ink)] lg:text-[34px]">
             What Bangalore clients say about Gentle Space
           </h2>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid w-full gap-8 md:grid-cols-2">
           {TESTIMONIALS.map((t) => (
             <figure
               key={t.name}
@@ -47,7 +47,7 @@ export function Testimonials() {
               <blockquote className="text-base leading-[1.6] text-[var(--ink)]">
                 “{t.quote}”
               </blockquote>
-              <figcaption>
+              <figcaption className="flex flex-col gap-0.5">
                 <p className="text-[15px] font-semibold text-[var(--ink)]">{t.name}</p>
                 <p className="text-[13px] text-[var(--muted)]">{t.role}</p>
               </figcaption>

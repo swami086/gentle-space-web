@@ -1,14 +1,21 @@
 import { SERVICES_CONTENT } from "@/lib/content-services";
+import {
+  IconBanknote,
+  IconBuilding2,
+  IconCalendarCheck,
+  IconHandshake,
+  IconSearch,
+  IconTrendingUp,
+} from "@/components/icons";
 
-function CardIcon() {
-  return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-tint)]">
-      <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-        <path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" />
-      </svg>
-    </div>
-  );
-}
+const SERVICE_ICONS = {
+  "Tenant Representation": IconHandshake,
+  "Managed & Coworking Advisory": IconBuilding2,
+  "Custom Portfolio Strategy": IconTrendingUp,
+  "Tenant Sourcing & Leasing": IconSearch,
+  "Rent & Asset Positioning": IconBanknote,
+  "Renewal & Retention": IconCalendarCheck,
+} as const;
 
 export function Services() {
   return (
@@ -32,16 +39,21 @@ export function Services() {
               {group.label}
             </h3>
             <div className="grid w-full gap-6 md:grid-cols-3">
-              {group.items.map((item) => (
-                <article
-                  key={item.title}
-                  className="flex flex-col gap-3.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-7"
-                >
-                  <CardIcon />
-                  <h4 className="text-[17px] font-semibold text-[var(--ink)]">{item.title}</h4>
-                  <p className="text-sm leading-[1.5] text-[var(--muted)]">{item.body}</p>
-                </article>
-              ))}
+              {group.items.map((item) => {
+                const Icon = SERVICE_ICONS[item.title as keyof typeof SERVICE_ICONS];
+                return (
+                  <article
+                    key={item.title}
+                    className="flex flex-col gap-3.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-7"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-tint)] text-[var(--accent)]">
+                      {Icon ? <Icon size={22} /> : null}
+                    </div>
+                    <h4 className="text-[17px] font-semibold text-[var(--ink)]">{item.title}</h4>
+                    <p className="text-sm leading-[1.5] text-[var(--muted)]">{item.body}</p>
+                  </article>
+                );
+              })}
             </div>
           </div>
         ))}

@@ -1,14 +1,12 @@
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-[var(--accent)]" fill="currentColor" aria-hidden="true">
-      <path d="M6.5 11.2 3.3 8l1.1-1.1 2.1 2.1 5-5L12.6 5l-6.1 6.2z" />
-    </svg>
-  );
-}
+import { IconBadgeIndianRupee, IconMapPin, IconShieldCheck, IconTrendingUp } from "@/components/icons";
+
+const HIGHLIGHTS = [
+  { label: "Client-Focused Consulting", Icon: IconShieldCheck },
+  { label: "Proven Track Record", Icon: IconTrendingUp },
+  { label: "Local expertise", Icon: IconMapPin },
+] as const;
 
 export function About() {
-  const pills = ["Client-Focused Consulting", "Proven Track Record", "Local expertise"];
-
   return (
     <section id="why-us" className="bg-[var(--bg)] px-6 py-24 lg:px-[160px]">
       <div className="mx-auto grid max-w-[1120px] items-center gap-[72px] lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -29,20 +27,17 @@ export function About() {
             end in a high-trust manner.
           </p>
           <div className="flex flex-wrap gap-7">
-            {pills.map((pill) => (
-              <div key={pill} className="flex items-center gap-2">
-                <CheckIcon />
-                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{pill}</span>
+            {HIGHLIGHTS.map(({ label, Icon }) => (
+              <div key={label} className="flex items-center gap-2">
+                <Icon className="text-[var(--accent)]" size={16} />
+                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <aside className="flex flex-col gap-3 rounded-[var(--radius-lg)] bg-[var(--accent-dark)] p-8 text-white">
-          <svg viewBox="0 0 28 28" className="h-7 w-7 text-white" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <rect x="4" y="6" width="20" height="16" rx="2" />
-            <path d="M4 11h20" />
-          </svg>
+        <aside className="flex w-full flex-col gap-3 rounded-[var(--radius-lg)] bg-[var(--accent-dark)] p-8 text-white lg:w-[380px]">
+          <IconBadgeIndianRupee className="text-white" size={28} />
           <h3 className="text-[22px] font-bold tracking-tight">How fees work</h3>
           <p className="text-sm leading-[1.5] text-white/80">
             We charge no fees for standard requirements. For highly customised needs where we invest

@@ -46,11 +46,9 @@ export function FAQ() {
 
         <div className="flex w-full flex-col gap-8">
           {FAQ_ITEMS.map((item) => (
-            <div key={item.question} className="border-b border-[var(--border)] pb-7 last:border-b-0">
+            <div key={item.question} className="flex flex-col gap-2.5 pb-7">
               <h3 className="text-lg font-semibold text-[var(--ink)]">{item.question}</h3>
-              <p className="mt-2.5 text-[15px] leading-[1.6] text-[var(--ink-secondary)]">
-                {item.answer}
-              </p>
+              <p className="text-[15px] leading-[1.6] text-[var(--ink-secondary)]">{item.answer}</p>
             </div>
           ))}
         </div>
