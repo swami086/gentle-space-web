@@ -1,6 +1,5 @@
 export const CONTENT = {
   hero: {
-    kicker: "TOP COMMERCIAL REAL ESTATE CONSULTANTS IN BANGALORE",
     headline:
       "Top Commercial real estate consultants in Bangalore for custom requirements",
     subtext:

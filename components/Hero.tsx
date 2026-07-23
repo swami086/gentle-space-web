@@ -12,12 +12,7 @@ export function Hero() {
     <section className="px-6 py-20 lg:px-[160px]">
       <div className="flex flex-col items-center gap-[72px] lg:flex-row lg:items-center">
         <div className="max-w-[640px]">
-          <p className="text-sm font-semibold">
-            <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-              {CONTENT.hero.kicker}
-            </span>
-          </p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[var(--ink)] lg:text-6xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-[var(--ink)] lg:text-6xl">
             {CONTENT.hero.headline}
           </h1>
           <p className="mt-6 text-base leading-8 text-[var(--muted)] lg:text-lg">
