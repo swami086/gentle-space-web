@@ -11,12 +11,12 @@ const FAQ_ITEMS = [
   {
     question: "Which Bangalore locations do you cover?",
     answer:
-      "Gentle Space covers all areas in Bangalore and can meet any custom requirements, We can accelerate across high growth areas like Whitefield, Outer Ring Road, Koramangala, Indiranagar, HSR Layout, Electronic City, MG Road, and Sarjapur Road.",
+      "Gentle Space covers all areas in Bangalore and can meet any custom requirements, We can accelerate across high growth areas like Whitefield, Outer Ring Road, Koramangala, Indiranagar, HSR Layout, Electronic City, MG Road, and Sarjapur Road for office and commercial leasing in Bangalore.",
   },
   {
     question: "How are commercial real estate consultants different from property listings?",
     answer:
-      "Property listings are often inflated and mask crucial details that could present legal and commercial risk for client businesses. Gentle Space cater to highly customised needs for clients in a high trust manner.",
+      "Property listings are often inflated and mask crucial details that could present legal and commecial risk for client businesses. Gentle Space cater to highly customised needs for clients in a high trust environment ensuring that our clients get a market aligned deal that has been throughly vetted and legally safe.",
   },
   {
     question: "How long does the consulting process take?",

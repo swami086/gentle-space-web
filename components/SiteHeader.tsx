@@ -56,7 +56,7 @@ export function SiteHeader() {
           onClick={openModal}
           className="rounded-full border border-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--on-accent)] lg:px-5"
         >
-          Contact Us
+          Share My Custom Brief
         </button>
 
         <button

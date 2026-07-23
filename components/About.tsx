@@ -16,7 +16,11 @@ export function About() {
           <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--muted)] lg:text-lg">
             Gentle Space is a commercial real estate consulting firm in Bangalore that
             specialises in custom requirements. We remove friction for companies and property
-            owners so deals close cleanly.
+            owners so deals close cleanly. Companies establishing or expanding here get office
+            and retail options matched to location, budget, size, building quality, commute, and
+            lease terms. Property owners get high-quality screened tenants and market-based rents.
+            We thoroughly validate property documents and other legal aspects, so high-quality
+            transactions close end to end in a high-trust manner.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -32,11 +36,10 @@ export function About() {
         </div>
 
         <aside className="rounded-[var(--radius-lg)] bg-[var(--accent-dark)] p-6 text-[var(--on-accent)] lg:p-8">
-          <h3 className="text-xl font-semibold tracking-tight">How our fee works</h3>
+          <h3 className="text-xl font-semibold tracking-tight">How fees work</h3>
           <p className="mt-4 text-sm leading-7 text-[var(--on-accent)]/90">
-            We charge no fees for standard requirements within our existing inventory. For highly
-            customised needs where we have to invest efforts for new properties, we charge a fixed
-            fee.
+            We charge no fees for standard requirements. For highly customised needs where we
+            invest our efforts, we charge a fixed fee.
           </p>
         </aside>
       </div>
