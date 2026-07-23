@@ -9,39 +9,44 @@ export function Hero() {
   const { openModal } = useLeadCapture();
 
   return (
-    <section className="px-6 py-20 lg:px-[160px]">
+    <section className="bg-[var(--bg)] px-6 py-20 lg:px-[160px]">
       <div className="flex flex-col items-center gap-[72px] lg:flex-row lg:items-center">
-        <div className="max-w-[640px]">
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--ink)] lg:text-6xl">
+        <div className="flex w-full max-w-[640px] flex-col gap-6">
+          <p>
+            <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.4px] text-[var(--accent-dark)]">
+              {CONTENT.hero.kicker}
+            </span>
+          </p>
+          <h1 className="text-[36px] font-bold leading-[1.12] tracking-tight text-[var(--ink)] lg:text-[46px]">
             {CONTENT.hero.headline}
           </h1>
-          <p className="mt-6 text-base leading-8 text-[var(--muted)] lg:text-lg">
+          <p className="max-w-[480px] text-[17px] leading-[1.55] text-[var(--muted)]">
             {CONTENT.hero.subtext}
           </p>
 
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={openModal}
-              className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-7 py-3.5 text-sm font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
+              className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-7 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
             >
               {CONTENT.hero.primaryCta}
             </button>
             <a
               href="#services"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-dark)] transition hover:text-[var(--accent)]"
+              className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
             >
               {CONTENT.hero.secondaryCta}
               <span aria-hidden="true">→</span>
             </a>
           </div>
 
-          <p className="mt-6 max-w-[520px] text-sm leading-6 text-[var(--muted)]">
+          <p className="max-w-[480px] text-sm leading-[1.4] text-[var(--muted)]">
             {CONTENT.hero.incentive}
           </p>
         </div>
 
-        <div className="w-full max-w-[480px]">
+        <div className="w-full max-w-[480px] shrink-0">
           <Image
             src={SITE.heroImage}
             alt="Commercial real estate consultation in Bangalore"

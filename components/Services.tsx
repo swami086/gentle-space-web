@@ -1,48 +1,50 @@
 import { SERVICES_CONTENT } from "@/lib/content-services";
 
+function CardIcon() {
+  return (
+    <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-tint)]">
+      <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
 export function Services() {
   return (
-    <section id="services" className="px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[1120px]">
-        <p className="text-sm font-semibold">
-          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
+    <section id="services" className="bg-[var(--bg)] px-6 py-24 lg:px-[160px]">
+      <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-14">
+        <div className="flex max-w-[640px] flex-col items-center gap-4 text-center">
+          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.4px] text-[var(--accent-dark)]">
             {SERVICES_CONTENT.kicker}
           </span>
-        </p>
-
-        <div className="mt-4 max-w-[760px]">
-          <h2 className="text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+          <h2 className="text-[28px] font-bold tracking-tight text-[var(--ink)] lg:text-[34px]">
             {SERVICES_CONTENT.heading}
           </h2>
-          <p className="mt-5 text-base leading-8 text-[var(--muted)] lg:text-lg">
+          <p className="max-w-[520px] text-base leading-[1.5] text-[var(--muted)]">
             {SERVICES_CONTENT.subtext}
           </p>
         </div>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-2">
-          {SERVICES_CONTENT.groups.map((group) => (
-            <div key={group.label}>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-                {group.label}
-              </h3>
-              <div className="mt-5 grid gap-5">
-                {group.items.map((item) => (
-                  <article
-                    key={item.title}
-                    className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius-md)] p-7"
-                  >
-                    <h4 className="text-lg font-semibold tracking-tight text-[var(--ink)]">
-                      {item.title}
-                    </h4>
-                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                      {item.body}
-                    </p>
-                  </article>
-                ))}
-              </div>
+        {SERVICES_CONTENT.groups.map((group) => (
+          <div key={group.label} className="flex w-full flex-col items-center gap-6">
+            <h3 className="text-center text-[13px] font-bold uppercase tracking-[0.6px] text-[var(--accent-dark)]">
+              {group.label}
+            </h3>
+            <div className="grid w-full gap-6 md:grid-cols-3">
+              {group.items.map((item) => (
+                <article
+                  key={item.title}
+                  className="flex flex-col gap-3.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-7"
+                >
+                  <CardIcon />
+                  <h4 className="text-[17px] font-semibold text-[var(--ink)]">{item.title}</h4>
+                  <p className="text-sm leading-[1.5] text-[var(--muted)]">{item.body}</p>
+                </article>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </section>
   );
