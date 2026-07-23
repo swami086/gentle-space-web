@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --accent: #6840b8;
+  --accent-dark: #4a2d8a;
+  --bg: #ffffff;
+  --surface: #f7f3fc;
+  --surface-tint: #ede4f8;
+  --ink: #1e1630;
+  --ink-secondary: #5b4a7a;
+  --muted: #7a6e8c;
+  --border: #e5ddf0;
+  --on-accent: #ffffff;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  .font-primary {
+    font-family: var(--font-inter), "Inter", sans-serif;
+  }
+}
