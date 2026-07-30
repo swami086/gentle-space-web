@@ -13,7 +13,7 @@ vi.mock("../ai/client", () => ({
 import { explainListingFit } from "../ai/client";
 import { isPlacesConfigured, searchNearby } from "../places/client";
 import { clearInsightCache } from "./insight-cache";
-import { buildInsight } from "./insight";
+import { buildInsight, insightFingerprint } from "./insight";
 
 const listing: Listing = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -202,5 +202,72 @@ describe("buildInsight", () => {
     expect(searchNearby).not.toHaveBeenCalled();
     expect(insight.highlights).toHaveLength(1);
     expect(insight.nearby).toEqual([]);
+  });
+});
+
+describe("insightFingerprint", () => {
+  const baseListing = {
+    title: listing.title,
+    area: listing.area,
+    city: listing.city,
+    propertyType: listing.propertyType,
+    pricingHint: listing.pricingHint,
+    amenities: listing.amenities,
+    description: listing.description,
+  };
+
+  it("is deterministic for equivalent normalized inputs", () => {
+    const nearby = [
+      {
+        category: "cafe",
+        label: "Cafes",
+        places: [{ name: "Third Wave", distanceLabel: "~300 m" }],
+      },
+    ];
+    const a = insightFingerprint({
+      query: " COFFEE   nearby ",
+      entities,
+      listing: baseListing,
+      nearby,
+    });
+    const b = insightFingerprint({
+      query: "coffee nearby",
+      entities: { ...entities, amenities: ["coffee"] },
+      listing: baseListing,
+      nearby: [
+        {
+          category: "cafe",
+          label: "Cafes",
+          places: [{ name: "Third Wave", distanceLabel: "~300 m" }],
+        },
+      ],
+    });
+    expect(a).toBe(b);
+  });
+
+  it("keeps delimiter-like field values distinct (no pre-hash collision)", () => {
+    const nearby: never[] = [];
+    const fp1 = insightFingerprint({
+      query: "x",
+      entities,
+      listing: { ...baseListing, title: "a", area: "\u001ebar" },
+      nearby,
+    });
+    const fp2 = insightFingerprint({
+      query: "x\u0000extra",
+      entities,
+      listing: { ...baseListing, title: "a", area: "bar" },
+      nearby,
+    });
+    const fp3 = insightFingerprint({
+      query: "x",
+      entities,
+      listing: { ...baseListing, title: "a\u001e", area: "bar" },
+      nearby,
+    });
+
+    expect(fp1).not.toBe(fp3);
+    expect(fp2).not.toBe(fp1);
+    expect(fp2).not.toBe(fp3);
   });
 });

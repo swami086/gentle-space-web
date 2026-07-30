@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { explainListingFit } from "../ai/client";
-import { normalizeQueryEntities } from "../graph/normalize";
-import { emptyQueryEntities, type QueryEntities } from "../graph/types";
+import type { QueryEntities } from "../graph/types";
 import type { Listing } from "../listings/types";
 import { selectNearbyCategories } from "../places/categories";
 import { isPlacesConfigured, searchNearby } from "../places/client";
 import { distanceLabel } from "../places/distance";
 import type { NearbyCategory, NearbyGroup } from "../places/types";
+import { canonicalizeQueryEntities } from "./entity-signature";
 import { cacheKey, getCached, setCached, singleFlight } from "./insight-cache";
 import type { InsightContent, InsightResponse } from "./insight-types";
 
@@ -14,28 +14,23 @@ const NEARBY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const INSIGHT_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_DESCRIPTION_CHARS = 600;
 
-function sortedList(values: string[]): string {
-  return [...values].sort().join("\x1f");
+function normalizeQuery(query: string): string {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function canonicalNearby(nearby: NearbyGroup[]): string {
+function canonicalNearbyPayload(nearby: NearbyGroup[]) {
   return [...nearby]
     .sort((a, b) => a.category.localeCompare(b.category))
-    .map((group) => {
-      const places = [...group.places]
+    .map((group) => ({
+      category: group.category,
+      label: group.label,
+      places: [...group.places]
         .sort(
           (a, b) =>
             a.name.localeCompare(b.name) || a.distanceLabel.localeCompare(b.distanceLabel),
         )
-        .map((place) => `${place.name}@${place.distanceLabel}`)
-        .join(",");
-      return `${group.category}:${group.label}:${places}`;
-    })
-    .join("\x1e");
-}
-
-function normalizeQuery(query: string): string {
-  return query.trim().toLowerCase().replace(/\s+/g, " ");
+        .map((place) => [place.name, place.distanceLabel] as [string, string]),
+    }));
 }
 
 export function insightFingerprint(input: {
@@ -47,37 +42,21 @@ export function insightFingerprint(input: {
   >;
   nearby: NearbyGroup[];
 }): string {
-  const entities = normalizeQueryEntities(input.entities);
-  const parts = [
-    normalizeQuery(input.query),
-    sortedList(entities.areas),
-    sortedList(entities.amenities),
-    sortedList(entities.deskTypes),
-    sortedList(entities.landmarks),
-    sortedList(entities.budgetSignals),
-    input.listing.title,
-    input.listing.area,
-    input.listing.city,
-    input.listing.propertyType ?? "",
-    input.listing.pricingHint ?? "",
-    sortedList(input.listing.amenities),
-    input.listing.description.slice(0, MAX_DESCRIPTION_CHARS),
-    canonicalNearby(input.nearby),
-  ];
-  return createHash("sha256").update(parts.join("\x00")).digest("hex");
-}
-
-export function entitySignature(entities: QueryEntities): string {
-  const normalized = normalizeQueryEntities(entities);
-  return [
-    normalized.areas,
-    normalized.amenities,
-    normalized.deskTypes,
-    normalized.landmarks,
-    normalized.budgetSignals,
-  ]
-    .map((list) => sortedList(list))
-    .join(";");
+  const payload = {
+    query: normalizeQuery(input.query),
+    entities: canonicalizeQueryEntities(input.entities),
+    listing: {
+      title: input.listing.title,
+      area: input.listing.area,
+      city: input.listing.city,
+      propertyType: input.listing.propertyType ?? "",
+      pricingHint: input.listing.pricingHint ?? "",
+      amenities: [...input.listing.amenities].sort((a, b) => a.localeCompare(b)),
+      description: input.listing.description.slice(0, MAX_DESCRIPTION_CHARS),
+    },
+    nearby: canonicalNearbyPayload(input.nearby),
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
 async function fetchNearbyGroups(
@@ -129,7 +108,13 @@ export async function buildInsight(input: {
   query: string;
   entities?: QueryEntities;
 }): Promise<InsightResponse> {
-  const entities = input.entities ?? emptyQueryEntities();
+  const entities = input.entities ?? {
+    areas: [],
+    amenities: [],
+    deskTypes: [],
+    landmarks: [],
+    budgetSignals: [],
+  };
   const categories = selectNearbyCategories(entities);
 
   let nearby: NearbyGroup[] = [];

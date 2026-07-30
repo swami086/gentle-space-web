@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { emptyQueryEntities, type QueryEntities } from "@/lib/graph/types";
 import type { Listing, ListingSource } from "@/lib/listings/types";
-import { entitySignature } from "@/lib/spaces/insight";
+import { entitySignature } from "@/lib/spaces/entity-signature";
 import { spaceListingUrl } from "@/lib/site";
 import { LikeSpaceButton } from "./LikeSpaceButton";
 import { SpaceInsightPanel } from "./SpaceInsightPanel";
