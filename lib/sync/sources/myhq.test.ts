@@ -134,13 +134,13 @@ describe("parseMyhqDetail", () => {
   });
 });
 
-describe("myhqAdapter.fetchAll", () => {
+describe("myhqAdapter", () => {
   beforeEach(() => {
     vi.mocked(firecrawlMap).mockReset();
     vi.mocked(firecrawlScrape).mockReset();
   });
 
-  it("discovers detail URLs via map+scrape and scrapes each page", async () => {
+  it("discovers canonical source ids without scraping detail pages", async () => {
     vi.mocked(firecrawlMap).mockResolvedValue([
       "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta",
       "https://myhq.in/bangalore/dedicated/coworking-space-in-bangalore",
@@ -153,36 +153,36 @@ describe("myhqAdapter.fetchAll", () => {
           links: [],
         };
       }
-      if (url === "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta") {
-        return { markdown: weworkFixture, links: [] };
-      }
-      if (url === "https://myhq.in/dedicated/coworking-space/incubex-koramangala") {
-        return {
-          markdown: `# Incubex Koramangala\n\ncoworking | Koramangala, Bangalore\n\n## About\n\nShared workspace in Koramangala.\n\n### Address\n\nKoramangala, Bengaluru`,
-          links: [],
-        };
-      }
       return { markdown: "", links: [] };
     });
 
-    const listings = await myhqAdapter.fetchAll();
+    const discovered = await myhqAdapter.discover();
 
     expect(myhqAdapter.source).toBe("myhq");
     expect(firecrawlMap).toHaveBeenCalledWith(MYHQ_SEED_URL);
-    expect(firecrawlScrape).toHaveBeenCalledWith(MYHQ_SEED_URL);
-    expect(listings).toHaveLength(2);
-    expect(listings.map((l) => l.sourceId).sort()).toEqual([
-      "incubex-koramangala",
-      "wework-prestige-atlanta",
+    expect(firecrawlScrape).toHaveBeenCalledWith(MYHQ_SEED_URL, { includeLinks: true });
+    expect(discovered).toEqual([
+      {
+        sourceId: "wework-prestige-atlanta",
+        url: "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta",
+      },
+      {
+        sourceId: "incubex-koramangala",
+        url: "https://myhq.in/dedicated/coworking-space/incubex-koramangala",
+      },
     ]);
   });
 
-  it("throws when no detail URLs are discovered", async () => {
-    vi.mocked(firecrawlMap).mockResolvedValue([
-      "https://myhq.in/bangalore/dedicated/coworking-space-in-bangalore",
-    ]);
-    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: "city index only", links: [] });
+  it("fetches and parses one detail page without requesting links", async () => {
+    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: weworkFixture, links: [] });
 
-    await expect(myhqAdapter.fetchAll()).rejects.toThrow(/no detail URLs/);
+    const parsed = await myhqAdapter.fetchDetail(
+      "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta",
+    );
+
+    expect(parsed?.sourceId).toBe("wework-prestige-atlanta");
+    expect(firecrawlScrape).toHaveBeenCalledWith(
+      "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta",
+    );
   });
 });

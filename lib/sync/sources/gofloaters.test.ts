@@ -125,13 +125,13 @@ describe("parseGoFloatersDetail", () => {
   });
 });
 
-describe("gofloatersAdapter.fetchAll", () => {
+describe("gofloatersAdapter", () => {
   beforeEach(() => {
     vi.mocked(firecrawlMap).mockReset();
     vi.mocked(firecrawlScrape).mockReset();
   });
 
-  it("discovers locality pages then scrapes detail URLs", async () => {
+  it("discovers canonical source ids without scraping detail pages", async () => {
     vi.mocked(firecrawlMap).mockResolvedValue([
       "https://gofloaters.com/office-spaces/bengaluru/koramangala/",
       "https://gofloaters.com/office-spaces/bengaluru/hsr-layout/",
@@ -154,32 +154,44 @@ describe("gofloatersAdapter.fetchAll", () => {
           links: [],
         };
       }
-      if (url.includes("gooffice-2817")) {
-        return { markdown: weworkFixture, links: [] };
-      }
-      if (url.includes("gooffice-2454")) {
-        return {
-          markdown: `# Dedicated Desks in HSR Layout,Bengaluru\n\n[Awfis HSR](https://gofloaters.com/)• GoOffice 2454\n\nHSR workspace.`,
-          links: [],
-        };
-      }
       return { markdown: "", links: [] };
     });
 
-    const listings = await gofloatersAdapter.fetchAll();
+    const discovered = await gofloatersAdapter.discover();
 
     expect(gofloatersAdapter.source).toBe("gofloaters");
     expect(firecrawlMap).toHaveBeenCalledWith(GOFLOATERS_INDEX_URL);
-    expect(listings).toHaveLength(2);
-    expect(listings.map((l) => l.sourceId).sort()).toEqual(["gooffice-2454", "gooffice-2817"]);
+    expect(firecrawlScrape).toHaveBeenCalledWith(GOFLOATERS_INDEX_URL, { includeLinks: true });
+    expect(firecrawlScrape).toHaveBeenCalledWith(
+      "https://gofloaters.com/office-spaces/bengaluru/koramangala/",
+      { includeLinks: true },
+    );
+    expect(firecrawlScrape).toHaveBeenCalledWith(
+      "https://gofloaters.com/office-spaces/bengaluru/hsr-layout/",
+      { includeLinks: true },
+    );
+    expect(discovered).toEqual([
+      {
+        sourceId: "gooffice-2817",
+        url: "https://gofloaters.com/coworking-space/gooffice-2817-open-desks-koramangala-bengaluru/",
+      },
+      {
+        sourceId: "gooffice-2454",
+        url: "https://gofloaters.com/office-space/gooffice-2454-open-desks-hsr-layout-bengaluru/",
+      },
+    ]);
   });
 
-  it("throws when no detail URLs are discovered", async () => {
-    vi.mocked(firecrawlMap).mockResolvedValue([
-      "https://gofloaters.com/office-spaces/bengaluru/koramangala/",
-    ]);
-    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: "no listings", links: [] });
+  it("fetches and parses one detail page without requesting links", async () => {
+    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: weworkFixture, links: [] });
 
-    await expect(gofloatersAdapter.fetchAll()).rejects.toThrow(/no detail URLs/);
+    const parsed = await gofloatersAdapter.fetchDetail(
+      "https://gofloaters.com/coworking-space/gooffice-2817-open-desks-koramangala-bengaluru/",
+    );
+
+    expect(parsed?.sourceId).toBe("gooffice-2817");
+    expect(firecrawlScrape).toHaveBeenCalledWith(
+      "https://gofloaters.com/coworking-space/gooffice-2817-open-desks-koramangala-bengaluru/",
+    );
   });
 });

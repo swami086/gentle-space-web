@@ -1,5 +1,10 @@
 import type { ListingSource } from "@/lib/listings/types";
 
+export type DiscoveredListing = {
+  sourceId: string;
+  url: string;
+};
+
 export type RawListing = {
   source: ListingSource;
   sourceId: string;
@@ -20,5 +25,6 @@ export type RawListing = {
 
 export type SourceAdapter = {
   source: ListingSource;
-  fetchAll(): Promise<RawListing[]>;
+  discover(): Promise<DiscoveredListing[]>;
+  fetchDetail(url: string): Promise<RawListing | null>;
 };

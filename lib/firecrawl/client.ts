@@ -26,10 +26,12 @@ async function firecrawlPost<T>(path: string, body: unknown): Promise<FirecrawlR
 
 export async function firecrawlScrape(
   url: string,
+  options: { includeLinks?: boolean } = {},
 ): Promise<{ markdown: string; links: string[] }> {
+  const formats = options.includeLinks ? ["markdown", "links"] : ["markdown"];
   const json = await firecrawlPost<{ data: { markdown?: string; links?: string[] } }>("/scrape", {
     url,
-    formats: ["markdown", "links"],
+    formats,
     onlyMainContent: true,
   });
   return {

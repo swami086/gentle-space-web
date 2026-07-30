@@ -2,4 +2,4 @@ export { cofyndAdapter } from "./cofynd";
 export { coworkerAdapter } from "./coworker";
 export { gofloatersAdapter } from "./gofloaters";
 export { myhqAdapter } from "./myhq";
-export type { RawListing, SourceAdapter } from "./types";
+export type { DiscoveredListing, RawListing, SourceAdapter } from "./types";

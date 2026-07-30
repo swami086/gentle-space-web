@@ -1,5 +1,5 @@
 import { firecrawlMap, firecrawlScrape } from "@/lib/firecrawl/client";
-import type { RawListing, SourceAdapter } from "./types";
+import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const MYHQ_SEED_URL = "https://myhq.in/bangalore";
 
@@ -149,39 +149,23 @@ export function parseMyhqDetail(markdown: string, sourceUrl: string): RawListing
   };
 }
 
-async function discoverDetailUrls(): Promise<string[]> {
+async function discover(): Promise<DiscoveredListing[]> {
   const [mapped, indexPage] = await Promise.all([
     firecrawlMap(MYHQ_SEED_URL),
-    firecrawlScrape(MYHQ_SEED_URL),
+    firecrawlScrape(MYHQ_SEED_URL, { includeLinks: true }),
   ]);
   const fromIndex = extractLinksFromMarkdown(indexPage.markdown);
-  return extractMyhqDetailUrls([...mapped, ...fromIndex, ...indexPage.links]);
+  return extractMyhqDetailUrls([...mapped, ...fromIndex, ...indexPage.links]).map((url) => ({
+    sourceId: slugFromUrl(url)!,
+    url,
+  }));
 }
 
 export const myhqAdapter: SourceAdapter = {
   source: "myhq",
-
-  async fetchAll(): Promise<RawListing[]> {
-    const detailUrls = await discoverDetailUrls();
-    if (!detailUrls.length) {
-      throw new Error("myhq: no detail URLs discovered from index");
-    }
-
-    const listings: RawListing[] = [];
-    for (const url of detailUrls) {
-      try {
-        const { markdown } = await firecrawlScrape(url);
-        const parsed = parseMyhqDetail(markdown, url);
-        if (parsed) listings.push(parsed);
-      } catch {
-        // ponytail: skip failed detail scrapes; index failure still aborts above
-      }
-    }
-
-    if (!listings.length) {
-      throw new Error("myhq: scraped detail pages but parsed zero listings");
-    }
-
-    return listings;
+  discover,
+  async fetchDetail(url): Promise<RawListing | null> {
+    const { markdown } = await firecrawlScrape(url);
+    return parseMyhqDetail(markdown, url);
   },
 };

@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe("firecrawlScrape", () => {
-  it("POSTs v1 scrape with markdown+links and onlyMainContent", async () => {
+  it("requests links only for discovery scrapes", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -27,23 +27,18 @@ describe("firecrawlScrape", () => {
       }),
     });
 
-    const result = await firecrawlScrape("https://example.com/wework");
+    await firecrawlScrape("https://example.com/detail");
+    await firecrawlScrape("https://example.com/index", { includeLinks: true });
 
-    expect(fetchMock).toHaveBeenCalledWith("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer fc-test-key",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: "https://example.com/wework",
-        formats: ["markdown", "links"],
-        onlyMainContent: true,
-      }),
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      url: "https://example.com/detail",
+      formats: ["markdown"],
+      onlyMainContent: true,
     });
-    expect(result).toEqual({
-      markdown: "# WeWork\nHot desks from ₹5000",
-      links: ["https://example.com/amenities", "https://example.com/book"],
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      url: "https://example.com/index",
+      formats: ["markdown", "links"],
+      onlyMainContent: true,
     });
   });
 

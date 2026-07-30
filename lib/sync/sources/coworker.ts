@@ -1,5 +1,5 @@
 import { firecrawlScrape } from "@/lib/firecrawl/client";
-import type { RawListing, SourceAdapter } from "./types";
+import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const COWORKER_LIST_BASE = "https://www.coworker.com/india/bengaluru";
 
@@ -158,12 +158,12 @@ export function parseCoworkerDetail(markdown: string, sourceUrl: string): RawLis
   };
 }
 
-async function discoverDetailUrls(): Promise<string[]> {
+async function discover(): Promise<DiscoveredListing[]> {
   const seen = new Set<string>();
 
   for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
     const listUrl = page === 1 ? COWORKER_LIST_BASE : `${COWORKER_LIST_BASE}?page=${page}`;
-    const { markdown, links } = await firecrawlScrape(listUrl);
+    const { markdown, links } = await firecrawlScrape(listUrl, { includeLinks: true });
     const found = extractCoworkerDetailUrls([
       ...links,
       ...extractLinksFromMarkdown(markdown),
@@ -173,33 +173,14 @@ async function discoverDetailUrls(): Promise<string[]> {
     if (!found.length || seen.size === before) break;
   }
 
-  return [...seen];
+  return [...seen].map((url) => ({ sourceId: slugFromUrl(url)!, url }));
 }
 
 export const coworkerAdapter: SourceAdapter = {
   source: "coworker",
-
-  async fetchAll(): Promise<RawListing[]> {
-    const detailUrls = await discoverDetailUrls();
-    if (!detailUrls.length) {
-      throw new Error("coworker: no detail URLs discovered from list pages");
-    }
-
-    const listings: RawListing[] = [];
-    for (const url of detailUrls) {
-      try {
-        const { markdown } = await firecrawlScrape(url);
-        const parsed = parseCoworkerDetail(markdown, url);
-        if (parsed) listings.push(parsed);
-      } catch {
-        // ponytail: skip failed detail scrapes; list discovery failure still aborts above
-      }
-    }
-
-    if (!listings.length) {
-      throw new Error("coworker: scraped detail pages but parsed zero listings");
-    }
-
-    return listings;
+  discover,
+  async fetchDetail(url): Promise<RawListing | null> {
+    const { markdown } = await firecrawlScrape(url);
+    return parseCoworkerDetail(markdown, url);
   },
 };

@@ -1,7 +1,4 @@
-export type DiscoveredListing = {
-  sourceId: string;
-  url: string;
-};
+import type { DiscoveredListing } from "./sources/types";
 
 export type ExistingListingSyncState = {
   sourceId: string;

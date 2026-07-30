@@ -122,12 +122,12 @@ describe("parseCoworkerDetail", () => {
   });
 });
 
-describe("coworkerAdapter.fetchAll", () => {
+describe("coworkerAdapter", () => {
   beforeEach(() => {
     vi.mocked(firecrawlScrape).mockReset();
   });
 
-  it("paginates list pages and scrapes each detail URL", async () => {
+  it("discovers canonical source ids without scraping detail pages", async () => {
     vi.mocked(firecrawlScrape).mockImplementation(async (url: string) => {
       if (url === COWORKER_LIST_BASE) {
         return { markdown: listFixture, links: [] };
@@ -135,33 +135,38 @@ describe("coworkerAdapter.fetchAll", () => {
       if (url === `${COWORKER_LIST_BASE}?page=2`) {
         return { markdown: "no new listings", links: [] };
       }
-      if (url === "https://www.coworker.com/india/bengaluru/cowrks-ecoworld") {
-        return { markdown: detailFixture, links: [] };
-      }
-      if (url === "https://www.coworker.com/india/bengaluru/regus-bangalore-world-trade-centre") {
-        return {
-          markdown: `## Overview of Regus World Trade Centre\n\nPrestige workspace in Bengaluru.\n\nMG Road, Bengaluru, Karnataka 560001, India`,
-          links: [],
-        };
-      }
       return { markdown: "", links: [] };
     });
 
-    const listings = await coworkerAdapter.fetchAll();
+    const discovered = await coworkerAdapter.discover();
 
     expect(coworkerAdapter.source).toBe("coworker");
-    expect(firecrawlScrape).toHaveBeenCalledWith(COWORKER_LIST_BASE);
-    expect(firecrawlScrape).toHaveBeenCalledWith(`${COWORKER_LIST_BASE}?page=2`);
-    expect(listings).toHaveLength(2);
-    expect(listings.map((l) => l.sourceId).sort()).toEqual([
-      "cowrks-ecoworld",
-      "regus-bangalore-world-trade-centre",
+    expect(firecrawlScrape).toHaveBeenCalledWith(COWORKER_LIST_BASE, { includeLinks: true });
+    expect(firecrawlScrape).toHaveBeenCalledWith(`${COWORKER_LIST_BASE}?page=2`, {
+      includeLinks: true,
+    });
+    expect(discovered).toEqual([
+      {
+        sourceId: "cowrks-ecoworld",
+        url: "https://www.coworker.com/india/bengaluru/cowrks-ecoworld",
+      },
+      {
+        sourceId: "regus-bangalore-world-trade-centre",
+        url: "https://www.coworker.com/india/bengaluru/regus-bangalore-world-trade-centre",
+      },
     ]);
   });
 
-  it("throws when no detail URLs are discovered", async () => {
-    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: "empty city page", links: [] });
+  it("fetches and parses one detail page without requesting links", async () => {
+    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: detailFixture, links: [] });
 
-    await expect(coworkerAdapter.fetchAll()).rejects.toThrow(/no detail URLs/);
+    const parsed = await coworkerAdapter.fetchDetail(
+      "https://www.coworker.com/india/bengaluru/cowrks-ecoworld",
+    );
+
+    expect(parsed?.sourceId).toBe("cowrks-ecoworld");
+    expect(firecrawlScrape).toHaveBeenCalledWith(
+      "https://www.coworker.com/india/bengaluru/cowrks-ecoworld",
+    );
   });
 });

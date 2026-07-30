@@ -103,13 +103,13 @@ describe("parseCofyndDetail", () => {
   });
 });
 
-describe("cofyndAdapter.fetchAll", () => {
+describe("cofyndAdapter", () => {
   beforeEach(() => {
     vi.mocked(firecrawlMap).mockReset();
     vi.mocked(firecrawlScrape).mockReset();
   });
 
-  it("discovers detail URLs and scrapes each page", async () => {
+  it("discovers canonical source ids without scraping detail pages", async () => {
     vi.mocked(firecrawlMap).mockResolvedValue([
       "https://cofynd.com/coworking/workhome",
       "https://cofynd.com/coworking/bangalore",
@@ -118,31 +118,32 @@ describe("cofyndAdapter.fetchAll", () => {
       if (url === COFYND_INDEX_URL) {
         return { markdown: "[IndiQube](https://cofynd.com/coworking/indiqube-omega)", links: [] };
       }
-      if (url === "https://cofynd.com/coworking/workhome") {
-        return { markdown: workhomeFixture, links: [] };
-      }
-      if (url === "https://cofynd.com/coworking/indiqube-omega") {
-        return {
-          markdown: `# IndiQube Omega\n\n4.0 | Brookefield, Bangalore\n\n## IndiQube Omega\n\nBrookefield workspace.\n\n## IndiQube Omega Location\n\nBrookefield, Bangalore`,
-          links: [],
-        };
-      }
       return { markdown: "", links: [] };
     });
 
-    const listings = await cofyndAdapter.fetchAll();
+    const discovered = await cofyndAdapter.discover();
 
     expect(cofyndAdapter.source).toBe("cofynd");
     expect(firecrawlMap).toHaveBeenCalledWith(COFYND_INDEX_URL);
-    expect(firecrawlScrape).toHaveBeenCalledWith(COFYND_INDEX_URL);
-    expect(listings).toHaveLength(2);
-    expect(listings.map((l) => l.sourceId).sort()).toEqual(["indiqube-omega", "workhome"]);
+    expect(firecrawlScrape).toHaveBeenCalledWith(COFYND_INDEX_URL, { includeLinks: true });
+    expect(discovered).toEqual([
+      {
+        sourceId: "workhome",
+        url: "https://cofynd.com/coworking/workhome",
+      },
+      {
+        sourceId: "indiqube-omega",
+        url: "https://cofynd.com/coworking/indiqube-omega",
+      },
+    ]);
   });
 
-  it("throws when no detail URLs are discovered", async () => {
-    vi.mocked(firecrawlMap).mockResolvedValue(["https://cofynd.com/coworking/bangalore"]);
-    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: "city index only", links: [] });
+  it("fetches and parses one detail page without requesting links", async () => {
+    vi.mocked(firecrawlScrape).mockResolvedValue({ markdown: workhomeFixture, links: [] });
 
-    await expect(cofyndAdapter.fetchAll()).rejects.toThrow(/no detail URLs/);
+    const parsed = await cofyndAdapter.fetchDetail("https://cofynd.com/coworking/workhome");
+
+    expect(parsed?.sourceId).toBe("workhome");
+    expect(firecrawlScrape).toHaveBeenCalledWith("https://cofynd.com/coworking/workhome");
   });
 });

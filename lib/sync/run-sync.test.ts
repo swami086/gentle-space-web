@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RawListing } from "./sources/types";
+import type { DiscoveredListing, RawListing } from "./sources/types";
 
 vi.mock("../db/listings", () => ({
   fullReplaceListings: vi.fn(),
@@ -19,10 +19,10 @@ vi.mock("../graph/rebuild", () => ({
 }));
 
 vi.mock("./sources", () => ({
-  coworkerAdapter: { source: "coworker", fetchAll: vi.fn() },
-  myhqAdapter: { source: "myhq", fetchAll: vi.fn() },
-  cofyndAdapter: { source: "cofynd", fetchAll: vi.fn() },
-  gofloatersAdapter: { source: "gofloaters", fetchAll: vi.fn() },
+  coworkerAdapter: { source: "coworker", discover: vi.fn(), fetchDetail: vi.fn() },
+  myhqAdapter: { source: "myhq", discover: vi.fn(), fetchDetail: vi.fn() },
+  cofyndAdapter: { source: "cofynd", discover: vi.fn(), fetchDetail: vi.fn() },
+  gofloatersAdapter: { source: "gofloaters", discover: vi.fn(), fetchDetail: vi.fn() },
 }));
 
 import { fullReplaceListings } from "../db/listings";
@@ -65,6 +65,34 @@ const makeListings = (count: number, source: RawListing["source"] = "coworker") 
     }),
   );
 
+const makeDiscovered = (
+  count: number,
+  source: RawListing["source"] = "coworker",
+): DiscoveredListing[] =>
+  Array.from({ length: count }, (_, i) => ({
+    sourceId: `${source}-${i}`,
+    url: `https://example.com/${source}/${i}`,
+  }));
+
+function mockDetailFetch(
+  fetchDetail: (typeof coworkerAdapter)["fetchDetail"],
+  source: RawListing["source"],
+  discovered: DiscoveredListing[],
+): void {
+  vi.mocked(fetchDetail).mockImplementation(async (url: string) => {
+    const match = discovered.find((item) => item.url === url);
+    const suffix = match?.url.split("/").at(-1) ?? match?.sourceId ?? "0";
+    return match
+      ? rawListing({
+          source,
+          sourceId: match.sourceId,
+          title: `${source} Space ${suffix}`,
+          sourceUrl: match.url,
+        })
+      : null;
+  });
+}
+
 beforeEach(() => {
   delete process.env.AI_PROVIDER;
   delete process.env.OPENAI_API_KEY;
@@ -75,10 +103,14 @@ beforeEach(() => {
   vi.mocked(fullReplaceListings).mockReset();
   vi.mocked(embedAllListings).mockReset();
   vi.mocked(rebuildListingGraph).mockReset();
-  vi.mocked(coworkerAdapter.fetchAll).mockReset();
-  vi.mocked(myhqAdapter.fetchAll).mockReset();
-  vi.mocked(cofyndAdapter.fetchAll).mockReset();
-  vi.mocked(gofloatersAdapter.fetchAll).mockReset();
+  vi.mocked(coworkerAdapter.discover).mockReset();
+  vi.mocked(coworkerAdapter.fetchDetail).mockReset();
+  vi.mocked(myhqAdapter.discover).mockReset();
+  vi.mocked(myhqAdapter.fetchDetail).mockReset();
+  vi.mocked(cofyndAdapter.discover).mockReset();
+  vi.mocked(cofyndAdapter.fetchDetail).mockReset();
+  vi.mocked(gofloatersAdapter.discover).mockReset();
+  vi.mocked(gofloatersAdapter.fetchDetail).mockReset();
 
   vi.mocked(startSyncRun).mockResolvedValue(undefined);
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
@@ -89,10 +121,10 @@ beforeEach(() => {
 
 describe("runListingsSync", () => {
   it("aborts when no source returns listings", async () => {
-    vi.mocked(coworkerAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(myhqAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.fetchAll).mockResolvedValue([]);
+    vi.mocked(coworkerAdapter.discover).mockResolvedValue([]);
+    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
+    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
+    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
 
     const run = await runListingsSync();
 
@@ -109,10 +141,12 @@ describe("runListingsSync", () => {
   });
 
   it("aborts when total raw count is below 10", async () => {
-    vi.mocked(coworkerAdapter.fetchAll).mockResolvedValue(makeListings(5));
-    vi.mocked(myhqAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.fetchAll).mockResolvedValue([]);
+    const coworkerDiscovered = makeDiscovered(5);
+    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
+    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
+    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
+    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
+    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
 
     const run = await runListingsSync();
 
@@ -127,10 +161,12 @@ describe("runListingsSync", () => {
   });
 
   it("replaces listings when at least one source succeeds with 10+ rows", async () => {
-    vi.mocked(coworkerAdapter.fetchAll).mockResolvedValue(makeListings(10));
-    vi.mocked(myhqAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.fetchAll).mockResolvedValue([]);
+    const coworkerDiscovered = makeDiscovered(10);
+    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
+    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
+    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
+    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
+    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
 
     const run = await runListingsSync();
 
@@ -156,10 +192,12 @@ describe("runListingsSync", () => {
     process.env.AI_PROVIDER = "openai";
     process.env.OPENAI_API_KEY = "test-key";
 
-    vi.mocked(coworkerAdapter.fetchAll).mockResolvedValue(makeListings(10));
-    vi.mocked(myhqAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.fetchAll).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.fetchAll).mockResolvedValue([]);
+    const coworkerDiscovered = makeDiscovered(10);
+    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
+    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
+    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
+    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
+    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
     vi.mocked(embedAllListings).mockRejectedValueOnce(new Error("embed failed"));
 
     const run = await runListingsSync();
@@ -170,10 +208,14 @@ describe("runListingsSync", () => {
   });
 
   it("ignores rejected adapters and still succeeds on combined rows", async () => {
-    vi.mocked(coworkerAdapter.fetchAll).mockRejectedValue(new Error("network"));
-    vi.mocked(myhqAdapter.fetchAll).mockResolvedValue(makeListings(6, "myhq"));
-    vi.mocked(cofyndAdapter.fetchAll).mockResolvedValue(makeListings(5, "cofynd"));
-    vi.mocked(gofloatersAdapter.fetchAll).mockResolvedValue([]);
+    vi.mocked(coworkerAdapter.discover).mockRejectedValue(new Error("network"));
+    const myhqDiscovered = makeDiscovered(6, "myhq");
+    vi.mocked(myhqAdapter.discover).mockResolvedValue(myhqDiscovered);
+    mockDetailFetch(myhqAdapter.fetchDetail, "myhq", myhqDiscovered);
+    const cofyndDiscovered = makeDiscovered(5, "cofynd");
+    vi.mocked(cofyndAdapter.discover).mockResolvedValue(cofyndDiscovered);
+    mockDetailFetch(cofyndAdapter.fetchDetail, "cofynd", cofyndDiscovered);
+    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
 
     const run = await runListingsSync();
 

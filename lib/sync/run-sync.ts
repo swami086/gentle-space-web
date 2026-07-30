@@ -5,13 +5,22 @@ import { rebuildListingGraph } from "../graph/rebuild";
 import { dedupeListings } from "../listings/dedupe";
 import { slugifyTitle } from "../listings/slug";
 import type { Listing, SyncRun } from "../listings/types";
+import { mapSettledWithConcurrency } from "./concurrency";
 import {
   cofyndAdapter,
   coworkerAdapter,
   gofloatersAdapter,
   myhqAdapter,
 } from "./sources";
-import type { RawListing } from "./sources/types";
+import type { RawListing, SourceAdapter } from "./sources/types";
+
+async function scrapeAdapter(adapter: SourceAdapter): Promise<RawListing[]> {
+  const discovered = await adapter.discover();
+  const results = await mapSettledWithConcurrency(discovered, 3, ({ url }) => adapter.fetchDetail(url));
+  return results.flatMap((result) =>
+    result.status === "fulfilled" && result.value ? [result.value] : [],
+  );
+}
 
 export async function runListingsSync(): Promise<SyncRun> {
   const runId = crypto.randomUUID();
@@ -19,10 +28,10 @@ export async function runListingsSync(): Promise<SyncRun> {
   await startSyncRun(runId);
 
   const results = await Promise.allSettled([
-    coworkerAdapter.fetchAll(),
-    myhqAdapter.fetchAll(),
-    cofyndAdapter.fetchAll(),
-    gofloatersAdapter.fetchAll(),
+    scrapeAdapter(coworkerAdapter),
+    scrapeAdapter(myhqAdapter),
+    scrapeAdapter(cofyndAdapter),
+    scrapeAdapter(gofloatersAdapter),
   ]);
 
   const raw: RawListing[] = [];

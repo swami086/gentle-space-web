@@ -1,5 +1,5 @@
 import { firecrawlMap, firecrawlScrape } from "@/lib/firecrawl/client";
-import type { RawListing, SourceAdapter } from "./types";
+import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const COFYND_INDEX_URL = "https://cofynd.com/coworking/bangalore";
 
@@ -176,39 +176,23 @@ export function parseCofyndDetail(markdown: string, sourceUrl: string): RawListi
   };
 }
 
-async function discoverDetailUrls(): Promise<string[]> {
+async function discover(): Promise<DiscoveredListing[]> {
   const [mapped, indexPage] = await Promise.all([
     firecrawlMap(COFYND_INDEX_URL),
-    firecrawlScrape(COFYND_INDEX_URL),
+    firecrawlScrape(COFYND_INDEX_URL, { includeLinks: true }),
   ]);
   const fromIndex = extractLinksFromMarkdown(indexPage.markdown);
-  return extractCofyndDetailUrls([...mapped, ...fromIndex, ...indexPage.links]);
+  return extractCofyndDetailUrls([...mapped, ...fromIndex, ...indexPage.links]).map((url) => ({
+    sourceId: slugFromUrl(url)!,
+    url,
+  }));
 }
 
 export const cofyndAdapter: SourceAdapter = {
   source: "cofynd",
-
-  async fetchAll(): Promise<RawListing[]> {
-    const detailUrls = await discoverDetailUrls();
-    if (!detailUrls.length) {
-      throw new Error("cofynd: no detail URLs discovered from index");
-    }
-
-    const listings: RawListing[] = [];
-    for (const url of detailUrls) {
-      try {
-        const { markdown } = await firecrawlScrape(url);
-        const parsed = parseCofyndDetail(markdown, url);
-        if (parsed) listings.push(parsed);
-      } catch {
-        // ponytail: skip failed detail scrapes; index failure still aborts above
-      }
-    }
-
-    if (!listings.length) {
-      throw new Error("cofynd: scraped detail pages but parsed zero listings");
-    }
-
-    return listings;
+  discover,
+  async fetchDetail(url): Promise<RawListing | null> {
+    const { markdown } = await firecrawlScrape(url);
+    return parseCofyndDetail(markdown, url);
   },
 };

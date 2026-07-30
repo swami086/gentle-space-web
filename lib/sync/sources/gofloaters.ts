@@ -1,5 +1,6 @@
 import { firecrawlMap, firecrawlScrape } from "@/lib/firecrawl/client";
-import type { RawListing, SourceAdapter } from "./types";
+import { mapSettledWithConcurrency } from "../concurrency";
+import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const GOFLOATERS_INDEX_URL = "https://gofloaters.com/office-spaces/bengaluru/";
 
@@ -124,7 +125,8 @@ export function parseGoFloatersDetail(markdown: string, sourceUrl: string): RawL
 
   const pricingHint =
     firstMatch(markdown, /(₹\s*[\d,]+(?:\s*\/\s*(?:day|month|seat|mo))?)/i) ??
-    firstMatch(markdown, /Rs\.?\s*([\d,]+)\s*\/\s*day/i)?.replace(/^Rs\.?\s*/i, "₹");
+    firstMatch(markdown, /Rs\.?\s*([\d,]+)\s*\/\s*day/i)?.replace(/^Rs\.?\s*/i, "₹") ??
+    null;
 
   const address =
     firstMatch(markdown, /Landmark for this space is\s*:\s*([^\n]+)/i) ??
@@ -183,48 +185,33 @@ export function parseGoFloatersDetail(markdown: string, sourceUrl: string): RawL
   };
 }
 
-async function discoverDetailUrls(): Promise<string[]> {
+async function discover(): Promise<DiscoveredListing[]> {
   const mapped = await firecrawlMap(GOFLOATERS_INDEX_URL);
   const localityUrls = mapped.filter(isGoFloatersLocalityUrl);
   const linkSets: string[] = [...mapped];
 
-  const [indexPage, ...localityPages] = await Promise.all([
-    firecrawlScrape(GOFLOATERS_INDEX_URL),
-    ...localityUrls.map((url) => firecrawlScrape(url)),
-  ]);
-
-  linkSets.push(...indexPage.links, ...extractLinksFromMarkdown(indexPage.markdown));
-  for (const page of localityPages) {
-    linkSets.push(...page.links, ...extractLinksFromMarkdown(page.markdown));
+  const pages = await mapSettledWithConcurrency(
+    [GOFLOATERS_INDEX_URL, ...localityUrls],
+    3,
+    (url) => firecrawlScrape(url, { includeLinks: true }),
+  );
+  for (const page of pages) {
+    if (page.status === "fulfilled") {
+      linkSets.push(...page.value.links, ...extractLinksFromMarkdown(page.value.markdown));
+    }
   }
 
-  return extractGoFloatersDetailUrls(linkSets);
+  return extractGoFloatersDetailUrls(linkSets).map((url) => ({
+    sourceId: sourceIdFromGoFloatersUrl(url)!,
+    url,
+  }));
 }
 
 export const gofloatersAdapter: SourceAdapter = {
   source: "gofloaters",
-
-  async fetchAll(): Promise<RawListing[]> {
-    const detailUrls = await discoverDetailUrls();
-    if (!detailUrls.length) {
-      throw new Error("gofloaters: no detail URLs discovered from index");
-    }
-
-    const listings: RawListing[] = [];
-    for (const url of detailUrls) {
-      try {
-        const { markdown } = await firecrawlScrape(url);
-        const parsed = parseGoFloatersDetail(markdown, url);
-        if (parsed) listings.push(parsed);
-      } catch {
-        // ponytail: skip failed detail scrapes; index failure still aborts above
-      }
-    }
-
-    if (!listings.length) {
-      throw new Error("gofloaters: scraped detail pages but parsed zero listings");
-    }
-
-    return listings;
+  discover,
+  async fetchDetail(url): Promise<RawListing | null> {
+    const { markdown } = await firecrawlScrape(url);
+    return parseGoFloatersDetail(markdown, url);
   },
 };
