@@ -87,3 +87,32 @@ npx tsc --noEmit
 
 - Known live-source gaps remain intentionally untouched: myHQ locality hopping, CoFynd discovery leakage/coord gaps, and GoFloaters coord gaps.
 - `runListingsSync()` now has a temporary bridge over the new adapter contract; Task 5 still needs to replace that full-replace path with incremental apply logic.
+
+## Review Follow-Up
+
+### Regression fixed
+
+- `scripts/preview-listings-sync.ts` was still scraping `COWORKER_LIST_BASE` without `{ includeLinks: true }` while reading `list.links`.
+- Fixed by changing that discovery scrape to `firecrawlScrape(COWORKER_LIST_BASE, { includeLinks: true })`.
+
+### Grep result
+
+- Searched for `firecrawlScrape` callers that read `.links`.
+- Only one unmigrated production caller remained: `scripts/preview-listings-sync.ts`.
+- Existing adapter discovery callers were already migrated:
+  - `lib/sync/sources/coworker.ts`
+  - `lib/sync/sources/myhq.ts`
+  - `lib/sync/sources/cofynd.ts`
+  - `lib/sync/sources/gofloaters.ts`
+
+### Follow-up verification
+
+1. `npm test -- lib/firecrawl/client.test.ts`
+   - GREEN, `6/6` tests passed.
+2. `npm test`
+   - GREEN, `120/120` tests passed.
+
+### Follow-up files changed
+
+- `scripts/preview-listings-sync.ts`
+- `.superpowers/sdd/task-4-report.md`

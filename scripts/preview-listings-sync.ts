@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 
   try {
     console.log(`scraping list: ${COWORKER_LIST_BASE}`);
-    const list = await firecrawlScrape(COWORKER_LIST_BASE);
+    const list = await firecrawlScrape(COWORKER_LIST_BASE, { includeLinks: true });
     const detailUrls = extractCoworkerDetailUrls([
       ...list.links,
       ...extractLinksFromMarkdown(list.markdown),
