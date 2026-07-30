@@ -14,13 +14,14 @@ const INSIGHT_TTL_MS = 24 * 60 * 60 * 1000;
 
 function querySignature(entities: QueryEntities): string {
   const normalized = normalizeQueryEntities(entities);
-  return [
-    normalized.areas.join(","),
-    normalized.amenities.join(","),
-    normalized.deskTypes.join(","),
-    normalized.landmarks.join(","),
-    normalized.budgetSignals.join(","),
-  ].join(";");
+  const parts = [
+    normalized.areas,
+    normalized.amenities,
+    normalized.deskTypes,
+    normalized.landmarks,
+    normalized.budgetSignals,
+  ];
+  return parts.map((list) => [...list].sort().join(",")).join(";");
 }
 
 async function loadNearby(

@@ -94,6 +94,12 @@ describe("buildInsight", () => {
 
     expect(insight.nearby).toEqual([]);
     expect(insight.highlights).toHaveLength(1);
+
+    vi.mocked(searchNearby).mockResolvedValue([{ name: "Third Wave", distanceMeters: 300 }]);
+    const retry = await buildInsight({ listing, query: "coffee nearby", entities });
+    expect(retry.nearby).toHaveLength(1);
+    expect(searchNearby).toHaveBeenCalledTimes(2);
+
     errSpy.mockRestore();
   });
 
@@ -116,5 +122,36 @@ describe("buildInsight", () => {
     await buildInsight({ listing, query: "coffee nearby", entities });
 
     expect(explainListingFit).toHaveBeenCalledTimes(2);
+    expect(searchNearby).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses insight cache when entity list order differs", async () => {
+    vi.mocked(searchNearby).mockResolvedValue([
+      { name: "Third Wave", distanceMeters: 300 },
+    ]);
+
+    const orderA = {
+      ...entities,
+      amenities: ["coffee", "gym"],
+    };
+    const orderB = {
+      ...entities,
+      amenities: ["gym", "coffee"],
+    };
+
+    await buildInsight({ listing, query: "coffee nearby", entities: orderA });
+    await buildInsight({ listing, query: "coffee nearby", entities: orderB });
+
+    expect(explainListingFit).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns summary and highlights without calling Places when unconfigured", async () => {
+    vi.mocked(isPlacesConfigured).mockReturnValue(false);
+
+    const insight = await buildInsight({ listing, query: "coffee nearby", entities });
+
+    expect(searchNearby).not.toHaveBeenCalled();
+    expect(insight.highlights).toHaveLength(1);
+    expect(insight.nearby).toEqual([]);
   });
 });
