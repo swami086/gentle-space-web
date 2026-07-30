@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   applySpacesFilters,
-  parsePricingHintInr,
   activeFilterChips,
   EMPTY_FILTERS,
   type SpacesFilterState,
@@ -29,16 +28,6 @@ function listing(partial: Partial<Listing> & Pick<Listing, "id" | "title">): Lis
     ...partial,
   };
 }
-
-describe("parsePricingHintInr", () => {
-  it("parses From ₹18,500/mo", () => {
-    expect(parsePricingHintInr("From ₹18,500/mo")).toBe(18500);
-  });
-
-  it("returns null when missing", () => {
-    expect(parsePricingHintInr(null)).toBeNull();
-  });
-});
 
 describe("applySpacesFilters", () => {
   const rows = [
@@ -73,11 +62,6 @@ describe("applySpacesFilters", () => {
     expect(applySpacesFilters(rows, filters).map((l) => l.id)).toEqual(["1"]);
   });
 
-  it("filters by budget max", () => {
-    const filters: SpacesFilterState = { ...EMPTY_FILTERS, budgetMax: 10000 };
-    expect(applySpacesFilters(rows, filters).map((l) => l.id)).toEqual(["2"]);
-  });
-
   it("filters by amenity substring", () => {
     const filters: SpacesFilterState = { ...EMPTY_FILTERS, amenities: ["metro"] };
     expect(applySpacesFilters(rows, filters).map((l) => l.id)).toEqual(["1"]);
@@ -89,13 +73,8 @@ describe("activeFilterChips", () => {
     const chips = activeFilterChips({
       deskTypes: ["Private cabin"],
       areas: ["Koramangala"],
-      budgetMin: null,
-      budgetMax: 15000,
       amenities: ["Near Metro"],
     });
-    expect(chips).toContain("Private cabin");
-    expect(chips).toContain("Koramangala");
-    expect(chips.some((c) => c.includes("15,000") || c.includes("15000"))).toBe(true);
-    expect(chips).toContain("Near Metro");
+    expect(chips).toEqual(["Private cabin", "Koramangala", "Near Metro"]);
   });
 });

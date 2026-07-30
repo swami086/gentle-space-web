@@ -134,44 +134,6 @@ export function SpacesFiltersModal({
           </section>
 
           <section className="flex flex-col gap-3">
-            <h3 className="text-[15px] font-semibold text-[var(--ink)]">Budget / month</h3>
-            <div className="flex gap-3">
-              <label className="flex flex-1 flex-col gap-1 text-[13px] text-[var(--ink-secondary)]">
-                Min
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={value.budgetMin ?? ""}
-                  onChange={(event) =>
-                    onChange({
-                      ...value,
-                      budgetMin: event.target.value === "" ? null : Number(event.target.value),
-                    })
-                  }
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--ink)]"
-                  placeholder="5000"
-                />
-              </label>
-              <label className="flex flex-1 flex-col gap-1 text-[13px] text-[var(--ink-secondary)]">
-                Max
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={value.budgetMax ?? ""}
-                  onChange={(event) =>
-                    onChange({
-                      ...value,
-                      budgetMax: event.target.value === "" ? null : Number(event.target.value),
-                    })
-                  }
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--ink)]"
-                  placeholder="15000"
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3">
             <h3 className="text-[15px] font-semibold text-[var(--ink)]">Amenities</h3>
             <div className="flex flex-wrap gap-2">
               {AMENITY_PRESETS.map((amenity) => {
