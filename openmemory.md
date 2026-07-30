@@ -21,7 +21,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 | Area | Key paths |
 |------|-----------|
-| Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `SpaceGallery`, `SpaceInsightPanel` |
+| Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `ApproxAreaMap`, `useGoogleMap`, `SpaceGallery`, `SpaceInsightPanel` |
 | Search API | `app/api/spaces/search/route.ts` |
 | Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
 | Listings DB | `lib/db/*`, `docker-compose.listings.yml` (port **5433**) |
@@ -31,15 +31,18 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 | Embeddings | `lib/sync/embed-listings.ts`, `scripts/backfill-embeddings.ts` |
 | GraphRAG | `lib/graph/*`, migration `004_age.sql`, `npm run graph:rebuild` |
 | AI facade | `lib/ai/client.ts` → `lib/vertex/*` or `lib/openai/*` |
-| Nearby places (AI insight) | `lib/places/types.ts`, `lib/places/categories.ts`, `lib/places/client.ts`, `lib/places/distance.ts` — maps `QueryEntities` → Places `includedTypes`; `searchNearby()` + `distanceLabel()` |
-| AI insight prompt (Why this fits) | `lib/spaces/insight-types.ts`, `lib/spaces/insight-prompt.ts` — evidence-bound fact packet (stable IDs), JSON user payload, model returns evidence ID selections only; server renders exact listing/Places facts into `{ summary, highlights }` |
+| Nearby places (AI insight) | `lib/places/types.ts`, `lib/places/categories.ts`, `lib/places/client.ts`, `lib/places/distance.ts` — maps `QueryEntities` → Places `includedTypes`; `searchNearby()` + `distanceBand()` (coarse bands, not metre labels) |
+| Listing redaction | `lib/listings/redact.ts` — `redactSensitiveText()` drops sensitive sentences; `sanitizeArea()` keeps short locality-only area strings; `displayLocationLine()` for cards/detail |
+| AI insight prompt (Why this fits) | `lib/spaces/insight-types.ts`, `lib/spaces/insight-prompt.ts` — evidence-bound fact packet (stable IDs), JSON user payload, model returns evidence ID selections only; server renders exact listing/Places facts into `{ summary, highlights }`; no pricing facts; listing description redacted via `redactSensitiveText()` before fact packet and cache fingerprint |
 | Entity signature (client-safe) | `lib/spaces/entity-signature.ts` — `canonicalizeQueryEntities()` + `entitySignature()` for SpaceCard remount keys; no Node/server imports |
 | AI insight orchestrator | `lib/spaces/insight.ts`, `lib/spaces/insight-cache.ts` — `buildInsight()` ties category selection, Places nearby (best-effort), and `explainListingFit()` with two-layer in-memory cache (nearby 30d, insight 24h) |
 | Listings lookup | `lib/db/listings.ts` — `getListingBySlug()`, `getListingById()` share visibility filter (`missing_runs < limit`) |
+| Listing privacy (read boundary) | `lib/listings/public.ts` — `PublicListing`, `toPublicListing()` strips exact coords/address/pricing/sourceUrl; redacts prose via `redact.ts`; approx circle center = `approximateCoords` + 3-decimal round, `approxRadiusM = 500` |
 
 ## Patterns
 
-- Spaces filters stay pure in `lib/listings/filterListings.ts`.
+- Listing privacy read boundary: `app/spaces/page.tsx`, `app/api/spaces/search/route.ts`, and `app/spaces/[slug]/page.tsx` all map DB rows through `toPublicListing()` before HTML/JSON; `PublicListing` uses `?: never` on forbidden fields. Cards/detail show `displayLocationLine()` and fixed "Ask for pricing" copy (budget filter removed).
+- Spaces filters stay pure in `lib/listings/filterListings.ts` (typed on `PublicListing`).
 - `SpacesBrowseClient` owns idle hero ↔ browse chrome mode; failed AI search snaps back to `initialListings`. On successful search it stores `activeQuery` + `searchEntities` (`matchedEntities` from API) and passes them to `SpaceCard`; both clear on `handleClear` and `restoreSyncCatalog`.
 - `SpaceInsightPanel` (`components/spaces/SpaceInsightPanel.tsx`) renders only after a successful AI search (`searchQuery` set on `SpaceCard`); on-demand POST to `/api/spaces/insight` with in-component cache; remounted via `key={listingId:searchQuery:entitySignature}` on `SpaceCard` using client-safe `lib/spaces/entity-signature.ts` (not server `insight.ts`).
 - `buildInsight()` caches two layers in a bounded process-local store (max 500 entries, LRU refresh on read, expired entries pruned on write): query-independent nearby (`listingId|categories`, 30d) and insight selection (`listingId|sha256(JSON fingerprint)`, 24h) where the fingerprint is canonical JSON over normalized query, entities, listing facts, and sorted nearby `[name,distanceLabel]` tuples (no delimiter framing); concurrent misses dedupe via per-key single-flight; empty AI content is never cached and failed nearby lookups are never cached. Gemini selects query-relevant evidence IDs from the JSON fact packet; the server renders every user-visible factual sentence from exact supplied facts (stricter grounding than LLM phrasing).
@@ -55,7 +58,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 - Incremental DB primitives in `lib/db/listings.ts` now back the live orchestrator: per-source upsert/touch/hide keeps `id`/`slug` stable, uses a 7-day detail TTL by default (`LISTING_DETAIL_TTL_DAYS`), preserves embeddings unless `embed_hash` changes, soft-hides rows after 3 successful unseen runs by default (`LISTING_MISSING_RUNS_LIMIT`), and dedupes cross-source variants at vector-search read time.
 - `embedListingsMissingEmbedding()` now reuses the chunked embed loop over `listListingsMissingEmbedding()` only; `scripts/backfill-embeddings.ts` now truly fills missing vectors instead of re-embedding every listing.
 - `syncListingGraph(changed)` now prepares extraction for every changed/reactivated listing before the first AGE write, then calls `replaceListingGraph()` per listing. Soft-hidden `Listing` nodes intentionally remain in AGE until `graph:rebuild`; vector search filters hidden SQL rows before graph scoring, and `rebuildListingGraph()` still does wipe-once + `upsertListingGraph()` recovery.
-- Map pins use approximate coords (`lib/listings/approximateCoords.ts`) for privacy.
+- Map circles use `approxLat`/`approxLng`/`approxRadiusM` from `toPublicListing()`; shared `useGoogleMap()` loads Maps JS once per component; `SpacesMap` draws browse circles with title-only info windows; detail page uses `ApproxAreaMap` (~zoom 14) with text fallback when key/coords missing. `MapEmbed` removed.
 - 2026 Google Maps research baseline for `Spaces`: prefer client-only `@vis.gl/react-google-maps` in Next.js App Router, use cloud `mapId`, render price pins with `AdvancedMarker`, and reuse map instances where practical to avoid extra map-view cost.
 
 ## Local runtime setup (verified 2026-07-30)

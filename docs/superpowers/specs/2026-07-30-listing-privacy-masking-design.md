@@ -1,7 +1,7 @@
 # Listing privacy masking design
 
 Date: 2026-07-30
-Status: approved, not yet implemented
+Status: implemented
 
 ## Context
 
