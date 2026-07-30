@@ -1,4 +1,4 @@
-import { extractSearchEntitiesBatch, isAiSearchConfigured } from "@/lib/ai/client";
+import { extractSearchEntitiesBatchStrict, isAiSearchConfigured } from "@/lib/ai/client";
 import { listListings } from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
 import { forEachChunkPaced } from "../sync/pace";
@@ -44,9 +44,24 @@ const ITEMS_PER_MINUTE = 25;
 
 async function prepareListingGraphInputs(listings: Listing[]): Promise<ListingInput[]> {
   const prepared: ListingInput[] = [];
+  let useLlm = true;
 
   await forEachChunkPaced(listings, EXTRACT_BATCH_SIZE, ITEMS_PER_MINUTE, async (chunk) => {
-    const extracted = await extractSearchEntitiesBatch(chunk.map(buildListingEmbeddingText));
+    let extracted: QueryEntities[];
+    if (!useLlm) {
+      extracted = chunk.map(() => emptyQueryEntities());
+    } else {
+      try {
+        extracted = await extractSearchEntitiesBatchStrict(chunk.map(buildListingEmbeddingText));
+      } catch (error) {
+        console.error(
+          "extract batch failed; finishing graph prepare with seeded entities only",
+          error,
+        );
+        useLlm = false;
+        extracted = chunk.map(() => emptyQueryEntities());
+      }
+    }
 
     chunk.forEach((listing, j) => {
       prepared.push({

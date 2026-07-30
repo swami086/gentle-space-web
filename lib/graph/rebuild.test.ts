@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/ai/client", () => ({
-  extractSearchEntitiesBatch: vi.fn(),
+  extractSearchEntitiesBatchStrict: vi.fn(),
   isAiSearchConfigured: vi.fn(),
 }));
 
@@ -20,7 +20,7 @@ vi.mock("./age", () => ({
   wipeGentleSpaceGraph: vi.fn(),
 }));
 
-import { extractSearchEntitiesBatch, isAiSearchConfigured } from "@/lib/ai/client";
+import { extractSearchEntitiesBatchStrict, isAiSearchConfigured } from "@/lib/ai/client";
 import { listListings } from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
 import {
@@ -53,7 +53,7 @@ const sampleListing = {
 };
 
 beforeEach(() => {
-  vi.mocked(extractSearchEntitiesBatch).mockReset();
+  vi.mocked(extractSearchEntitiesBatchStrict).mockReset();
   vi.mocked(isAiSearchConfigured).mockReset();
   vi.mocked(listListings).mockReset();
   vi.mocked(buildListingEmbeddingText).mockReset();
@@ -79,7 +79,7 @@ describe("rebuildListingGraph", () => {
     vi.mocked(isAgeAvailable).mockResolvedValue(true);
     vi.mocked(listListings).mockResolvedValue([sampleListing]);
     vi.mocked(buildListingEmbeddingText).mockReturnValue("Koramangala Spot · under 15k");
-    vi.mocked(extractSearchEntitiesBatch).mockResolvedValue([
+    vi.mocked(extractSearchEntitiesBatchStrict).mockResolvedValue([
       {
         areas: ["Bengaluru", "Indiranagar", "koramangala"],
         amenities: ["wifi", "Printer"],
@@ -92,7 +92,7 @@ describe("rebuildListingGraph", () => {
     await expect(rebuildListingGraph()).resolves.toEqual({ listings: 1, skipped: false });
 
     expect(wipeGentleSpaceGraph).toHaveBeenCalledOnce();
-    expect(extractSearchEntitiesBatch).toHaveBeenCalledWith(["Koramangala Spot · under 15k"]);
+    expect(extractSearchEntitiesBatchStrict).toHaveBeenCalledWith(["Koramangala Spot · under 15k"]);
     expect(buildListingEmbeddingText).toHaveBeenCalledOnce();
     expect(upsertListingGraphs).toHaveBeenCalledWith([
       {
@@ -110,7 +110,7 @@ describe("rebuildListingGraph", () => {
     ]);
   });
 
-  it("does not wipe the graph if extraction fails mid-run", async () => {
+  it("circuit-breaks to seeded entities when extract fails, then still rebuilds", async () => {
     vi.mocked(isAiSearchConfigured).mockReturnValue(true);
     vi.mocked(isAgeAvailable).mockResolvedValue(true);
     vi.mocked(listListings).mockResolvedValue([
@@ -139,12 +139,30 @@ describe("rebuildListingGraph", () => {
     vi.mocked(buildListingEmbeddingText)
       .mockReturnValueOnce("Koramangala Spot · under 15k")
       .mockReturnValueOnce("Indiranagar Spot · under 20k");
-    vi.mocked(extractSearchEntitiesBatch).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(extractSearchEntitiesBatchStrict).mockRejectedValueOnce(new Error("boom"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(rebuildListingGraph()).rejects.toThrow("boom");
+    await expect(rebuildListingGraph()).resolves.toEqual({ listings: 2, skipped: false });
 
-    expect(wipeGentleSpaceGraph).not.toHaveBeenCalled();
-    expect(upsertListingGraphs).not.toHaveBeenCalled();
+    expect(wipeGentleSpaceGraph).toHaveBeenCalledOnce();
+    expect(upsertListingGraphs).toHaveBeenCalledOnce();
+    expect(upsertListingGraphs).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: "listing-1",
+        entities: expect.objectContaining({
+          areas: ["koramangala", "bengaluru"],
+          amenities: ["wifi"],
+        }),
+      }),
+      expect.objectContaining({
+        id: "listing-2",
+        entities: expect.objectContaining({
+          areas: ["indiranagar", "bengaluru"],
+          amenities: ["ac"],
+        }),
+      }),
+    ]);
+    errSpy.mockRestore();
   });
 });
 
@@ -155,7 +173,7 @@ describe("syncListingGraph", () => {
     await expect(syncListingGraph([sampleListing])).resolves.toEqual({ listings: 0, skipped: true });
 
     expect(isAgeAvailable).not.toHaveBeenCalled();
-    expect(extractSearchEntitiesBatch).not.toHaveBeenCalled();
+    expect(extractSearchEntitiesBatchStrict).not.toHaveBeenCalled();
     expect(replaceListingGraphs).not.toHaveBeenCalled();
   });
 
@@ -165,7 +183,7 @@ describe("syncListingGraph", () => {
     vi.mocked(buildListingEmbeddingText)
       .mockReturnValueOnce("Koramangala Spot · under 15k")
       .mockReturnValueOnce("Indiranagar Spot · under 20k");
-    vi.mocked(extractSearchEntitiesBatch).mockResolvedValueOnce([
+    vi.mocked(extractSearchEntitiesBatchStrict).mockResolvedValueOnce([
       {
         areas: ["Koramangala"],
         amenities: ["WiFi"],
@@ -202,13 +220,13 @@ describe("syncListingGraph", () => {
     await expect(syncListingGraph(changed)).resolves.toEqual({ listings: 2, skipped: false });
 
     expect(replaceListingGraphs).toHaveBeenCalledTimes(1);
-    expect(extractSearchEntitiesBatch).toHaveBeenCalledOnce();
-    expect(extractSearchEntitiesBatch).toHaveBeenCalledWith([
+    expect(extractSearchEntitiesBatchStrict).toHaveBeenCalledOnce();
+    expect(extractSearchEntitiesBatchStrict).toHaveBeenCalledWith([
       "Koramangala Spot · under 15k",
       "Indiranagar Spot · under 20k",
     ]);
     const firstReplaceCall = vi.mocked(replaceListingGraphs).mock.invocationCallOrder[0];
-    const batchExtractCall = vi.mocked(extractSearchEntitiesBatch).mock.invocationCallOrder[0];
+    const batchExtractCall = vi.mocked(extractSearchEntitiesBatchStrict).mock.invocationCallOrder[0];
     expect(batchExtractCall).toBeLessThan(firstReplaceCall);
     expect(replaceListingGraphs).toHaveBeenCalledWith([
       expect.objectContaining({ id: "listing-1" }),
@@ -224,7 +242,7 @@ describe("syncListingGraph", () => {
 
     await expect(syncListingGraph([])).resolves.toEqual({ listings: 0, skipped: false });
 
-    expect(extractSearchEntitiesBatch).not.toHaveBeenCalled();
+    expect(extractSearchEntitiesBatchStrict).not.toHaveBeenCalled();
     expect(replaceListingGraphs).not.toHaveBeenCalled();
   });
 });

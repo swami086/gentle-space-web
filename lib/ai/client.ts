@@ -50,13 +50,20 @@ export async function extractSearchEntities(text: string): Promise<QueryEntities
 export async function extractSearchEntitiesBatch(texts: string[]): Promise<QueryEntities[]> {
   if (texts.length === 0) return [];
   try {
-    return aiProvider() === "vertex"
-      ? await vertex.extractSearchEntitiesBatch(texts)
-      : await openai.extractSearchEntitiesBatch(texts);
+    return await extractSearchEntitiesBatchStrict(texts);
   } catch (error) {
     console.error("extractSearchEntitiesBatch failed", error);
     return texts.map(() => emptyQueryEntities());
   }
+}
+
+// Same as extractSearchEntitiesBatch but lets callers (graph rebuild) decide how
+// to recover from 429/outages instead of silently substituting empty entities.
+export async function extractSearchEntitiesBatchStrict(texts: string[]): Promise<QueryEntities[]> {
+  if (texts.length === 0) return [];
+  return aiProvider() === "vertex"
+    ? await vertex.extractSearchEntitiesBatch(texts)
+    : await openai.extractSearchEntitiesBatch(texts);
 }
 
 export async function extractListingEntities(text: string): Promise<QueryEntities> {
