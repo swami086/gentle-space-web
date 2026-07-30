@@ -1,7 +1,7 @@
 # Incremental listings sync design
 
 Date: 2026-07-30
-Status: approved (design), not yet implemented
+Status: implemented locally; Task 8 verification found the intended Bellandur graph overlap, but the stock `npm run graph:check` can still false-fail after the live CoFynd probe because that row's parsed `area` is malformed
 
 ## Context
 
@@ -256,8 +256,10 @@ the live check, prove unchanged embeddings are preserved.
 2. Implement bottom-up, TDD per unit: `content-hash` -> `plan` -> db functions ->
    adapters -> orchestrator -> embed -> graph.
 3. Run the unit suite, then `npm run sync:check` against CoFynd.
-4. Verify `/spaces` still renders and `POST /api/spaces/search` still boosts
-   (`npm run graph:check`).
+4. Verify `/spaces` still renders and `POST /api/spaces/search` still boosts.
+   Use `npm run graph:check` as the first probe, but if `sync:check` has seeded the live
+   CoFynd row and the check fails on malformed `area` text, confirm with a direct Bellandur
+   overlap probe instead of treating it as graph infrastructure breakage.
 
 ## Risks and known simplifications
 
