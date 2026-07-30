@@ -1,46 +1,46 @@
 export const SERVICES_CONTENT = {
   kicker: "WHAT WE DO",
-  heading: "We specialise in custom commercial real estate requirements in Bangalore",
+  heading: "Commercial real estate across Bangalore, matched to your brief.",
   subtext:
-    "High Trust Property Consulting for Commercial Real Estate and custom leasing mandates for property owners. End-to-end support includes verification, legal, and paperwork.",
+    "Every requirement is different, so we start with yours: space type, corridor, budget, and lease terms. Then we verify, negotiate, and handle the paperwork through close.",
   groups: [
     {
-      label: "CUSTOM REQUIREMENTS FOR COMPANIES",
+      label: "FOR COMPANIES",
       items: [
         {
           title: "Tenant Representation",
           body:
-            "Custom tenant representation: we search, tour, and negotiate to your brief, then support verification, legal, and paperwork through close.",
+            "We search, tour, and negotiate to your brief. Verification, legal, and paperwork are handled through handover.",
         },
         {
           title: "Managed & Coworking Advisory",
           body:
-            "Managed offices, coworking, and furnished floors when you need ready-to-use Office spaces.",
+            "Need a space ready to move into? We help with managed offices, coworking, and furnished floors.",
         },
         {
-          title: "Custom Portfolio Strategy",
+          title: "Multi-location Portfolio Strategy",
           body:
-            "Custom portfolio strategy for multi-location Bangalore footprints, not one-off leases.",
+            "Opening a second or third Bangalore location? We plan the leases together, on the same timeline, so terms and renewal dates line up across your footprint.",
         },
       ],
     },
     {
-      label: "CUSTOM REQUIREMENTS FOR PROPERTY OWNERS",
+      label: "FOR PROPERTY OWNERS",
       items: [
         {
           title: "Tenant Sourcing & Leasing",
           body:
-            "Custom tenant sourcing for property owners: screened occupants matched to your asset, corridor, and lease goals.",
+            "We screen occupants against your asset, corridor, and lease goals before they ever see the space.",
         },
         {
           title: "Rent & Asset Positioning",
           body:
-            "Rent and asset positioning using current Bangalore rent and vacancy data so space leases at market rates.",
+            "We price your space against current Bangalore rent and vacancy data for that corridor, so the number holds up in negotiation.",
         },
         {
           title: "Renewal & Retention",
           body:
-            "Renewal and retention support so property owners keep good tenants, with paperwork handled through each renewal cycle.",
+            "Good tenants are worth keeping. Renewals are where deals quietly fall apart if nobody owns the paperwork, so we do.",
         },
       ],
     },
@@ -49,43 +49,43 @@ export const SERVICES_CONTENT = {
 
 export const HOW_IT_WORKS_CONTENT = {
   kicker: "HOW IT WORKS",
-  heading: "How we deliver custom commercial leasing in Bangalore",
+  heading: "From brief to signed lease, six steps.",
   steps: [
     {
       label: "01",
       title: "Client Requirement",
       body:
-        "Capture the custom brief: team size, budget, locations, lease length, timeline, and every parameter that defines a fit.",
+        "Team size, budget, locations, lease length, timeline: every detail that decides whether a space actually fits your business.",
     },
     {
       label: "02",
       title: "Pre-Vetted Sourcing",
       body:
-        "Source Bangalore office and retail options scored on rent, location, building quality, and owner reliability, and thoroughly validate property documents and other legal aspects before they reach your shortlist.",
+        "We source Bangalore options across every property type and score them on rent, location, and building quality. Documents get checked before anything reaches your shortlist.",
     },
     {
       label: "03",
-      title: "Custom Requirements Shortlist",
+      title: "Shortlist",
       body:
-        "A shortlist built around your custom parameters: location, budget, size, quality, commute, and lease terms.",
+        "Built around your parameters: location, budget, size, quality, commute, lease terms. Everything on it fits your brief.",
     },
     {
       label: "04",
       title: "Property Tours",
       body:
-        "Run property tours with micro-market context on pricing and demand in each Bangalore corridor.",
+        "We walk you through each option with real context on pricing and demand in that corridor.",
     },
     {
       label: "05",
       title: "Price Negotiations",
       body:
-        "Negotiate rent, lock-in, and incentives using live Bangalore lease comps.",
+        "We negotiate rent, lock-in, and incentives using live Bangalore lease comps.",
     },
     {
       label: "06",
       title: "Verification, Legal & Paperwork",
       body:
-        "Handle verification, legal checks, and associated paperwork through handover for an end-to-end close.",
+        "Handled through to handover.",
     },
   ],
 } as const;

@@ -1,13 +1,13 @@
 export const CONTENT = {
   hero: {
-    kicker: "TOP COMMERCIAL REAL ESTATE CONSULTANTS IN BANGALORE",
+    kicker: "COMMERCIAL REAL ESTATE CONSULTING IN BANGALORE",
     headline:
-      "Top Commercial real estate consultants in Bangalore for custom requirements",
+      "Find commercial space in Bangalore without wading through inflated listings. No dead-end tours.",
     subtext:
-      "We specialise in custom commercial real estate requirements for companies seeking commercial properties in Bangalore. We match properties based on specific/custom requirements across location, budget, size, building quality, commute, and lease terms, providing high quality outcomes for our clients. For property owners, we find screened tenants and help lease your properties on clear, high-trust terms.",
+      "Office, retail, warehouse, whatever the brief calls for. We match it to your budget, size, location, and lease terms, then stay through verification, legal, and paperwork until you're handed the keys. For property owners, we find screened tenants and help you lease on clear terms.",
     incentive:
-      "Share your details with us get your private property e-brochure within an hour. A member of our team will reach out to you within 24 hours.",
-    primaryCta: "Contact Us",
-    secondaryCta: "Explore Services",
+      "Share your brief and we'll reply within the hour. Your shortlist typically follows within five working days.",
+    primaryCta: "Get My Shortlist",
+    secondaryCta: "Browse Spaces",
   },
 } as const;

@@ -9,11 +9,11 @@ export function CtaBand() {
     <section className="bg-[var(--accent-dark)] px-6 py-[72px] lg:px-[160px]">
       <div className="mx-auto flex max-w-[720px] flex-col items-center gap-5 text-center">
         <h2 className="text-[28px] font-bold tracking-tight text-white lg:text-[32px]">
-          Need custom commercial real estate requirements in Bangalore?
+          Ready to find the right commercial space in Bangalore?
         </h2>
         <p className="max-w-[520px] text-base leading-[1.5] text-white/80">
-          Share your custom brief. We’ll send a private property shortlist as an e-brochure on
-          WhatsApp.
+          Share your brief on WhatsApp and we&apos;ll reply within the hour, with your private
+          shortlist typically ready in about five working days.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
@@ -21,7 +21,7 @@ export function CtaBand() {
             onClick={openModal}
             className="rounded-[var(--radius-sm)] bg-white px-8 py-3.5 text-[15px] font-semibold text-[var(--accent-dark)] transition hover:bg-[var(--surface-tint)]"
           >
-            Share My Custom Brief
+            Get My Shortlist
           </button>
           <a
             href="/spaces"

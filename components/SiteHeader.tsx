@@ -91,7 +91,7 @@ export function SiteHeader() {
             onClick={openModal}
             className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
           >
-            Share My Custom Brief
+            Get My Shortlist
           </button>
           <button
             type="button"

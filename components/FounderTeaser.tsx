@@ -26,9 +26,10 @@ export function FounderTeaser() {
             Founder · Gentle Space Global Solutions · Bangalore
           </p>
           <p className="mt-6 max-w-[62ch] text-base leading-8 text-[var(--ink)]">
-            Sanjay Singh and his team of consultants specialise in Bangalore Commercial Real
-            Estate and can meet the demand across any industry. He founded Gentle Space to help
-            Companies and Property owners achieve high-trust outcomes.
+            Sanjay Singh and the Gentle Space team work across every type of commercial real
+            estate in Bangalore. He started the firm to give companies and property owners a
+            consultant who stays on the deal through legal, paperwork, and whatever comes up
+            after move-in.
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">

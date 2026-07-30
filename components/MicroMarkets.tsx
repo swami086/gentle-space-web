@@ -19,7 +19,7 @@ export function MicroMarkets() {
           </span>
         </p>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
-          Office and commercial space across Bangalore’s main corridors
+          We cover all of Bangalore. These corridors see the most activity right now.
         </h2>
 
         <div className="mt-8 flex flex-wrap gap-3">

@@ -1,5 +1,5 @@
 export function About() {
-  const pills = ["Client-Focused Consulting", "Proven Track Record", "Local expertise"];
+  const pills = ["Verified before you tour", "Legal and paperwork through close", "Bangalore-wide coverage"];
 
   return (
     <section id="why-us" className="px-6 py-20 lg:px-[160px]">
@@ -11,12 +11,13 @@ export function About() {
             </span>
           </p>
           <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
-            Why choose Gentle Space for commercial real estate in Bangalore
+            Why companies and owners work with Gentle Space
           </h2>
           <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--muted)] lg:text-lg">
-            Gentle Space is a commercial real estate consulting firm in Bangalore that
-            specialises in custom requirements. We remove friction for companies and property
-            owners so deals close cleanly.
+            Most leases run into trouble in the fine print. We check it before you tour a
+            property, then stay on the deal through legal and handover. Property owners get the
+            same coverage from the other side: a tenant we&apos;ve actually vetted, and a close we
+            manage end to end.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -34,9 +35,8 @@ export function About() {
         <aside className="rounded-[var(--radius-lg)] bg-[var(--accent-dark)] p-6 text-[var(--on-accent)] lg:p-8">
           <h3 className="text-xl font-semibold tracking-tight">How our fee works</h3>
           <p className="mt-4 text-sm leading-7 text-[var(--on-accent)]/90">
-            We charge no fees for standard requirements within our existing inventory. For highly
-            customised needs where we have to invest efforts for new properties, we charge a fixed
-            fee.
+            Standard requirements cost you nothing. A highly customised search outside our
+            existing network carries a fixed fee, agreed upfront.
           </p>
         </aside>
       </div>

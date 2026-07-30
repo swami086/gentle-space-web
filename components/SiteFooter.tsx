@@ -20,7 +20,7 @@ export function SiteFooter() {
             <span className="text-lg font-semibold tracking-tight text-[var(--ink)]">{SITE.name}</span>
           </a>
           <p className="mt-5 text-sm leading-7 text-[var(--ink-secondary)]">
-            Top commercial real estate consultants in Bangalore. Specialists in custom requirements for companies and property owners.
+            Commercial real estate consulting in Bangalore, for companies and property owners across every property type.
           </p>
         </div>
 
