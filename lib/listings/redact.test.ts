@@ -27,9 +27,12 @@ describe("redactSensitiveText", () => {
   it("drops precise metro distance + road sentence", () => {
     const input =
       "The centre is a 2 minute walk from the local bus stand and a 4 minute walk from Lalbhag Metro station. Within 50 meters you have the Bus Depo. Collaborative desks suit growing teams.";
-    // "Within 50 meters..." must drop; keep collaborative sentence
     const out = redactSensitiveText(input);
     expect(out.toLowerCase()).not.toContain("within 50");
+    expect(out.toLowerCase()).not.toContain("2 minute");
+    expect(out.toLowerCase()).not.toContain("4 minute");
+    expect(out.toLowerCase()).not.toContain("lalbhag");
+    expect(out.toLowerCase()).not.toContain("metro station");
     expect(out).toMatch(/Collaborative desks/i);
   });
 

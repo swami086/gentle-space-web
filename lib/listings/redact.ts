@@ -11,6 +11,7 @@ const SENSITIVE = [
   /\b(?:located|situated)\s+(?:at|on|in)\b/i,
   /\bwithin\s+\d+\s+meters?\b/i,
   /\b\d+\s+meters?\s+(?:away|from)\b/i,
+  /\b\d+\s+minutes?\s+walk\b/i,
 ];
 
 export function redactSensitiveText(text: string): string {
