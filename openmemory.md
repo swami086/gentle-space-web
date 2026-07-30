@@ -13,6 +13,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 - **Marketing home** (`/`): static sections (Hero, Services, HowItWorks, FAQ, Founder, CTA).
 - **Spaces product** (`/spaces`): Airbnb-style browse with AI search, client filters, split map, detail pages (`/spaces/[slug]`).
 - **AI search**: `POST /api/spaces/search` — vector-first pgvector rank-boost; optional Apache AGE GraphRAG scoring when configured.
+- **AI insight**: `POST /api/spaces/insight` — on-demand "Why this fits" panel; validates UUID listing id, query (≤500 chars), and optional `QueryEntities` shape before config/DB; loads via `getListingById`, delegates to `buildInsight()`.
 - **Ingest**: Firecrawl listings sync from 4 sources (Coworker, myHQ, CoFynd, GoFloaters) now runs per-source incremental discovery/plan/apply orchestration, then soft-fails downstream embedding + graph hooks. Embeddings now backfill only `embedding IS NULL` rows; AGE sync now replaces graph state only for changed/reactivated rows while preserving the full rebuild recovery path. `sync:preview` now reuses the same incremental write path for capped Coworker runs, and `sync:check` provides a one-listing live CoFynd probe.
 - **AI provider**: Vertex preferred (`AI_PROVIDER=vertex`, project `propane-galaxy-498403-n8`, `text-embedding-004` / `gemini-2.5-flash-lite`); OpenAI fallback.
 
@@ -20,8 +21,9 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 | Area | Key paths |
 |------|-----------|
-| Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `SpaceGallery` |
+| Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `SpaceGallery`, `SpaceInsightPanel` |
 | Search API | `app/api/spaces/search/route.ts` |
+| Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
 | Listings DB | `lib/db/*`, `docker-compose.listings.yml` (port **5433**) |
 | Sync | `lib/sync/run-sync.ts`, `lib/sync/sources/*`, `scripts/run-listings-sync.ts` |
 | Sync planning | `lib/sync/plan.ts`, `lib/sync/content-hash.ts`, `lib/sync/config.ts` |
@@ -29,11 +31,20 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 | Embeddings | `lib/sync/embed-listings.ts`, `scripts/backfill-embeddings.ts` |
 | GraphRAG | `lib/graph/*`, migration `004_age.sql`, `npm run graph:rebuild` |
 | AI facade | `lib/ai/client.ts` → `lib/vertex/*` or `lib/openai/*` |
+| Nearby places (AI insight) | `lib/places/types.ts`, `lib/places/categories.ts`, `lib/places/client.ts`, `lib/places/distance.ts` — maps `QueryEntities` → Places `includedTypes`; `searchNearby()` + `distanceLabel()` |
+| AI insight prompt (Why this fits) | `lib/spaces/insight-types.ts`, `lib/spaces/insight-prompt.ts` — evidence-bound fact packet (stable IDs), JSON user payload, model returns evidence ID selections only; server renders exact listing/Places facts into `{ summary, highlights }` |
+| Entity signature (client-safe) | `lib/spaces/entity-signature.ts` — `canonicalizeQueryEntities()` + `entitySignature()` for SpaceCard remount keys; no Node/server imports |
+| AI insight orchestrator | `lib/spaces/insight.ts`, `lib/spaces/insight-cache.ts` — `buildInsight()` ties category selection, Places nearby (best-effort), and `explainListingFit()` with two-layer in-memory cache (nearby 30d, insight 24h) |
+| Listings lookup | `lib/db/listings.ts` — `getListingBySlug()`, `getListingById()` share visibility filter (`missing_runs < limit`) |
 
 ## Patterns
 
 - Spaces filters stay pure in `lib/listings/filterListings.ts`.
-- `SpacesBrowseClient` owns idle hero ↔ browse chrome mode; failed AI search snaps back to `initialListings`.
+- `SpacesBrowseClient` owns idle hero ↔ browse chrome mode; failed AI search snaps back to `initialListings`. On successful search it stores `activeQuery` + `searchEntities` (`matchedEntities` from API) and passes them to `SpaceCard`; both clear on `handleClear` and `restoreSyncCatalog`.
+- `SpaceInsightPanel` (`components/spaces/SpaceInsightPanel.tsx`) renders only after a successful AI search (`searchQuery` set on `SpaceCard`); on-demand POST to `/api/spaces/insight` with in-component cache; remounted via `key={listingId:searchQuery:entitySignature}` on `SpaceCard` using client-safe `lib/spaces/entity-signature.ts` (not server `insight.ts`).
+- `buildInsight()` caches two layers in a bounded process-local store (max 500 entries, LRU refresh on read, expired entries pruned on write): query-independent nearby (`listingId|categories`, 30d) and insight selection (`listingId|sha256(JSON fingerprint)`, 24h) where the fingerprint is canonical JSON over normalized query, entities, listing facts, and sorted nearby `[name,distanceLabel]` tuples (no delimiter framing); concurrent misses dedupe via per-key single-flight; empty AI content is never cached and failed nearby lookups are never cached. Gemini selects query-relevant evidence IDs from the JSON fact packet; the server renders every user-visible factual sentence from exact supplied facts (stricter grounding than LLM phrasing).
+- `selectNearbyCategories()` maps query entities to Places `includedTypes` deterministically (max 3, stable order for cache-key stability) with a transit/food/ATM commuter default.
+- `npm run insight:check` live-checks Places + Gemini end-to-end for one Coworker listing with real coordinates; asserts non-empty highlights and at least one nearby place.
 - Sync soft-fails embed + graph rebuild after successful listing write.
 - Sync hashes are split into content vs embed scope in `lib/sync/content-hash.ts`; both normalize amenity ordering with `buildListingEmbeddingText()` still as the embedding-text source of truth.
 - `runListingsSync()` now processes each adapter independently: `discover()` → `listExistingForSource()` → `planSourceSync()` → bounded detail scrapes → one `applySourceSync()` call, with source-local failures captured in `sync_runs.sources` and no shared full-replace abort threshold.
@@ -51,7 +62,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 Runtime config is **not in git** — it was copied from `~/Documents/Resume/gentle-space-web/`:
 
-- `.env.local` — `DATABASE_URL`, `AI_PROVIDER=vertex`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`, `VERTEX_*` models, `FIRECRAWL_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY`, `GOOGLE_MAPS_EMBED_KEY`, `GOOGLE_GEOCODING_API_KEY`. `GOOGLE_APPLICATION_CREDENTIALS` must be rewritten to this workspace's absolute path.
+- `.env.local` — `DATABASE_URL`, `AI_PROVIDER=vertex`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`, `VERTEX_*` models, `FIRECRAWL_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY`, `GOOGLE_MAPS_EMBED_KEY`, `GOOGLE_GEOCODING_API_KEY`, `GOOGLE_PLACES_API_KEY` (server-only; Places API (New)). `GOOGLE_APPLICATION_CREDENTIALS` must be rewritten to this workspace's absolute path.
 - `.secrets/gentle-space-vertex-stackgen.json` (+ `gentle-space-vertex.json`) — Vertex SA keys, mode `600`. Both are gitignored (`.env*`, `.secrets/`) — keep it that way, the remote is public.
 
 **Docker:** the pgvector+AGE volume was created by the Resume folder, so compose must pin the original project name or a new empty volume is used instead:

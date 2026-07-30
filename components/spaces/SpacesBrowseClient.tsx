@@ -15,6 +15,7 @@ import {
   applySpacesFilters,
   type SpacesFilterState,
 } from "@/lib/listings/filterListings";
+import type { QueryEntities } from "@/lib/graph/types";
 import type { Listing, SyncRun } from "@/lib/listings/types";
 
 type MetaMode = "sync" | "matches" | "empty-search";
@@ -28,6 +29,7 @@ type SpacesBrowseClientProps = {
 type SearchResponse = {
   interpretedQuery: string;
   listings: Listing[];
+  matchedEntities?: QueryEntities;
 };
 
 export function SpacesBrowseClient({
@@ -38,6 +40,8 @@ export function SpacesBrowseClient({
   const [listings, setListings] = useState(initialListings);
   const [query, setQuery] = useState("");
   const [interpretedQuery, setInterpretedQuery] = useState<string | null>(null);
+  const [searchEntities, setSearchEntities] = useState<QueryEntities | undefined>(undefined);
+  const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [metaMode, setMetaMode] = useState<MetaMode>("sync");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,6 +85,8 @@ export function SpacesBrowseClient({
     setMetaMode("sync");
     setError(null);
     setShowHome(true);
+    setSearchEntities(undefined);
+    setActiveQuery(null);
   }, [initialListings]);
 
   const restoreSyncCatalog = useCallback(() => {
@@ -88,6 +94,8 @@ export function SpacesBrowseClient({
     setInterpretedQuery(null);
     setMetaMode("sync");
     setActiveId(null);
+    setSearchEntities(undefined);
+    setActiveQuery(null);
   }, [initialListings]);
 
   const runSearch = useCallback(async (rawQuery: string) => {
@@ -119,6 +127,8 @@ export function SpacesBrowseClient({
       const data = (await response.json()) as SearchResponse;
       setQuery(trimmed);
       setInterpretedQuery(data.interpretedQuery);
+      setSearchEntities(data.matchedEntities);
+      setActiveQuery(trimmed);
       setListings(data.listings);
       setActiveId((prev) =>
         prev && data.listings.some((l) => l.id === prev) ? prev : null,
@@ -242,6 +252,8 @@ export function SpacesBrowseClient({
                       listing={listing}
                       active={listing.id === activeId}
                       onActivate={handleCardActivate}
+                      searchQuery={activeQuery ?? undefined}
+                      searchEntities={searchEntities}
                     />
                   </li>
                 ))}

@@ -1,6 +1,8 @@
 import * as openai from "../openai/client";
 import * as vertex from "../vertex/client";
 import { emptyQueryEntities, type QueryEntities } from "../graph/types";
+import { emptyInsightContent } from "../spaces/insight-prompt";
+import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
 export function aiProvider(): "vertex" | "openai" {
   if (process.env.AI_PROVIDER === "vertex") return "vertex";
@@ -50,5 +52,16 @@ export async function extractListingEntities(text: string): Promise<QueryEntitie
   } catch (error) {
     console.error("extractListingEntities failed", error);
     return emptyQueryEntities();
+  }
+}
+
+export async function explainListingFit(facts: InsightFacts): Promise<InsightContent> {
+  try {
+    return aiProvider() === "vertex"
+      ? await vertex.explainListingFit(facts)
+      : await openai.explainListingFit(facts);
+  } catch (error) {
+    console.error("explainListingFit failed", error);
+    return emptyInsightContent();
   }
 }

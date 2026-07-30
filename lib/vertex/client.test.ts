@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { extractSearchEntities } from "./client";
+import type { InsightFacts } from "../spaces/insight-types";
 
 vi.mock("./auth", () => ({
   getVertexAccessToken: vi.fn().mockResolvedValue("vertex-test-token"),
 }));
 
 const fetchMock = vi.fn();
+
+const facts: InsightFacts = {
+  title: "CoWrks Ecoworld",
+  area: "Bellandur",
+  city: "Bengaluru",
+  propertyType: null,
+  pricingHint: null,
+  amenities: [],
+  description: "",
+  query: "coworking in bellandur",
+  nearby: [],
+};
 
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
@@ -45,6 +57,7 @@ describe("extractSearchEntities", () => {
       }),
     });
 
+    const { extractSearchEntities } = await import("./client");
     await expect(extractSearchEntities("private cabin near metro")).resolves.toEqual({
       areas: ["indiranagar"],
       amenities: ["wifi"],
@@ -69,5 +82,35 @@ describe("extractSearchEntities", () => {
       responseMimeType: "application/json",
       temperature: 0,
     });
+  });
+});
+
+describe("vertex explainListingFit", () => {
+  it("sends an abort signal on insight requests", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    summaryEvidenceIds: ["listing.area"],
+                    highlightEvidenceIds: [],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const { explainListingFit } = await import("./client");
+    await explainListingFit(facts);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeDefined();
   });
 });

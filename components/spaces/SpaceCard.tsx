@@ -1,7 +1,14 @@
 import Link from "next/link";
+import { emptyQueryEntities, type QueryEntities } from "@/lib/graph/types";
 import type { Listing, ListingSource } from "@/lib/listings/types";
+import { entitySignature } from "@/lib/spaces/entity-signature";
 import { spaceListingUrl } from "@/lib/site";
 import { LikeSpaceButton } from "./LikeSpaceButton";
+import { SpaceInsightPanel } from "./SpaceInsightPanel";
+
+function insightPanelKey(listingId: string, query: string, entities?: QueryEntities): string {
+  return `${listingId}:${query}:${entitySignature(entities ?? emptyQueryEntities())}`;
+}
 
 const SOURCE_LABELS: Record<ListingSource, string> = {
   coworker: "Coworker",
@@ -14,9 +21,17 @@ type SpaceCardProps = {
   listing: Listing;
   active?: boolean;
   onActivate?: (id: string) => void;
+  searchQuery?: string;
+  searchEntities?: QueryEntities;
 };
 
-export function SpaceCard({ listing, active = false, onActivate }: SpaceCardProps) {
+export function SpaceCard({
+  listing,
+  active = false,
+  onActivate,
+  searchQuery,
+  searchEntities,
+}: SpaceCardProps) {
   const heroImage = listing.images[0];
   const detailUrl = `/spaces/${listing.slug}`;
   const propertyUrl = spaceListingUrl(listing.slug);
@@ -73,6 +88,15 @@ export function SpaceCard({ listing, active = false, onActivate }: SpaceCardProp
         <span className="inline-flex w-fit rounded-full bg-[var(--surface-tint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-secondary)]">
           {SOURCE_LABELS[listing.source]}
         </span>
+
+        {searchQuery ? (
+          <SpaceInsightPanel
+            key={insightPanelKey(listing.id, searchQuery, searchEntities)}
+            listingId={listing.id}
+            query={searchQuery}
+            entities={searchEntities}
+          />
+        ) : null}
       </div>
     </article>
   );
