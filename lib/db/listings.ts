@@ -171,10 +171,14 @@ export async function searchListingsByEmbedding(
   const vectorLiteral = `[${embedding.join(",")}]`;
   const visibleLimit = getListingMissingRunsLimit();
   const { rows } = await getPool().query<ListingRow & { vector_similarity: number }>(
-    `SELECT *, (1 - (embedding <=> $1::vector))::float8 AS vector_similarity
+    `SELECT *, GREATEST(
+       1 - (structured_embedding <=> $1::vector),
+       1 - (description_embedding <=> $1::vector)
+     )::float8 AS vector_similarity
      FROM listings
-     WHERE embedding IS NOT NULL AND missing_runs < $2
-     ORDER BY embedding <=> $1::vector
+     WHERE (structured_embedding IS NOT NULL OR description_embedding IS NOT NULL)
+       AND missing_runs < $2
+     ORDER BY vector_similarity DESC
      LIMIT $3`,
     [vectorLiteral, visibleLimit, k * 4],
   );
@@ -192,14 +196,17 @@ export async function searchListingsByEmbedding(
     }));
 }
 
-export async function updateListingEmbedding(
+export async function updateListingEmbeddings(
   id: string,
-  embedding: number[],
+  embeddings: { structured: number[]; description: number[] },
 ): Promise<void> {
-  const vectorLiteral = `[${embedding.join(",")}]`;
+  const structuredLiteral = `[${embeddings.structured.join(",")}]`;
+  const descriptionLiteral = `[${embeddings.description.join(",")}]`;
   await getPool().query(
-    `UPDATE listings SET embedding = $1::vector WHERE id = $2`,
-    [vectorLiteral, id],
+    `UPDATE listings
+     SET structured_embedding = $1::vector, description_embedding = $2::vector
+     WHERE id = $3`,
+    [structuredLiteral, descriptionLiteral, id],
   );
 }
 
@@ -309,9 +316,13 @@ export async function applySourceSync(input: {
            missing_runs = 0,
            content_hash = EXCLUDED.content_hash,
            embed_hash = EXCLUDED.embed_hash,
-           embedding = CASE
+           structured_embedding = CASE
              WHEN listings.embed_hash IS DISTINCT FROM EXCLUDED.embed_hash
-               THEN NULL ELSE listings.embedding
+               THEN NULL ELSE listings.structured_embedding
+           END,
+           description_embedding = CASE
+             WHEN listings.embed_hash IS DISTINCT FROM EXCLUDED.embed_hash
+               THEN NULL ELSE listings.description_embedding
            END
          RETURNING id, slug`,
         values,
@@ -365,7 +376,7 @@ export async function listListingsMissingEmbedding(): Promise<Listing[]> {
 
   const { rows } = await getPool().query<ListingRow>(
     `SELECT * FROM listings
-     WHERE embedding IS NULL AND missing_runs < $1
+     WHERE (structured_embedding IS NULL OR description_embedding IS NULL) AND missing_runs < $1
      ORDER BY title ASC`,
     [getListingMissingRunsLimit()],
   );

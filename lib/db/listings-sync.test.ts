@@ -64,7 +64,8 @@ it("upserts scraped rows, touches every discovered id, and increments only unsee
   expect(result.updated).toBe(1);
   expect(result.newlyHiddenIds).toEqual(["hidden-id"]);
   expect(query.mock.calls[1][0]).toContain("ON CONFLICT (source, source_id)");
-  expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.embedding");
+  expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.structured_embedding");
+  expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.description_embedding");
   expect(query.mock.calls[2][0]).toContain("missing_runs = 0");
   expect(query.mock.calls[2][0]).not.toContain("synced_at");
   expect(query.mock.calls[3][0]).toContain("missing_runs < $3");

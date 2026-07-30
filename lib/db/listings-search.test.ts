@@ -9,8 +9,9 @@ vi.mock("./client", () => ({
 import {
   getListingBySlug,
   listListings,
+  listListingsMissingEmbedding,
   searchListingsByEmbedding,
-  updateListingEmbedding,
+  updateListingEmbeddings,
 } from "./listings";
 
 const sampleRow = {
@@ -33,7 +34,8 @@ const sampleRow = {
   source_url: "https://example.com/wework",
   synced_at: new Date("2026-01-01T00:00:00Z"),
   missing_runs: 0,
-  embedding: "[0.1,0.2,0.3]",
+  structured_embedding: "[0.1,0.2,0.3]",
+  description_embedding: "[0.4,0.5,0.6]",
 };
 
 beforeEach(() => {
@@ -48,7 +50,7 @@ describe("searchListingsByEmbedding", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("queries pgvector cosine distance and maps rows", async () => {
+  it("queries the max of both column similarities and maps rows", async () => {
     process.env.DATABASE_URL = "postgres://local/test";
     query.mockResolvedValue({
       rows: [{ ...sampleRow, vector_similarity: 0.83 }],
@@ -56,17 +58,22 @@ describe("searchListingsByEmbedding", () => {
 
     const results = await searchListingsByEmbedding([0.1, 0.2, 0.3], 5);
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "SELECT *, (1 - (embedding <=> $1::vector))::float8 AS vector_similarity",
-      ),
-      ["[0.1,0.2,0.3]", 3, 20],
+    const sql = query.mock.calls[0]?.[0] as string;
+    expect(query).toHaveBeenCalledWith(sql, ["[0.1,0.2,0.3]", 3, 20]);
+    expect(sql).toContain("GREATEST(");
+    expect(sql).toContain("structured_embedding <=> $1::vector");
+    expect(sql).toContain("description_embedding <=> $1::vector");
+    expect(sql).toContain("AS vector_similarity");
+    expect(sql).toContain(
+      "WHERE (structured_embedding IS NOT NULL OR description_embedding IS NOT NULL)",
     );
-    expect(query.mock.calls[0]?.[0]).toContain("missing_runs < $2");
+    expect(sql).toContain("missing_runs < $2");
+    expect(sql).toContain("ORDER BY vector_similarity DESC");
     expect(results).toHaveLength(1);
     expect(results[0].listing.slug).toBe("wework-prestige");
     expect(results[0].vectorSimilarity).toBe(0.83);
-    expect(results[0].listing).not.toHaveProperty("embedding");
+    expect(results[0].listing).not.toHaveProperty("structured_embedding");
+    expect(results[0].listing).not.toHaveProperty("description_embedding");
   });
 });
 
@@ -93,16 +100,33 @@ describe("visibility-filtered reads", () => {
   });
 });
 
-describe("updateListingEmbedding", () => {
-  it("updates embedding column via vector cast", async () => {
+describe("listListingsMissingEmbedding", () => {
+  it("selects rows where either embedding column is null", async () => {
+    process.env.DATABASE_URL = "postgres://local/test";
+    query.mockResolvedValue({ rows: [sampleRow] });
+
+    const results = await listListingsMissingEmbedding();
+
+    const sql = query.mock.calls[0]?.[0] as string;
+    expect(sql).toContain("structured_embedding IS NULL OR description_embedding IS NULL");
+    expect(sql).toContain("missing_runs < $1");
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe("updateListingEmbeddings", () => {
+  it("updates both embedding columns via vector cast", async () => {
     process.env.DATABASE_URL = "postgres://local/test";
     query.mockResolvedValue({ rows: [] });
 
-    await updateListingEmbedding("abc", [0.4, 0.5, 0.6]);
+    await updateListingEmbeddings("abc", {
+      structured: [0.4, 0.5, 0.6],
+      description: [0.7, 0.8, 0.9],
+    });
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE listings SET embedding = $1::vector"),
-      ["[0.4,0.5,0.6]", "abc"],
-    );
+    const sql = query.mock.calls[0]?.[0] as string;
+    expect(query).toHaveBeenCalledWith(sql, ["[0.4,0.5,0.6]", "[0.7,0.8,0.9]", "abc"]);
+    expect(sql).toContain("structured_embedding = $1::vector");
+    expect(sql).toContain("description_embedding = $2::vector");
   });
 });
