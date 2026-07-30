@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { useEffect, useRef } from "react";
 import type { PublicListing } from "@/lib/listings/public";
+import { useGoogleMap } from "./useGoogleMap";
 
 const BANGALORE = { lat: 12.9716, lng: 77.5946 };
 
@@ -14,69 +14,41 @@ type SpacesMapProps = {
 
 export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const circlesRef = useRef<Map<string, google.maps.Circle>>(new Map());
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
   const onActivateRef = useRef(onActivate);
   onActivateRef.current = onActivate;
-  const [mapReady, setMapReady] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY;
+  const { map, mapReady, loadFailed } = useGoogleMap(containerRef);
 
   useEffect(() => {
-    if (!apiKey || !containerRef.current) return;
-    let cancelled = false;
-
-    setOptions({ key: apiKey, v: "weekly" });
-
-    importLibrary("maps")
-      .then(() => {
-        if (cancelled || !containerRef.current) return;
-        mapRef.current = new google.maps.Map(containerRef.current, {
-          center: BANGALORE,
-          zoom: 12,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-        });
-        infoRef.current = new google.maps.InfoWindow();
-        setMapReady(true);
-      })
-      .catch(() => {
-        mapRef.current = null;
-        setLoadFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-      infoRef.current?.close();
-      clearMapMarkers(markersRef.current);
-      mapRef.current = null;
-      setMapReady(false);
-    };
-  }, [apiKey]);
+    if (mapReady && map && !infoRef.current) {
+      infoRef.current = new google.maps.InfoWindow();
+    }
+  }, [mapReady, map]);
 
   useEffect(() => {
-    const map = mapRef.current;
     if (!map || !apiKey || !mapReady) return;
 
     infoRef.current?.close();
-    clearMapMarkers(markersRef.current);
+    clearCircles(circlesRef.current);
 
     const bounds = new google.maps.LatLngBounds();
-    let pinCount = 0;
+    let circleCount = 0;
 
     for (const listing of listings) {
       if (listing.approxLat == null || listing.approxLng == null) continue;
-      const position = { lat: listing.approxLat, lng: listing.approxLng };
-      const marker = new google.maps.Marker({
+      const center = { lat: listing.approxLat, lng: listing.approxLng };
+      const circle = new google.maps.Circle({
         map,
-        position,
-        title: listing.title,
+        center,
+        radius: listing.approxRadiusM,
+        clickable: true,
+        ...circleStyle(false),
       });
-      marker.addListener("mouseover", () => onActivateRef.current(listing.id));
-      marker.addListener("click", () => {
+      circle.addListener("mouseover", () => onActivateRef.current(listing.id));
+      circle.addListener("click", () => {
         onActivateRef.current(listing.id);
         infoRef.current?.setContent(
           `<div style="max-width:220px;padding:4px">
@@ -85,47 +57,36 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
             </a>
           </div>`,
         );
-        infoRef.current?.open({ map, anchor: marker });
+        infoRef.current?.setPosition(center);
+        infoRef.current?.open({ map });
       });
-      markersRef.current.set(listing.id, marker);
-      bounds.extend(position);
-      pinCount += 1;
+      circlesRef.current.set(listing.id, circle);
+      const circleBounds = circle.getBounds();
+      if (circleBounds) bounds.union(circleBounds);
+      circleCount += 1;
     }
 
-    if (pinCount > 0) {
+    if (circleCount > 0) {
       map.fitBounds(bounds, 48);
     } else {
       map.setCenter(BANGALORE);
       map.setZoom(12);
     }
-  }, [listings, apiKey, mapReady]);
+  }, [listings, apiKey, mapReady, map]);
 
   useEffect(() => {
     if (!mapReady) return;
-    markersRef.current.forEach((marker, id) => {
-      const isActive = id === activeId;
-      marker.setZIndex(isActive ? 1000 : 1);
-      marker.setIcon(
-        isActive
-          ? {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: "#C45C26",
-              fillOpacity: 1,
-              strokeWeight: 2,
-              strokeColor: "#ffffff",
-            }
-          : {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 7,
-              fillColor: "#8B5E3C",
-              fillOpacity: 0.9,
-              strokeWeight: 1,
-              strokeColor: "#ffffff",
-            },
-      );
+    circlesRef.current.forEach((circle, id) => {
+      circle.setOptions(circleStyle(id === activeId));
     });
   }, [activeId, listings, mapReady]);
+
+  useEffect(() => {
+    return () => {
+      infoRef.current?.close();
+      clearCircles(circlesRef.current);
+    };
+  }, []);
 
   if (!apiKey || loadFailed) {
     return (
@@ -144,12 +105,21 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
   );
 }
 
-function clearMapMarkers(markers: Map<string, google.maps.Marker>): void {
-  markers.forEach((m) => {
-    m.setMap(null);
-    google.maps?.event?.clearInstanceListeners(m);
+function circleStyle(active: boolean): google.maps.CircleOptions {
+  return {
+    fillColor: "#8B5E3C",
+    fillOpacity: active ? 0.45 : 0.25,
+    strokeWeight: active ? 2 : 1,
+    strokeColor: active ? "#C45C26" : "#ffffff",
+  };
+}
+
+function clearCircles(circles: Map<string, google.maps.Circle>): void {
+  circles.forEach((circle) => {
+    circle.setMap(null);
+    google.maps?.event?.clearInstanceListeners(circle);
   });
-  markers.clear();
+  circles.clear();
 }
 
 function escapeHtml(value: string): string {

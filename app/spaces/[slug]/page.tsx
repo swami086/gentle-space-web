@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { ApproxAreaMap } from "@/components/spaces/ApproxAreaMap";
 import { LikeSpaceButton } from "@/components/spaces/LikeSpaceButton";
 import { SpaceGallery } from "@/components/spaces/SpaceGallery";
 import { getListingBySlug } from "@/lib/db/listings";
@@ -81,10 +82,12 @@ export default async function SpaceDetailPage({ params }: PageProps) {
               </div>
             ) : null}
 
-            {/* Task 6: replace with ApproxAreaMap using approxLat/approxLng */}
-            <p className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-tint)] px-4 py-6 text-sm text-[var(--muted)]">
-              Approximate area — {locationLine}
-            </p>
+            <ApproxAreaMap
+              approxLat={listing.approxLat}
+              approxLng={listing.approxLng}
+              approxRadiusM={listing.approxRadiusM}
+              locationLabel={locationLine}
+            />
           </div>
         </div>
 
