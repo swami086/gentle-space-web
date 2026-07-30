@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS listings (
   missing_runs INT NOT NULL DEFAULT 0,
   content_hash TEXT,
   embed_hash TEXT,
+  extracted_entities JSONB,
+  entities_hash TEXT,
   structured_embedding vector(768),
   description_embedding vector(768),
   UNIQUE (source, source_id)
