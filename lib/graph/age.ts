@@ -5,7 +5,7 @@ import { emptyQueryEntities } from "./types";
 import type { PoolClient } from "pg";
 import { getPool } from "../db/client";
 
-type ListingInput = {
+export type ListingInput = {
   id: string;
   slug: string;
   title: string;
@@ -168,6 +168,12 @@ ${entityCypher ? `${entityCypher}\n` : ""}RETURN l.id AS listing_id
 `.trim();
 }
 
+async function runListingUpsert(client: PoolClient, input: ListingInput): Promise<void> {
+  await client.query(
+    `SELECT * FROM cypher('gentle_space', $$ ${listingUpsertCypher(input)} $$) AS (listing_id agtype)`,
+  );
+}
+
 export async function upsertListingGraph(input: ListingInput): Promise<void> {
   if (!process.env.DATABASE_URL) return;
 
@@ -175,9 +181,29 @@ export async function upsertListingGraph(input: ListingInput): Promise<void> {
   try {
     await ensureAgeSession(client);
     await client.query("BEGIN");
+    await runListingUpsert(client, input);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function replaceListingGraph(input: ListingInput): Promise<void> {
+  if (!process.env.DATABASE_URL) return;
+
+  const client = await getPool().connect();
+  try {
+    await ensureAgeSession(client);
+    await client.query("BEGIN");
     await client.query(
-      `SELECT * FROM cypher('gentle_space', $$ ${listingUpsertCypher(input)} $$) AS (listing_id agtype)`,
+      `SELECT * FROM cypher('gentle_space', $$
+        MATCH (l:Listing {id: ${cypherString(input.id)}}) DETACH DELETE l
+      $$) AS (v agtype)`,
     );
+    await runListingUpsert(client, input);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

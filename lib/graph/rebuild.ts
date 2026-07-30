@@ -2,8 +2,15 @@ import { extractSearchEntities, isAiSearchConfigured } from "@/lib/ai/client";
 import { listListings } from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
 import { normalizeQueryEntities } from "./normalize";
-import { isAgeAvailable, upsertListingGraph, wipeGentleSpaceGraph } from "./age";
+import {
+  isAgeAvailable,
+  replaceListingGraph,
+  type ListingInput,
+  upsertListingGraph,
+  wipeGentleSpaceGraph,
+} from "./age";
 import { emptyQueryEntities, type QueryEntities } from "./types";
+import type { Listing } from "@/lib/listings/types";
 
 function mergeEntities(seed: QueryEntities, extracted: QueryEntities): QueryEntities {
   return {
@@ -26,6 +33,18 @@ function seedListingEntities(listing: Awaited<ReturnType<typeof listListings>>[n
   };
 }
 
+async function prepareListingGraphInput(listing: Listing): Promise<ListingInput> {
+  const extracted = await extractSearchEntities(buildListingEmbeddingText(listing));
+  const entities = normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted));
+
+  return {
+    id: listing.id,
+    slug: listing.slug,
+    title: listing.title,
+    entities,
+  };
+}
+
 export async function rebuildListingGraph(): Promise<{ listings: number; skipped: boolean }> {
   if (!isAiSearchConfigured() || !(await isAgeAvailable())) {
     console.info("graph rebuild skipped");
@@ -36,15 +55,7 @@ export async function rebuildListingGraph(): Promise<{ listings: number; skipped
   const preparedListings = [];
 
   for (const listing of listings) {
-    const extracted = await extractSearchEntities(buildListingEmbeddingText(listing));
-    const entities = normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted));
-
-    preparedListings.push({
-      id: listing.id,
-      slug: listing.slug,
-      title: listing.title,
-      entities,
-    });
+    preparedListings.push(await prepareListingGraphInput(listing));
   }
 
   await wipeGentleSpaceGraph();
@@ -57,8 +68,23 @@ export async function rebuildListingGraph(): Promise<{ listings: number; skipped
 }
 
 export async function syncListingGraph(
-  _changed: Awaited<ReturnType<typeof listListings>>,
+  changed: Listing[],
 ): Promise<{ listings: number; skipped: boolean }> {
-  // ponytail: Task 5 keeps the old full rebuild behind the new hook; Task 6 replaces this with per-listing updates.
-  return rebuildListingGraph();
+  if (!isAiSearchConfigured() || !(await isAgeAvailable())) {
+    console.info("graph sync skipped");
+    return { listings: 0, skipped: true };
+  }
+
+  const preparedListings = [];
+  for (const listing of changed) {
+    preparedListings.push(await prepareListingGraphInput(listing));
+  }
+
+  for (const listing of preparedListings) {
+    await replaceListingGraph(listing);
+  }
+
+  // ponytail: soft-hidden Listing nodes remain until graph:rebuild; vector search
+  // filters them before graph scoring, and retaining them makes reactivation safe.
+  return { listings: preparedListings.length, skipped: false };
 }

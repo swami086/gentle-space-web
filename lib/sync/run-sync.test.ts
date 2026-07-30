@@ -251,13 +251,19 @@ describe("runListingsSync", () => {
 
   it("soft-fails downstream hooks after a successful source write", async () => {
     vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    const changedListing = {
+      ...rawListing({ source: "cofynd", sourceId: "c1" }),
+      id: "listing-1",
+      slug: "wework-prestige",
+      syncedAt: "2026-07-30T00:00:00.000Z",
+    };
     vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
     vi.mocked(listExistingForSource).mockResolvedValue([]);
     vi.mocked(applySourceSync).mockResolvedValue({
       inserted: 1,
       updated: 0,
       unchanged: 0,
-      graphListings: [],
+      graphListings: [changedListing],
       newlyHiddenIds: [],
     });
     vi.mocked(countVisibleListings).mockResolvedValue(1);
@@ -270,6 +276,6 @@ describe("runListingsSync", () => {
 
     expect(run.status).toBe("success");
     expect(embedListingsMissingEmbedding).toHaveBeenCalledOnce();
-    expect(syncListingGraph).toHaveBeenCalledOnce();
+    expect(syncListingGraph).toHaveBeenCalledWith([changedListing]);
   });
 });

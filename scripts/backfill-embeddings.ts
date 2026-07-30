@@ -1,8 +1,8 @@
-import { embedAllListings } from "../lib/sync/embed-listings";
+import { embedListingsMissingEmbedding } from "../lib/sync/embed-listings";
 import { rebuildListingGraph } from "../lib/graph/rebuild";
 
 async function main(): Promise<void> {
-  const n = await embedAllListings();
+  const n = await embedListingsMissingEmbedding();
   console.log(`embedded ${n} listings`);
 
   try {

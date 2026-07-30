@@ -12,6 +12,7 @@ import { emptyQueryEntities } from "./types";
 import {
   ensureAgeSession,
   isAgeAvailable,
+  replaceListingGraph,
   scoreListingsAgainstQuery,
   sanitizeCypherLiteral,
   upsertListingGraph,
@@ -110,6 +111,25 @@ describe("upsertListingGraph", () => {
       4,
       expect.stringContaining("o''reilly wifi"),
     );
+  });
+});
+
+describe("replaceListingGraph", () => {
+  it("replaces one listing graph atomically", async () => {
+    process.env.DATABASE_URL = "postgres://local/test";
+    query.mockResolvedValue({ rows: [] });
+
+    await replaceListingGraph({
+      id: "listing-1",
+      slug: "space",
+      title: "Space",
+      entities: { ...emptyQueryEntities(), amenities: ["wifi"] },
+    });
+
+    expect(query).toHaveBeenCalledWith("BEGIN");
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("DETACH DELETE l"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("MERGE (l:Listing"));
+    expect(query).toHaveBeenCalledWith("COMMIT");
   });
 });
 
