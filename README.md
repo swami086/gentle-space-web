@@ -10,13 +10,15 @@ docker compose -f docker-compose.listings.yml up -d
 
 Set `DATABASE_URL` in `.env.local` (not committed), e.g. `postgresql://gentle:gentle@127.0.0.1:5433/gentle_space_listings`.
 
-Apply schema and the pgvector migration (768-d for Vertex `text-embedding-004`):
+Apply schema and the pgvector/AGE migrations (768-d for Vertex `text-embedding-004`):
 
 ```bash
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/schema.sql
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/002_pgvector.sql
 # if upgrading from an older 1536-d local DB:
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/003_pgvector_768.sql
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/004_age.sql
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/005_incremental_sync.sql
 ```
 
 ### Vertex AI (local, cheapest models)
@@ -37,6 +39,12 @@ DATABASE_URL=postgresql://gentle:gentle@127.0.0.1:5433/gentle_space_listings
 Use gcloud as `CLOUDSDK_CORE_ACCOUNT=swami@stackgen.com` (and unset / override any Cursor `CLOUDSDK_CORE_PROJECT=blissful-axiom-271209`).
 
 Then: `npm run sync:preview` → `npm run embed:backfill` → `npm run dev` → search on `/spaces`.
+
+Listings sync behavior:
+
+- `npm run sync:listings` runs the 4-source incremental sync. A source failure is recorded per-source and does not delete or hide rows from successful sources.
+- `npm run sync:preview` is Coworker-only, respects `PREVIEW_MAX_DETAILS`, and now uses the same non-destructive incremental path as production.
+- `npm run sync:check` is a live CoFynd operational check. It does one real discovery pass plus one real detail scrape on the first run, writes or refreshes a single listing, skips downstream embeddings/graph work, and proves an immediate second run does zero detail scrapes.
 
 ## Getting Started
 
