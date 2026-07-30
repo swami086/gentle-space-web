@@ -86,3 +86,23 @@ it("rolls back the complete source write on failure", async () => {
 
   expect(query).toHaveBeenCalledWith("ROLLBACK");
 });
+
+it("skips the missing-runs increment when trackMissing is false", async () => {
+  query
+    .mockResolvedValueOnce({ rows: [] })
+    .mockResolvedValueOnce({ rows: [] })
+    .mockResolvedValueOnce({ rows: [] });
+
+  const result = await applySourceSync({
+    source: "coworker",
+    discoveredSourceIds: ["seen-only"],
+    scraped: [],
+    missingLimit: 3,
+    trackMissing: false,
+  });
+
+  expect(result.newlyHiddenIds).toEqual([]);
+  expect(query).toHaveBeenCalledTimes(3);
+  expect(query.mock.calls.some((call) => String(call[0]).includes("missing_runs < $3"))).toBe(false);
+  expect(release).toHaveBeenCalledOnce();
+});

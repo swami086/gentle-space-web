@@ -4,7 +4,7 @@
 INSERT INTO listings (
   id, source, source_id, slug, title, description, short_teaser,
   address, area, city, lat, lng, amenities, images,
-  pricing_hint, property_type, source_url, synced_at
+  pricing_hint, property_type, source_url, synced_at, last_seen_at
 ) VALUES
   (
     'a1111111-1111-4111-8111-111111111101',
@@ -24,6 +24,7 @@ INSERT INTO listings (
     'From ₹8,000/seat',
     'Coworking',
     'https://www.coworker.com/india/bengaluru/cowrks-ecoworld',
+    '2026-07-23T12:00:00Z',
     '2026-07-23T12:00:00Z'
   ),
   (
@@ -44,6 +45,7 @@ INSERT INTO listings (
     'From ₹6,500/seat',
     'Coworking',
     'https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta',
+    '2026-07-23T12:00:00Z',
     '2026-07-23T12:00:00Z'
   ),
   (
@@ -64,6 +66,7 @@ INSERT INTO listings (
     'From ₹5,000/seat',
     'Coworking',
     'https://cofynd.com/coworking/workhome',
+    '2026-07-23T12:00:00Z',
     '2026-07-23T12:00:00Z'
   )
 ON CONFLICT (slug) DO NOTHING;
