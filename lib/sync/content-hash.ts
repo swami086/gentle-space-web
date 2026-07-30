@@ -10,6 +10,10 @@ function sortedUnique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
 }
 
+export function hashEmbeddingTextValue(value: string): string {
+  return sha256(value);
+}
+
 export function contentHash(row: RawListing): string {
   return sha256({
     source: row.source,
@@ -33,7 +37,7 @@ export function contentHash(row: RawListing): string {
 export function hashEmbeddingText(
   fields: Parameters<typeof buildListingEmbeddingText>[0],
 ): string {
-  return sha256(
+  return hashEmbeddingTextValue(
     buildListingEmbeddingText({
       ...fields,
       amenities: sortedUnique(fields.amenities),

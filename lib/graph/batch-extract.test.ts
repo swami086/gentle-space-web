@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hashEmbeddingTextValue } from "../sync/content-hash";
 import { EXTRACT_SYSTEM } from "./extract";
 import { emptyQueryEntities } from "./types";
 import {
@@ -78,6 +79,8 @@ describe("parseEntityBatchOutputLine", () => {
   it("recovers the listing id from the echoed request text and normalizes entities", () => {
     expect(parseEntityBatchOutputLine(makeOutputLine())).toEqual({
       listingId: LISTING_ID,
+      submittedText: "hello",
+      submittedHash: hashEmbeddingTextValue("hello"),
       entities: {
         ...emptyQueryEntities(),
         landmarks: ["indiranagar metro"],
@@ -99,6 +102,8 @@ describe("parseEntityBatchOutputLine", () => {
       ),
     ).toEqual({
       listingId: LISTING_ID,
+      submittedText: "hello",
+      submittedHash: hashEmbeddingTextValue("hello"),
       entities: null,
       failed: true,
     });
@@ -125,6 +130,8 @@ describe("parseEntityBatchOutputLine", () => {
       ),
     ).toEqual({
       listingId: LISTING_ID,
+      submittedText: "hello",
+      submittedHash: hashEmbeddingTextValue("hello"),
       entities: null,
       failed: true,
     });
@@ -143,7 +150,30 @@ describe("parseEntityBatchOutputLine", () => {
       ),
     ).toEqual({
       listingId: null,
+      submittedText: null,
+      submittedHash: null,
       entities: null,
+      failed: false,
+    });
+  });
+
+  it("keeps the full submitted listing text after the id prefix", () => {
+    expect(
+      parseEntityBatchOutputLine(
+        makeOutputLine({
+          request: {
+            contents: [{ parts: [{ text: `LISTING_ID: ${LISTING_ID}\nhello\nworld` }] }],
+          },
+        }),
+      ),
+    ).toEqual({
+      listingId: LISTING_ID,
+      submittedText: "hello\nworld",
+      submittedHash: hashEmbeddingTextValue("hello\nworld"),
+      entities: {
+        ...emptyQueryEntities(),
+        landmarks: ["indiranagar metro"],
+      },
       failed: false,
     });
   });
@@ -194,18 +224,26 @@ describe("parseEntityBatchOutput", () => {
       [
         secondId,
         {
-          areas: ["indiranagar"],
-          amenities: [],
-          deskTypes: [],
-          landmarks: [],
-          budgetSignals: [],
+          entities: {
+            areas: ["indiranagar"],
+            amenities: [],
+            deskTypes: [],
+            landmarks: [],
+            budgetSignals: [],
+          },
+          submittedText: "hello",
+          submittedHash: hashEmbeddingTextValue("hello"),
         },
       ],
       [
         LISTING_ID,
         {
-          ...emptyQueryEntities(),
-          landmarks: ["indiranagar metro"],
+          entities: {
+            ...emptyQueryEntities(),
+            landmarks: ["indiranagar metro"],
+          },
+          submittedText: "hello",
+          submittedHash: hashEmbeddingTextValue("hello"),
         },
       ],
     ]);

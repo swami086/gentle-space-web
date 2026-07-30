@@ -46,20 +46,26 @@ async function main(): Promise<void> {
   const listings = new Map((await listListings()).map((listing) => [listing.id, listing]));
 
   let wrote = 0;
+  let stale = 0;
   let unknown = 0;
 
-  for (const [id, entities] of applied) {
+  for (const [id, result] of applied) {
     const listing = listings.get(id);
     if (!listing) {
       unknown += 1;
       continue;
     }
 
-    await updateListingExtractedEntities(id, entities, hashEmbeddingText(listing));
+    if (hashEmbeddingText(listing) !== result.submittedHash) {
+      stale += 1;
+      continue;
+    }
+
+    await updateListingExtractedEntities(id, result.entities, result.submittedHash);
     wrote += 1;
   }
 
-  console.log({ wrote, failed, skipped, unknown, resultFiles: resultFiles.length });
+  console.log({ wrote, stale, failed, skipped, unknown, resultFiles: resultFiles.length });
 
   if (wrote === 0) {
     process.exit(1);

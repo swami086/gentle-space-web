@@ -1,3 +1,4 @@
+import { hashEmbeddingTextValue } from "../sync/content-hash";
 import { EXTRACT_SYSTEM, parseExtractedEntities } from "./extract";
 import type { QueryEntities } from "./types";
 
@@ -17,14 +18,24 @@ function readFirstPartText(value: unknown): string | null {
   return readText(parts[0]);
 }
 
-function extractListingIdFromRequest(request: unknown): string | null {
-  if (!request || typeof request !== "object") return null;
+function extractRequestListing(request: unknown): { listingId: string | null; submittedText: string | null } {
+  if (!request || typeof request !== "object") {
+    return { listingId: null, submittedText: null };
+  }
   const contents = (request as { contents?: unknown }).contents;
-  if (!Array.isArray(contents) || contents.length === 0) return null;
+  if (!Array.isArray(contents) || contents.length === 0) {
+    return { listingId: null, submittedText: null };
+  }
   const text = readFirstPartText(contents[0]);
-  if (!text) return null;
-  const match = LISTING_ID_RE.exec(text);
-  return match?.[1]?.toLowerCase() ?? null;
+  if (!text) return { listingId: null, submittedText: null };
+  const firstLineBreak = text.indexOf("\n");
+  const prefix = firstLineBreak === -1 ? text : text.slice(0, firstLineBreak);
+  const match = LISTING_ID_RE.exec(prefix);
+  if (!match) return { listingId: null, submittedText: null };
+  return {
+    listingId: match[1]?.toLowerCase() ?? null,
+    submittedText: firstLineBreak === -1 ? "" : text.slice(firstLineBreak + 1),
+  };
 }
 
 function extractResponseText(response: unknown): string | null {
@@ -68,38 +79,43 @@ export function buildEntityBatchJsonl(items: { id: string; text: string }[]): st
 
 export function parseEntityBatchOutputLine(line: string): {
   listingId: string | null;
+  submittedText: string | null;
+  submittedHash: string | null;
   entities: QueryEntities | null;
   failed: boolean;
 } {
   const trimmed = line.trim();
-  if (!trimmed) return { listingId: null, entities: null, failed: false };
+  if (!trimmed) {
+    return { listingId: null, submittedText: null, submittedHash: null, entities: null, failed: false };
+  }
 
   let row: { status?: unknown; request?: unknown; response?: unknown };
   try {
     row = JSON.parse(trimmed) as typeof row;
   } catch {
-    return { listingId: null, entities: null, failed: false };
+    return { listingId: null, submittedText: null, submittedHash: null, entities: null, failed: false };
   }
 
-  const listingId = extractListingIdFromRequest(row.request);
+  const { listingId, submittedText } = extractRequestListing(row.request);
+  const submittedHash = submittedText === null ? null : hashEmbeddingTextValue(submittedText);
   const status = typeof row.status === "string" ? row.status.trim() : "";
-  if (status) return { listingId, entities: null, failed: true };
+  if (status) return { listingId, submittedText, submittedHash, entities: null, failed: true };
 
   const responseText = extractResponseText(row.response);
-  if (!responseText) return { listingId, entities: null, failed: false };
+  if (!responseText) return { listingId, submittedText, submittedHash, entities: null, failed: false };
 
   const entities = parseResponseEntities(responseText);
-  if (!entities) return { listingId, entities: null, failed: true };
+  if (!entities) return { listingId, submittedText, submittedHash, entities: null, failed: true };
 
-  return { listingId, entities, failed: false };
+  return { listingId, submittedText, submittedHash, entities, failed: false };
 }
 
 export function parseEntityBatchOutput(files: string[]): {
-  applied: Map<string, QueryEntities>;
+  applied: Map<string, { entities: QueryEntities; submittedText: string; submittedHash: string }>;
   failed: number;
   skipped: number;
 } {
-  const applied = new Map<string, QueryEntities>();
+  const applied = new Map<string, { entities: QueryEntities; submittedText: string; submittedHash: string }>();
   let failed = 0;
   let skipped = 0;
 
@@ -111,11 +127,15 @@ export function parseEntityBatchOutput(files: string[]): {
         skipped += 1;
         continue;
       }
-      if (parsed.failed || !parsed.entities) {
+      if (parsed.failed || !parsed.entities || parsed.submittedText === null || parsed.submittedHash === null) {
         failed += 1;
         continue;
       }
-      applied.set(parsed.listingId, parsed.entities);
+      applied.set(parsed.listingId, {
+        entities: parsed.entities,
+        submittedText: parsed.submittedText,
+        submittedHash: parsed.submittedHash,
+      });
     }
   }
 
