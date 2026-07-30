@@ -96,8 +96,8 @@ describe("vertex explainListingFit", () => {
               parts: [
                 {
                   text: JSON.stringify({
-                    summary: { text: "fits", evidenceIds: ["listing.area"] },
-                    highlights: [],
+                    summaryEvidenceIds: ["listing.area"],
+                    highlightEvidenceIds: [],
                   }),
                 },
               ],

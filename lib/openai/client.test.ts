@@ -109,8 +109,8 @@ describe("openai explainListingFit", () => {
           {
             message: {
               content: JSON.stringify({
-                summary: { text: "fits", evidenceIds: ["listing.area"] },
-                highlights: [],
+                summaryEvidenceIds: ["listing.area"],
+                highlightEvidenceIds: [],
               }),
             },
           },
