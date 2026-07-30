@@ -82,6 +82,16 @@ it("sends 32 interleaved texts for a full 16-listing chunk", async () => {
   });
 });
 
+it("rejects when embedTexts returns fewer vectors than interleaved texts", async () => {
+  vi.mocked(listListingsMissingEmbedding).mockResolvedValue([makeListing(1), makeListing(2)]);
+  vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]);
+
+  await expect(embedListingsMissingEmbedding()).rejects.toThrow(
+    "embedTexts returned 3 vectors for 4 texts (2 listings)",
+  );
+  expect(updateListingEmbeddings).not.toHaveBeenCalled();
+});
+
 it("splits into multiple chunks when more than 16 listings need embedding", async () => {
   vi.useFakeTimers();
   const listings = Array.from({ length: 17 }, (_, i) => makeListing(i));

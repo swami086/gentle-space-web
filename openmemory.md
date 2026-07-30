@@ -14,7 +14,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 - **Spaces product** (`/spaces`): Airbnb-style browse with AI search, client filters, split map, detail pages (`/spaces/[slug]`).
 - **AI search**: `POST /api/spaces/search` — vector-first pgvector rank-boost; optional Apache AGE GraphRAG scoring when configured. Each listing has two embedding columns (`structured_embedding`, `description_embedding`, migration `006_split_embeddings.sql`); `searchListingsByEmbedding()` takes `GREATEST()` of both cosine similarities per row rather than averaging one blended vector.
 - **AI insight**: `POST /api/spaces/insight` — on-demand "Why this fits" panel; validates UUID listing id, query (≤500 chars), and optional `QueryEntities` shape before config/DB; loads via `getListingById`, delegates to `buildInsight()`.
-- **Ingest**: Firecrawl listings sync from 4 sources (Coworker, myHQ, CoFynd, GoFloaters) now runs per-source incremental discovery/plan/apply orchestration, then soft-fails downstream embedding + graph hooks. Embeddings now backfill only `embedding IS NULL` rows; AGE sync now replaces graph state only for changed/reactivated rows while preserving the full rebuild recovery path. `sync:preview` now reuses the same incremental write path for capped Coworker runs, and `sync:check` provides a one-listing live CoFynd probe.
+- **Ingest**: Firecrawl listings sync from 4 sources (Coworker, myHQ, CoFynd, GoFloaters) now runs per-source incremental discovery/plan/apply orchestration, then soft-fails downstream embedding + graph hooks. Embeddings backfill rows where either `structured_embedding` or `description_embedding` is `NULL` (via `listListingsMissingEmbedding()`); AGE sync now replaces graph state only for changed/reactivated rows while preserving the full rebuild recovery path. `sync:preview` now reuses the same incremental write path for capped Coworker runs, and `sync:check` provides a one-listing live CoFynd probe.
 - **AI provider**: Vertex preferred (`AI_PROVIDER=vertex`, project `propane-galaxy-498403-n8`, `text-embedding-004` / `gemini-2.5-flash-lite`); OpenAI fallback.
 
 ## Components
@@ -27,7 +27,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 | Listings DB | `lib/db/*`, `docker-compose.listings.yml` (port **5433**) |
 | Sync | `lib/sync/run-sync.ts`, `lib/sync/sources/*`, `scripts/run-listings-sync.ts` |
 | Sync planning | `lib/sync/plan.ts`, `lib/sync/content-hash.ts`, `lib/sync/config.ts` |
-| Listings migrations | `lib/db/migrations/005_incremental_sync.sql` |
+| Listings migrations | `lib/db/migrations/005_incremental_sync.sql`, `006_split_embeddings.sql` |
 | Embeddings | `lib/sync/embed-listings.ts`, `scripts/backfill-embeddings.ts` |
 | GraphRAG | `lib/graph/*`, migration `004_age.sql`, `npm run graph:rebuild` |
 | AI facade | `lib/ai/client.ts` → `lib/vertex/*` or `lib/openai/*` |
@@ -77,7 +77,7 @@ Runtime config is **not in git** — it was copied from `~/Documents/Resume/gent
 docker compose -p gentle-space-web -f docker-compose.listings.yml up -d
 ```
 
-Persisted volume `gentle-space-web_gentle_space_pgdata` already contains the applied schema (AGE 1.6.0, vector 0.8.1, `embedding vector(768)`) and 10 embedded Coworker listings from the 2026-07-23 sync — so schema/migrations and `sync:preview`/`embed:backfill` do **not** need re-running for local preview.
+Persisted volume `gentle-space-web_gentle_space_pgdata` already contains the applied schema (AGE 1.6.0, vector 0.8.1, `structured_embedding` / `description_embedding` `vector(768)` per migration `006`) and 11 listings with both columns populated (10 Coworker preview rows from 2026-07-23 plus one live CoFynd probe row) after the 2026-07-30 backfill — so schema/migrations and `sync:preview`/`embed:backfill` do **not** need re-running for local preview.
 
 ## Known issues / ops state
 
@@ -89,5 +89,5 @@ Persisted volume `gentle-space-web_gentle_space_pgdata` already contains the app
   - **CoFynd:** discovers real detail slugs from the Bangalore index, but `gurugram` leaks through `CITY_SLUGS` (alias of `gurgaon`). Live detail markdown has **no lat/lng**; area parsing can ingest markdown image alt text.
   - **GoFloaters:** locality hop works; live detail markdown has **no lat/lng** (only a Google Static Maps embed).
   - **Coworker:** still the only source with known-good DB rows; a fresh scrape of one known URL returned null coords under current Firecrawl `onlyMainContent`, so even Coworker coord extraction may have drifted since 2026-07-23.
-- Local catalog now contains the 2026-07-23 Coworker preview rows plus one live CoFynd probe row from `sync:check`; that CoFynd row is intentionally left unembedded because the check runs with `skipDownstream: true`. Backup at `backup-listings-20260730-084824.sql` (gitignored).
+- Local catalog now contains the 2026-07-23 Coworker preview rows plus one live CoFynd probe row from `sync:check` (inserted with `skipDownstream: true`, but both embedding columns were filled by the 2026-07-30 backfill). Backup at `backup-listings-20260730-084824.sql` (gitignored).
 - `npm run sync:listings` does **not** load `.env.local` — use `npx tsx --env-file=.env.local scripts/run-listings-sync.ts` for a local full sync. `sync:preview` is Coworker-only, non-destructive, and listings-only (`trackMissing: false`, `skipDownstream: true`); `sync:check` uses a live CoFynd discovery plus one real detail scrape on the first run, skips AI downstream work, and should report zero detail scrapes on the immediate second run. Worktrees without a copied `.env.local` must point `--env-file` at the parent checkout's env file.

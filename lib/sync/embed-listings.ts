@@ -38,7 +38,14 @@ async function embedListings(listings: Awaited<ReturnType<typeof listListings>>)
   await forEachChunkPaced(listings, LISTINGS_PER_CHUNK, ITEMS_PER_MINUTE, async (chunk) => {
     const structuredTexts = chunk.map(buildStructuredEmbeddingText);
     const descriptionTexts = chunk.map(buildDescriptionEmbeddingText);
-    const vectors = await embedTexts(interleaveTexts(structuredTexts, descriptionTexts));
+    const texts = interleaveTexts(structuredTexts, descriptionTexts);
+    const vectors = await embedTexts(texts);
+    const expected = 2 * chunk.length;
+    if (vectors.length !== expected) {
+      throw new Error(
+        `embedTexts returned ${vectors.length} vectors for ${expected} texts (${chunk.length} listings)`,
+      );
+    }
 
     for (let j = 0; j < chunk.length; j++) {
       await updateListingEmbeddings(chunk[j].id, {
