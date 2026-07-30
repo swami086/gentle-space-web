@@ -21,13 +21,13 @@ export function CtaBand() {
             onClick={openModal}
             className="rounded-[var(--radius-sm)] bg-white px-8 py-3.5 text-[15px] font-semibold text-[var(--accent-dark)] transition hover:bg-[var(--surface-tint)]"
           >
-            Get My Shortlist
+            Contact Us
           </button>
           <a
             href="/spaces"
             className="rounded-[var(--radius-sm)] border border-white/80 px-8 py-3.5 text-[15px] font-semibold text-white transition hover:bg-white/10"
           >
-            Browse Spaces
+            See Available Properties
           </a>
         </div>
       </div>

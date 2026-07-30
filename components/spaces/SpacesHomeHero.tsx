@@ -4,23 +4,14 @@ import { SpaceCard } from "@/components/spaces/SpaceCard";
 import { SpacesAiSearch } from "@/components/spaces/SpacesAiSearch";
 import type { Listing } from "@/lib/listings/types";
 
-const HERO_CHIPS = [
-  "Hot desk",
-  "Private cabin",
-  "Dedicated desk",
-  "Meeting room",
-] as const;
-
 type SpacesHomeHeroProps = {
   query: string;
   onQueryChange: (value: string) => void;
   onSubmit: () => void;
   onClear: () => void;
-  onOpenFilters?: () => void;
   loading?: boolean;
   error?: string | null;
   featured: Listing[];
-  onChip: (label: string) => void;
 };
 
 export function SpacesHomeHero({
@@ -28,11 +19,9 @@ export function SpacesHomeHero({
   onQueryChange,
   onSubmit,
   onClear,
-  onOpenFilters,
   loading = false,
   error,
   featured,
-  onChip,
 }: SpacesHomeHeroProps) {
   const featuredListings = featured.slice(0, 4);
 
@@ -44,10 +33,6 @@ export function SpacesHomeHero({
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-[var(--ink)] lg:text-[40px]">
             Find a workspace that fits how you work
           </h1>
-          <p className="mt-4 max-w-[560px] text-base leading-7 text-[var(--ink-secondary)]">
-            Ask in plain language. We rank coworking and private cabins by meaning, not
-            just keywords.
-          </p>
           <div className="mt-7 w-full">
             <SpacesAiSearch
               query={query}
@@ -57,29 +42,6 @@ export function SpacesHomeHero({
               error={error}
               loading={loading}
             />
-          </div>
-          {onOpenFilters ? (
-            <div className="mt-3 flex justify-center">
-              <button
-                type="button"
-                onClick={onOpenFilters}
-                className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-[13px] font-medium text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface)]"
-              >
-                Filters
-              </button>
-            </div>
-          ) : null}
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {HERO_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => onChip(chip)}
-                className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 py-2.5 text-[13px] font-medium text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface)]"
-              >
-                {chip}
-              </button>
-            ))}
           </div>
         </div>
       </div>

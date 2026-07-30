@@ -22,7 +22,6 @@ type MetaMode = "sync" | "matches" | "empty-search";
 type SpacesBrowseClientProps = {
   initialListings: Listing[];
   lastSync: SyncRun | null;
-  sourceCount: number;
   stale: boolean;
 };
 
@@ -31,12 +30,9 @@ type SearchResponse = {
   listings: Listing[];
 };
 
-const HERO_DESK_TYPES = new Set(["Hot desk", "Private cabin", "Dedicated desk", "Meeting room"]);
-
 export function SpacesBrowseClient({
   initialListings,
   lastSync,
-  sourceCount,
   stale,
 }: SpacesBrowseClientProps) {
   const [listings, setListings] = useState(initialListings);
@@ -140,17 +136,6 @@ export function SpacesBrowseClient({
     await runSearch(query);
   }, [query, runSearch]);
 
-  const handleHomeChip = useCallback(
-    (label: string) => {
-      setQuery(label);
-      setFilters(
-        HERO_DESK_TYPES.has(label) ? { ...EMPTY_FILTERS, deskTypes: [label] } : EMPTY_FILTERS,
-      );
-      void runSearch(label);
-    },
-    [runSearch],
-  );
-
   const handleRemoveChip = useCallback((chip: string) => {
     setFilters((current) => {
       if (current.deskTypes.includes(chip)) {
@@ -194,23 +179,16 @@ export function SpacesBrowseClient({
 
   return (
     <>
-      <SpacesHeader
-        lastSync={lastSync}
-        sourceCount={sourceCount}
-        metaOverride={metaOverride}
-        variant={showHero ? "minimal" : "default"}
-      />
+      <SpacesHeader metaOverride={metaOverride} variant={showHero ? "minimal" : "default"} />
       {showHero ? (
         <SpacesHomeHero
           query={query}
           onQueryChange={setQuery}
           onSubmit={handleSearch}
           onClear={handleClear}
-          onOpenFilters={() => setFiltersOpen(true)}
           error={error}
           loading={loading}
           featured={featured}
-          onChip={handleHomeChip}
         />
       ) : (
         <SpacesBrowseChrome

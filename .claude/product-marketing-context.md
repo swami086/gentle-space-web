@@ -141,7 +141,7 @@ Plus a separate, equally important audience: **property owners** seeking tenants
 
 | Page | URL | Use for | Anchor text |
 |------|-----|---------|-------------|
-| Spaces | `/spaces` | Self-serve browse | "Browse Spaces" |
+| Spaces | `/spaces` | Self-serve browse | "See Available Properties" (homepage Hero/CtaBand); "Spaces" (nav) |
 | Services | `#services` | What we do | "Services" |
 | Why Us | `#why-us` | Differentiation | "Why Us" |
 | How It Works | `#how-it-works` | Process | "How It Works" |

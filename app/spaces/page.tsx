@@ -6,7 +6,7 @@ import type { Listing, SyncRun } from "@/lib/listings/types";
 export const metadata: Metadata = {
   title: "Spaces in Bangalore | Gentle Space",
   description:
-    "Browse coworking spaces and flexible offices in Bangalore, synced daily from trusted directories.",
+    "Browse available coworking spaces and flexible offices in Bangalore.",
 };
 
 async function loadSpacesData(): Promise<{ listings: Listing[]; lastSync: SyncRun | null }> {
@@ -24,15 +24,9 @@ async function loadSpacesData(): Promise<{ listings: Listing[]; lastSync: SyncRu
 
 export default async function SpacesPage() {
   const { listings, lastSync } = await loadSpacesData();
-  const sourceCount = new Set(listings.map((listing) => listing.source)).size;
   const stale = isStaleSync(lastSync?.finishedAt);
 
   return (
-    <SpacesBrowseClient
-      initialListings={listings}
-      lastSync={lastSync}
-      sourceCount={sourceCount}
-      stale={stale}
-    />
+    <SpacesBrowseClient initialListings={listings} lastSync={lastSync} stale={stale} />
   );
 }

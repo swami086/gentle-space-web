@@ -41,7 +41,9 @@ export default async function SpaceDetailPage({ params }: PageProps) {
               <div className="min-w-0 flex-1">
                 <h1 className="text-[28px] font-bold text-[var(--ink)]">{listing.title}</h1>
                 <p className="mt-1 text-[15px] text-[var(--ink-secondary)]">
-                  {[listing.area, listing.city].filter(Boolean).join(", ")}
+                  {[listing.area, listing.city === "Bengaluru" ? "Bangalore" : listing.city]
+                    .filter(Boolean)
+                    .join(", ")}
                 </p>
               </div>
               <LikeSpaceButton

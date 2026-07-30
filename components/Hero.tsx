@@ -12,11 +12,6 @@ export function Hero() {
     <section className="bg-[var(--bg)] px-6 py-20 lg:px-[160px]">
       <div className="flex flex-col items-center gap-[72px] lg:flex-row lg:items-center">
         <div className="flex w-full max-w-[640px] flex-col gap-6">
-          <p>
-            <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.4px] text-[var(--accent-dark)]">
-              {CONTENT.hero.kicker}
-            </span>
-          </p>
           <h1 className="text-[36px] font-bold leading-[1.12] tracking-tight text-[var(--ink)] lg:text-[46px]">
             {CONTENT.hero.headline}
           </h1>
@@ -36,7 +31,7 @@ export function Hero() {
               href="/spaces"
               className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
             >
-              Browse Spaces
+              See Available Properties
               <span aria-hidden="true">→</span>
             </a>
           </div>
