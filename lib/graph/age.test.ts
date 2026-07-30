@@ -16,6 +16,7 @@ import {
   scoreListingsAgainstQuery,
   sanitizeCypherLiteral,
   upsertListingGraph,
+  upsertListingGraphs,
   wipeGentleSpaceGraph,
 } from "./age";
 
@@ -204,5 +205,34 @@ describe("scoreListingsAgainstQuery", () => {
 
     expect(scored.size).toBe(0);
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe("upsertListingGraphs", () => {
+  it("writes every listing in one transaction", async () => {
+    process.env.DATABASE_URL = "postgres://local/test";
+    query.mockResolvedValue({ rows: [] });
+
+    await upsertListingGraphs([
+      {
+        id: "listing-1",
+        slug: "a",
+        title: "A",
+        entities: { ...emptyQueryEntities(), areas: ["Koramangala"] },
+      },
+      {
+        id: "listing-2",
+        slug: "b",
+        title: "B",
+        entities: { ...emptyQueryEntities(), areas: ["Indiranagar"] },
+      },
+    ]);
+
+    expect(connect).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith("BEGIN");
+    expect(query).toHaveBeenCalledWith("COMMIT");
+    expect(
+      query.mock.calls.filter((c) => String(c[0]).includes("MERGE (l:Listing")).length,
+    ).toBe(2);
   });
 });

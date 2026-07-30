@@ -125,27 +125,43 @@ export async function extractListingEntities(text: string) {
 
 async function extractEntitiesBatch(texts: string[]): Promise<QueryEntities[]> {
   if (texts.length === 0) return [];
-  const token = await getVertexAccessToken();
-  const res = await fetch(modelUrl(chatModel(), "generateContent"), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: EXTRACT_BATCH_SYSTEM }] },
-      contents: [{ role: "user", parts: [{ text: JSON.stringify({ items: texts }) }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0 },
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`vertex extract batch failed: ${res.status} ${await res.text()}`);
+
+  // ponytail: fresh projects 429 after embedding backfills; a few exponential
+  // sleeps beat a full rebuild of empty entities. Ceiling is ~7.5 min of sleep
+  // across 5 attempts — upgrade path is a real quota increase.
+  const maxAttempts = 5;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const token = await getVertexAccessToken();
+    const res = await fetch(modelUrl(chatModel(), "generateContent"), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: EXTRACT_BATCH_SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text: JSON.stringify({ items: texts }) }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0 },
+      }),
+    });
+
+    if (res.ok) {
+      const body = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+      return parseExtractedEntitiesBatchJson(content, texts.length);
+    }
+
+    const detail = await res.text();
+    lastError = new Error(`vertex extract batch failed: ${res.status} ${detail}`);
+    if (res.status !== 429 || attempt === maxAttempts - 1) throw lastError;
+    await new Promise((resolve) => setTimeout(resolve, 15_000 * 2 ** attempt));
   }
-  const body = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
-  const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
-  return parseExtractedEntitiesBatchJson(content, texts.length);
+
+  throw lastError ?? new Error("vertex extract batch failed");
 }
 
 export async function extractSearchEntitiesBatch(texts: string[]) {

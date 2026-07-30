@@ -5,9 +5,9 @@ import { forEachChunkPaced } from "../sync/pace";
 import { normalizeQueryEntities } from "./normalize";
 import {
   isAgeAvailable,
-  replaceListingGraph,
+  replaceListingGraphs,
   type ListingInput,
-  upsertListingGraph,
+  upsertListingGraphs,
   wipeGentleSpaceGraph,
 } from "./age";
 import { emptyQueryEntities, type QueryEntities } from "./types";
@@ -34,13 +34,13 @@ function seedListingEntities(listing: Awaited<ReturnType<typeof listListings>>[n
   };
 }
 
-// Gemini call count is what costs money and burns per-minute quota, not listing
-// count — batching N listings per call turns e.g. 340 calls into ~17.
-const EXTRACT_BATCH_SIZE = 20;
-// Fresh GCP projects default to very low per-minute Gemini/Vertex quotas.
-// Pacing to ~30 listings/min keeps large backfills under that ceiling without
-// requiring a quota increase, while adding no delay to small incremental runs.
-const ITEMS_PER_MINUTE = 30;
+// Gemini call count (and cost) scales with batches, not listings — 50/call turns
+// a 704-listing rebuild into ~14 generateContent requests instead of 704.
+const EXTRACT_BATCH_SIZE = 50;
+// ~0.5 requests/min at batch=50 (one call every ~2 min). Fresh projects often
+// only get single-digit Gemini RPM; the prior 20/batch @ 30 listings/min still
+// 429'd mid-rebuild after an embedding backfill had already heated the project.
+const ITEMS_PER_MINUTE = 25;
 
 async function prepareListingGraphInputs(listings: Listing[]): Promise<ListingInput[]> {
   const prepared: ListingInput[] = [];
@@ -71,10 +71,7 @@ export async function rebuildListingGraph(): Promise<{ listings: number; skipped
   const preparedListings = await prepareListingGraphInputs(listings);
 
   await wipeGentleSpaceGraph();
-
-  for (const listing of preparedListings) {
-    await upsertListingGraph(listing);
-  }
+  await upsertListingGraphs(preparedListings);
 
   return { listings: listings.length, skipped: false };
 }
@@ -87,11 +84,12 @@ export async function syncListingGraph(
     return { listings: 0, skipped: true };
   }
 
-  const preparedListings = await prepareListingGraphInputs(changed);
-
-  for (const listing of preparedListings) {
-    await replaceListingGraph(listing);
+  if (changed.length === 0) {
+    return { listings: 0, skipped: false };
   }
+
+  const preparedListings = await prepareListingGraphInputs(changed);
+  await replaceListingGraphs(preparedListings);
 
   // ponytail: soft-hidden Listing nodes remain until graph:rebuild; vector search
   // filters them before graph scoring, and retaining them makes reactivation safe.

@@ -175,13 +175,21 @@ async function runListingUpsert(client: PoolClient, input: ListingInput): Promis
 }
 
 export async function upsertListingGraph(input: ListingInput): Promise<void> {
-  if (!process.env.DATABASE_URL) return;
+  await upsertListingGraphs([input]);
+}
+
+// One AGE session + one transaction for the whole set — a full rebuild of ~700
+// listings was spending most of its wall time on connect/BEGIN/COMMIT per row.
+export async function upsertListingGraphs(inputs: ListingInput[]): Promise<void> {
+  if (!process.env.DATABASE_URL || inputs.length === 0) return;
 
   const client = await getPool().connect();
   try {
     await ensureAgeSession(client);
     await client.query("BEGIN");
-    await runListingUpsert(client, input);
+    for (const input of inputs) {
+      await runListingUpsert(client, input);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -192,18 +200,24 @@ export async function upsertListingGraph(input: ListingInput): Promise<void> {
 }
 
 export async function replaceListingGraph(input: ListingInput): Promise<void> {
-  if (!process.env.DATABASE_URL) return;
+  await replaceListingGraphs([input]);
+}
+
+export async function replaceListingGraphs(inputs: ListingInput[]): Promise<void> {
+  if (!process.env.DATABASE_URL || inputs.length === 0) return;
 
   const client = await getPool().connect();
   try {
     await ensureAgeSession(client);
     await client.query("BEGIN");
-    await client.query(
-      `SELECT * FROM cypher('gentle_space', $$
-        MATCH (l:Listing {id: ${cypherString(input.id)}}) DETACH DELETE l
-      $$) AS (v agtype)`,
-    );
-    await runListingUpsert(client, input);
+    for (const input of inputs) {
+      await client.query(
+        `SELECT * FROM cypher('gentle_space', $$
+          MATCH (l:Listing {id: ${cypherString(input.id)}}) DETACH DELETE l
+        $$) AS (v agtype)`,
+      );
+      await runListingUpsert(client, input);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

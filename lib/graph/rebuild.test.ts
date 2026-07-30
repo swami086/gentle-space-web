@@ -15,8 +15,8 @@ vi.mock("@/lib/listings/embedding-text", () => ({
 
 vi.mock("./age", () => ({
   isAgeAvailable: vi.fn(),
-  replaceListingGraph: vi.fn(),
-  upsertListingGraph: vi.fn(),
+  replaceListingGraphs: vi.fn(),
+  upsertListingGraphs: vi.fn(),
   wipeGentleSpaceGraph: vi.fn(),
 }));
 
@@ -25,8 +25,8 @@ import { listListings } from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
 import {
   isAgeAvailable,
-  replaceListingGraph,
-  upsertListingGraph,
+  replaceListingGraphs,
+  upsertListingGraphs,
   wipeGentleSpaceGraph,
 } from "./age";
 import { rebuildListingGraph, syncListingGraph } from "./rebuild";
@@ -58,8 +58,8 @@ beforeEach(() => {
   vi.mocked(listListings).mockReset();
   vi.mocked(buildListingEmbeddingText).mockReset();
   vi.mocked(isAgeAvailable).mockReset();
-  vi.mocked(replaceListingGraph).mockReset();
-  vi.mocked(upsertListingGraph).mockReset();
+  vi.mocked(replaceListingGraphs).mockReset();
+  vi.mocked(upsertListingGraphs).mockReset();
   vi.mocked(wipeGentleSpaceGraph).mockReset();
 });
 
@@ -94,18 +94,20 @@ describe("rebuildListingGraph", () => {
     expect(wipeGentleSpaceGraph).toHaveBeenCalledOnce();
     expect(extractSearchEntitiesBatch).toHaveBeenCalledWith(["Koramangala Spot · under 15k"]);
     expect(buildListingEmbeddingText).toHaveBeenCalledOnce();
-    expect(upsertListingGraph).toHaveBeenCalledWith({
-      id: "listing-1",
-      slug: "koramangala-spot",
-      title: "Koramangala Spot",
-      entities: {
-        areas: ["koramangala", "bengaluru", "indiranagar"],
-        amenities: ["wifi", "ac", "printer"],
-        deskTypes: ["coworking", "private cabin"],
-        landmarks: ["metro"],
-        budgetSignals: ["under_15k"],
+    expect(upsertListingGraphs).toHaveBeenCalledWith([
+      {
+        id: "listing-1",
+        slug: "koramangala-spot",
+        title: "Koramangala Spot",
+        entities: {
+          areas: ["koramangala", "bengaluru", "indiranagar"],
+          amenities: ["wifi", "ac", "printer"],
+          deskTypes: ["coworking", "private cabin"],
+          landmarks: ["metro"],
+          budgetSignals: ["under_15k"],
+        },
       },
-    });
+    ]);
   });
 
   it("does not wipe the graph if extraction fails mid-run", async () => {
@@ -142,7 +144,7 @@ describe("rebuildListingGraph", () => {
     await expect(rebuildListingGraph()).rejects.toThrow("boom");
 
     expect(wipeGentleSpaceGraph).not.toHaveBeenCalled();
-    expect(upsertListingGraph).not.toHaveBeenCalled();
+    expect(upsertListingGraphs).not.toHaveBeenCalled();
   });
 });
 
@@ -154,7 +156,7 @@ describe("syncListingGraph", () => {
 
     expect(isAgeAvailable).not.toHaveBeenCalled();
     expect(extractSearchEntitiesBatch).not.toHaveBeenCalled();
-    expect(replaceListingGraph).not.toHaveBeenCalled();
+    expect(replaceListingGraphs).not.toHaveBeenCalled();
   });
 
   it("extracts all changed listings before the first graph mutation", async () => {
@@ -199,25 +201,21 @@ describe("syncListingGraph", () => {
 
     await expect(syncListingGraph(changed)).resolves.toEqual({ listings: 2, skipped: false });
 
-    expect(replaceListingGraph).toHaveBeenCalledTimes(2);
+    expect(replaceListingGraphs).toHaveBeenCalledTimes(1);
     expect(extractSearchEntitiesBatch).toHaveBeenCalledOnce();
     expect(extractSearchEntitiesBatch).toHaveBeenCalledWith([
       "Koramangala Spot · under 15k",
       "Indiranagar Spot · under 20k",
     ]);
-    const firstReplaceCall = vi.mocked(replaceListingGraph).mock.invocationCallOrder[0];
+    const firstReplaceCall = vi.mocked(replaceListingGraphs).mock.invocationCallOrder[0];
     const batchExtractCall = vi.mocked(extractSearchEntitiesBatch).mock.invocationCallOrder[0];
     expect(batchExtractCall).toBeLessThan(firstReplaceCall);
-    expect(replaceListingGraph).toHaveBeenNthCalledWith(
-      1,
+    expect(replaceListingGraphs).toHaveBeenCalledWith([
       expect.objectContaining({ id: "listing-1" }),
-    );
-    expect(replaceListingGraph).toHaveBeenNthCalledWith(
-      2,
       expect.objectContaining({ id: "listing-2" }),
-    );
+    ]);
     expect(wipeGentleSpaceGraph).not.toHaveBeenCalled();
-    expect(upsertListingGraph).not.toHaveBeenCalled();
+    expect(upsertListingGraphs).not.toHaveBeenCalled();
   });
 
   it("does not mutate AGE for soft-hidden rows when no changed listings are passed", async () => {
@@ -227,6 +225,6 @@ describe("syncListingGraph", () => {
     await expect(syncListingGraph([])).resolves.toEqual({ listings: 0, skipped: false });
 
     expect(extractSearchEntitiesBatch).not.toHaveBeenCalled();
-    expect(replaceListingGraph).not.toHaveBeenCalled();
+    expect(replaceListingGraphs).not.toHaveBeenCalled();
   });
 });
