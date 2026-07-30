@@ -4,7 +4,7 @@ import type { QueryEntities } from "../graph/types";
 import type { Listing } from "../listings/types";
 import { selectNearbyCategories } from "../places/categories";
 import { isPlacesConfigured, searchNearby } from "../places/client";
-import { distanceLabel } from "../places/distance";
+import { distanceBand } from "../places/distance";
 import type { NearbyCategory, NearbyGroup } from "../places/types";
 import { canonicalizeQueryEntities } from "./entity-signature";
 import { cacheKey, getCached, setCached, singleFlight } from "./insight-cache";
@@ -74,7 +74,7 @@ async function fetchNearbyGroups(
       label: category.label,
       places: places.map((place) => ({
         name: place.name,
-        distanceLabel: distanceLabel(place.distanceMeters),
+        distanceLabel: distanceBand(place.distanceMeters),
       })),
     });
   }

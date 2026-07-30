@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceLabel, haversineMeters } from "./distance";
+import { distanceBand, haversineMeters } from "./distance";
 
 describe("haversineMeters", () => {
   it("returns 0 for the same point", () => {
@@ -13,17 +13,20 @@ describe("haversineMeters", () => {
   });
 });
 
-describe("distanceLabel", () => {
-  it("rounds sub-kilometre distances to 50 m buckets", () => {
-    expect(distanceLabel(320)).toBe("~300 m");
-    expect(distanceLabel(340)).toBe("~350 m");
+describe("distanceBand", () => {
+  it("uses walking distance under 500m", () => {
+    expect(distanceBand(0)).toBe("walking distance");
+    expect(distanceBand(499)).toBe("walking distance");
   });
 
-  it("never reports below 50 m", () => {
-    expect(distanceLabel(10)).toBe("~50 m");
+  it("uses ~1 km from 500m inclusive to under 1500m", () => {
+    expect(distanceBand(500)).toBe("~1 km");
+    expect(distanceBand(1499)).toBe("~1 km");
   });
 
-  it("switches to kilometres at 1000 m", () => {
-    expect(distanceLabel(1240)).toBe("~1.2 km");
+  it("rounds to nearest kilometre from 1500m", () => {
+    expect(distanceBand(1500)).toBe("~2 km");
+    expect(distanceBand(2400)).toBe("~2 km");
+    expect(distanceBand(2600)).toBe("~3 km");
   });
 });

@@ -70,7 +70,7 @@ describe("buildInsight", () => {
     expect(insight.summary).toBe("Fits your Bellandur ask.");
     expect(insight.highlights).toEqual([{ label: "Cafes", detail: "Third Wave ~300 m" }]);
     expect(insight.nearby).toEqual([
-      { category: "cafe", label: "Cafes", places: [{ name: "Third Wave", distanceLabel: "~300 m" }] },
+      { category: "cafe", label: "Cafes", places: [{ name: "Third Wave", distanceLabel: "walking distance" }] },
     ]);
   });
 

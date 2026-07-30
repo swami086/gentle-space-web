@@ -17,8 +17,8 @@ export function haversineMeters(
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
-export function distanceLabel(meters: number): string {
-  if (meters >= 1000) return `~${(meters / 1000).toFixed(1)} km`;
-  const rounded = Math.max(50, Math.round(meters / 50) * 50);
-  return `~${rounded} m`;
+export function distanceBand(meters: number): string {
+  if (meters < 500) return "walking distance";
+  if (meters < 1500) return "~1 km";
+  return `~${Math.round(meters / 1000)} km`;
 }
