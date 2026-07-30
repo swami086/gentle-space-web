@@ -216,6 +216,52 @@ describe("runListingsSync", () => {
     );
   });
 
+  it("reuses the existing id and slug when a listing is rescraped", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    vi.mocked(listExistingForSource).mockResolvedValue([
+      {
+        sourceId: "c1",
+        id: "stable-id",
+        slug: "stable-slug",
+        syncedAt: new Date("2026-07-20T00:00:00Z"),
+        contentHash: "content-old",
+        embedHash: "embed-old",
+        missingRuns: 0,
+      },
+    ]);
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 0,
+      updated: 1,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+
+    await runListingsSync({
+      adapters: [cofynd],
+      skipDownstream: true,
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
+
+    expect(cofynd.fetchDetail).toHaveBeenCalledOnce();
+    expect(applySourceSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scraped: [
+          expect.objectContaining({
+            isNew: false,
+            listing: expect.objectContaining({
+              id: "stable-id",
+              slug: "stable-slug",
+              sourceId: "c1",
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
   it("finishes the run as failed when a post-write step throws", async () => {
     vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
     vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));

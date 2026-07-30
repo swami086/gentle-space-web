@@ -7,6 +7,8 @@ vi.mock("./client", () => ({
 }));
 
 import {
+  getListingBySlug,
+  listListings,
   searchListingsByEmbedding,
   updateListingEmbedding,
 } from "./listings";
@@ -65,6 +67,29 @@ describe("searchListingsByEmbedding", () => {
     expect(results[0].listing.slug).toBe("wework-prestige");
     expect(results[0].vectorSimilarity).toBe(0.83);
     expect(results[0].listing).not.toHaveProperty("embedding");
+  });
+});
+
+describe("visibility-filtered reads", () => {
+  it("keeps listListings scoped to visible rows", async () => {
+    process.env.DATABASE_URL = "postgres://local/test";
+    query.mockResolvedValue({ rows: [sampleRow] });
+
+    const results = await listListings();
+
+    expect(query.mock.calls[0]?.[0]).toContain("missing_runs < $1");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.slug).toBe("wework-prestige");
+  });
+
+  it("keeps getListingBySlug scoped to visible rows", async () => {
+    process.env.DATABASE_URL = "postgres://local/test";
+    query.mockResolvedValue({ rows: [sampleRow] });
+
+    const result = await getListingBySlug("wework-prestige");
+
+    expect(query.mock.calls[0]?.[0]).toContain("missing_runs < $2");
+    expect(result?.slug).toBe("wework-prestige");
   });
 });
 
