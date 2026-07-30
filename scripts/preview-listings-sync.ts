@@ -9,7 +9,12 @@ import { coworkerAdapter } from "../lib/sync/sources";
 
 const maxDetailScrapes = Number(process.env.PREVIEW_MAX_DETAILS ?? "12");
 
-runListingsSync({ adapters: [coworkerAdapter], maxDetailScrapes })
+runListingsSync({
+  adapters: [coworkerAdapter],
+  maxDetailScrapes,
+  trackMissing: false,
+  skipDownstream: true,
+})
   .then((run) => {
     const result = run.sources.coworker;
     console.log(
