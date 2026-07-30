@@ -204,6 +204,22 @@ describe("buildInsight", () => {
     expect(insight.nearby).toEqual([]);
   });
 
+  it("passes sanitized area to AI without address-like raw values", async () => {
+    vi.mocked(searchNearby).mockResolvedValue([]);
+    const junkArea = "Metropolis Office Park Plot No: 128-P2";
+
+    await buildInsight({
+      listing: { ...listing, area: junkArea },
+      query: "coffee nearby",
+      entities,
+    });
+
+    const facts = vi.mocked(explainListingFit).mock.calls[0]![0];
+    expect(facts.area).toBe("");
+    expect(JSON.stringify(facts)).not.toContain("Metropolis");
+    expect(JSON.stringify(facts)).not.toContain("128-P2");
+  });
+
   it("passes redacted description to AI without pricing facts", async () => {
     vi.mocked(searchNearby).mockResolvedValue([]);
     const sensitiveDescription =
@@ -264,6 +280,24 @@ describe("insightFingerprint", () => {
       ],
     });
     expect(a).toBe(b);
+  });
+
+  it("uses sanitized area in fingerprint", () => {
+    const nearby: never[] = [];
+    const junkArea = "Metropolis Office Park Plot No: 128-P2";
+    const withJunk = insightFingerprint({
+      query: "coffee",
+      entities,
+      listing: { ...baseListing, area: junkArea },
+      nearby,
+    });
+    const withEmpty = insightFingerprint({
+      query: "coffee",
+      entities,
+      listing: { ...baseListing, area: "" },
+      nearby,
+    });
+    expect(withJunk).toBe(withEmpty);
   });
 
   it("uses redacted description in fingerprint", () => {

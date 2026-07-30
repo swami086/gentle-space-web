@@ -55,7 +55,7 @@ Browse (`/spaces`), search JSON, and detail pages show **approximate location** 
 
 ### AI search insight ("Why this fits")
 
-AI search results expose an on-demand **"Why this fits"** panel. The button appears only after a successful search (not in plain browse mode). Expanding a result calls `POST /api/spaces/insight`, which selects nearby categories from the search's extracted entities, queries Google Places API (New) around the listing's real server-side coordinates, and asks Gemini to select query-relevant evidence IDs from those facts; the server renders exact listing and Places facts into the summary and highlights. Requires `GOOGLE_PLACES_API_KEY` (server-only; authorize for Places API (New)). Nearby lookup is best-effort and degrades to highlights-only when Places is unavailable; the client receives place names and coarse distance labels only (never exact addresses or raw coordinates).
+AI search results expose an on-demand **"Why this fits"** panel. The button appears only after a successful search (not in plain browse mode). Expanding a result calls `POST /api/spaces/insight`, which selects nearby categories from the search's extracted entities, queries Google Places API (New) around the listing's real server-side coordinates, and asks Gemini to select query-relevant evidence IDs from those facts; the server renders exact listing and Places facts into the summary and highlights. Requires `GOOGLE_PLACES_API_KEY` (server-only; authorize for Places API (New)). Nearby lookup is best-effort and degrades to highlights-only when Places is unavailable; the client receives place names and distance bands only (never exact addresses or raw coordinates).
 
 ## Getting Started
 

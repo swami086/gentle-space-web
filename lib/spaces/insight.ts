@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { explainListingFit } from "../ai/client";
 import type { QueryEntities } from "../graph/types";
-import { redactSensitiveText } from "../listings/redact";
+import { redactSensitiveText, sanitizeArea } from "../listings/redact";
 import type { Listing } from "../listings/types";
 import { selectNearbyCategories } from "../places/categories";
 import { isPlacesConfigured, searchNearby } from "../places/client";
@@ -48,7 +48,7 @@ export function insightFingerprint(input: {
     entities: canonicalizeQueryEntities(input.entities),
     listing: {
       title: input.listing.title,
-      area: input.listing.area,
+      area: sanitizeArea(input.listing.area),
       city: input.listing.city,
       propertyType: input.listing.propertyType ?? "",
       amenities: [...input.listing.amenities].sort((a, b) => a.localeCompare(b)),
@@ -141,7 +141,7 @@ export async function buildInsight(input: {
 
       const generated = await explainListingFit({
         title: input.listing.title,
-        area: input.listing.area,
+        area: sanitizeArea(input.listing.area),
         city: input.listing.city,
         propertyType: input.listing.propertyType,
         amenities: input.listing.amenities,

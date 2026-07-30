@@ -65,7 +65,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 Runtime config is **not in git** — it was copied from `~/Documents/Resume/gentle-space-web/`:
 
-- `.env.local` — `DATABASE_URL`, `AI_PROVIDER=vertex`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`, `VERTEX_*` models, `FIRECRAWL_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY`, `GOOGLE_MAPS_EMBED_KEY`, `GOOGLE_GEOCODING_API_KEY`, `GOOGLE_PLACES_API_KEY` (server-only; Places API (New)). `GOOGLE_APPLICATION_CREDENTIALS` must be rewritten to this workspace's absolute path.
+- `.env.local` — `DATABASE_URL`, `AI_PROVIDER=vertex`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`, `VERTEX_*` models, `FIRECRAWL_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY`, `GOOGLE_GEOCODING_API_KEY`, `GOOGLE_PLACES_API_KEY` (server-only; Places API (New)). `GOOGLE_MAPS_EMBED_KEY` is legacy/unused (MapEmbed removed). `GOOGLE_APPLICATION_CREDENTIALS` must be rewritten to this workspace's absolute path.
 - `.secrets/gentle-space-vertex-stackgen.json` (+ `gentle-space-vertex.json`) — Vertex SA keys, mode `600`. Both are gitignored (`.env*`, `.secrets/`) — keep it that way, the remote is public.
 
 **Docker:** the pgvector+AGE volume was created by the Resume folder, so compose must pin the original project name or a new empty volume is used instead:
