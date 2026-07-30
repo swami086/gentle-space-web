@@ -1,5 +1,11 @@
 import { getVertexAccessToken } from "./auth";
 import { EXTRACT_SYSTEM, parseExtractedEntitiesJson } from "../graph/extract";
+import {
+  INSIGHT_SYSTEM,
+  buildInsightUserText,
+  parseInsightJson,
+} from "../spaces/insight-prompt";
+import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
 const REWRITE_SYSTEM = `You rewrite coworking/office search queries for Bangalore.
 Return one short line: desk/cabin type, amenities, area, budget if present.
@@ -107,4 +113,32 @@ export async function extractSearchEntities(text: string) {
 
 export async function extractListingEntities(text: string) {
   return extractEntities(text);
+}
+
+export async function explainListingFit(facts: InsightFacts): Promise<InsightContent> {
+  const token = await getVertexAccessToken();
+  const res = await fetch(modelUrl(chatModel(), "generateContent"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: INSIGHT_SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: buildInsightUserText(facts) }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        maxOutputTokens: 320,
+      },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`vertex insight failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+  return parseInsightJson(content);
 }

@@ -1,4 +1,10 @@
 import { EXTRACT_SYSTEM, parseExtractedEntitiesJson } from "../graph/extract";
+import {
+  INSIGHT_SYSTEM,
+  buildInsightUserText,
+  parseInsightJson,
+} from "../spaces/insight-prompt";
+import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
 
@@ -95,4 +101,31 @@ export async function extractSearchEntities(text: string) {
 
 export async function extractListingEntities(text: string) {
   return extractEntities(text);
+}
+
+export async function explainListingFit(facts: InsightFacts): Promise<InsightContent> {
+  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: INSIGHT_SYSTEM },
+        { role: "user", content: buildInsightUserText(facts) },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`insight failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    choices: { message?: { content?: string | null } }[];
+  };
+  const content = body.choices[0]?.message?.content?.trim() || "{}";
+  return parseInsightJson(content);
 }
