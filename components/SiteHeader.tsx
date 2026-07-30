@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { BrandLogoMark } from "@/components/BrandLogoMark";
 import { SITE } from "@/lib/site";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
 
-const NAV_LINKS = [
+const ROUTE_LINKS = [
+  ["Home", "/"],
+  ["Spaces", "/spaces"],
+] as const;
+
+const SECTION_LINKS = [
   ["Services", "#services"],
   ["Why Us", "#why-us"],
   ["How It Works", "#how-it-works"],
@@ -13,9 +19,37 @@ const NAV_LINKS = [
   ["Founder", "#founder"],
 ] as const;
 
+function getNavLinks(pathname: string) {
+  if (pathname === "/") {
+    return [...ROUTE_LINKS, ...SECTION_LINKS];
+  }
+  return ROUTE_LINKS;
+}
+
+function navLinkClass(
+  label: string,
+  homeActive: boolean,
+  spacesActive: boolean,
+  mobile = false,
+) {
+  const active =
+    (label === "Home" && homeActive) || (label === "Spaces" && spacesActive);
+  const base = mobile
+    ? "block rounded-[var(--radius-sm)] px-3 py-3 text-base font-medium hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+    : "transition hover:text-[var(--ink)]";
+  return [
+    base,
+    active ? "text-[var(--accent)]" : "text-[var(--ink-secondary)]",
+  ].join(" ");
+}
+
 export function SiteHeader() {
+  const pathname = usePathname();
   const { openModal } = useLeadCapture();
   const [menuOpen, setMenuOpen] = useState(false);
+  const spacesActive = pathname.startsWith("/spaces");
+  const homeActive = pathname === "/";
+  const navLinks = getNavLinks(pathname);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -28,7 +62,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--bg)]">
-      <div className="flex items-center justify-between gap-4 px-6 py-6 lg:px-[160px]">
+      <div className="flex items-center justify-between gap-4 px-6 py-6 lg:px-[var(--page-pad-x)]">
         <a href="/" className="flex min-w-0 items-center gap-2.5">
           <BrandLogoMark />
           <span className="truncate text-[19px] font-bold tracking-tight text-[var(--ink)]">
@@ -40,8 +74,12 @@ export function SiteHeader() {
           aria-label="Primary"
           className="hidden items-center gap-9 text-sm font-medium text-[var(--ink-secondary)] lg:flex"
         >
-          {NAV_LINKS.map(([label, href]) => (
-            <a key={label} href={href} className="transition hover:text-[var(--ink)]">
+          {navLinks.map(([label, href]) => (
+            <a
+              key={label}
+              href={href}
+              className={navLinkClass(label, homeActive, spacesActive)}
+            >
               {label}
             </a>
           ))}
@@ -84,11 +122,11 @@ export function SiteHeader() {
       {menuOpen ? (
         <nav id="mobile-nav" aria-label="Mobile" className="border-t border-[var(--border)] bg-[var(--bg)] px-6 py-4 lg:hidden">
           <ul className="flex flex-col gap-1">
-            {NAV_LINKS.map(([label, href]) => (
+            {navLinks.map(([label, href]) => (
               <li key={label}>
                 <a
                   href={href}
-                  className="block rounded-[var(--radius-sm)] px-3 py-3 text-base font-medium text-[var(--ink-secondary)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+                  className={navLinkClass(label, homeActive, spacesActive, true)}
                   onClick={() => setMenuOpen(false)}
                 >
                   {label}

@@ -1,0 +1,19 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.postgres
+    image: gentle-space-pg:pg16-age
+    container_name: gentle-space-pg
+    command: ["postgres", "-c", "shared_preload_libraries=age"]
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: gentle
+      POSTGRES_PASSWORD: gentle
+      POSTGRES_DB: gentle_space_listings
+    volumes:
+      - gentle_space_pgdata:/var/lib/postgresql/data
+
+volumes:
+  gentle_space_pgdata:

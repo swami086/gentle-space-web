@@ -27,29 +27,28 @@ const TESTIMONIALS = [
 
 export function Testimonials() {
   return (
-    <section className="bg-[var(--bg)] px-6 py-24 lg:px-[160px]">
-      <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-14">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <p className="text-[13px] font-semibold uppercase tracking-[1.2px] text-[var(--accent)]">
-            CLIENT NOTES
-          </p>
-          <h2 className="max-w-[640px] text-[28px] font-semibold tracking-tight text-[var(--ink)] lg:text-[34px]">
-            What Bangalore clients say about Gentle Space
-          </h2>
-        </div>
+    <section className="px-6 py-20 lg:px-[160px]">
+      <div className="max-w-[1120px]">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
+          CLIENT NOTES
+        </p>
+        <h2 className="mt-4 max-w-[640px] text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+          What Bangalore clients say about Gentle Space
+        </h2>
 
-        <div className="grid w-full gap-8 md:grid-cols-2">
-          {TESTIMONIALS.map((t) => (
+        <div className="mt-10 grid gap-5 lg:grid-cols-2">
+          {TESTIMONIALS.map((testimonial) => (
             <figure
-              key={t.name}
-              className="flex flex-col gap-6 rounded-[var(--radius-md)] bg-[var(--surface)] p-8"
+              key={testimonial.name}
+              className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_rgba(30,22,48,0.04)]"
             >
-              <blockquote className="text-base leading-[1.6] text-[var(--ink)]">
-                “{t.quote}”
+              <blockquote className="text-base leading-7 text-[var(--ink)]">
+                “{testimonial.quote}”
               </blockquote>
-              <figcaption className="flex flex-col gap-0.5">
-                <p className="text-[15px] font-semibold text-[var(--ink)]">{t.name}</p>
-                <p className="text-[13px] text-[var(--muted)]">{t.role}</p>
+              <figcaption className="mt-6 text-sm leading-6 text-[var(--ink-secondary)]">
+                <span className="font-semibold text-[var(--ink)]">{testimonial.name}</span>
+                <span className="mx-2 text-[var(--muted)]">•</span>
+                <span>{testimonial.role}</span>
               </figcaption>
             </figure>
           ))}

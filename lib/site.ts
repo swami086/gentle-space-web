@@ -18,3 +18,8 @@ export const SITE = {
   heroImage:
     "https://images.unsplash.com/photo-1684791394054-f79686977f29?auto=format&fit=crop&w=1080&q=80",
 } as const;
+
+export function spaceListingUrl(slug: string): string {
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gentle-space-web.onrender.com";
+  return `${base.replace(/\/$/, "")}/spaces/${slug}`;
+}

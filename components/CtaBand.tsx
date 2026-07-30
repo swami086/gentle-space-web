@@ -15,13 +15,21 @@ export function CtaBand() {
           Share your custom brief. We’ll send a private property shortlist as an e-brochure on
           WhatsApp.
         </p>
-        <button
-          type="button"
-          onClick={openModal}
-          className="rounded-[var(--radius-sm)] bg-white px-8 py-3.5 text-[15px] font-semibold text-[var(--accent-dark)] transition hover:bg-[var(--surface-tint)]"
-        >
-          Share My Custom Brief
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={openModal}
+            className="rounded-[var(--radius-sm)] bg-white px-8 py-3.5 text-[15px] font-semibold text-[var(--accent-dark)] transition hover:bg-[var(--surface-tint)]"
+          >
+            Share My Custom Brief
+          </button>
+          <a
+            href="/spaces"
+            className="rounded-[var(--radius-sm)] border border-white/80 px-8 py-3.5 text-[15px] font-semibold text-white transition hover:bg-white/10"
+          >
+            Browse Spaces
+          </a>
+        </div>
       </div>
     </section>
   );

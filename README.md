@@ -1,5 +1,43 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Local listings database (pgvector)
+
+For AI search / RAG, run Postgres with the pgvector extension on port **5433**:
+
+```bash
+docker compose -f docker-compose.listings.yml up -d
+```
+
+Set `DATABASE_URL` in `.env.local` (not committed), e.g. `postgresql://gentle:gentle@127.0.0.1:5433/gentle_space_listings`.
+
+Apply schema and the pgvector migration (768-d for Vertex `text-embedding-004`):
+
+```bash
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/schema.sql
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/002_pgvector.sql
+# if upgrading from an older 1536-d local DB:
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/003_pgvector_768.sql
+```
+
+### Vertex AI (local, cheapest models)
+
+Minimal GCP footprint: enable `aiplatform.googleapis.com`, SA with `roles/aiplatform.user` only.
+
+```bash
+# .env.local (do not commit)
+AI_PROVIDER=vertex
+GOOGLE_CLOUD_PROJECT=propane-galaxy-498403-n8
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/gentle-space-web/.secrets/gentle-space-vertex-stackgen.json
+VERTEX_CHAT_MODEL=gemini-2.5-flash-lite
+VERTEX_EMBED_MODEL=text-embedding-004
+DATABASE_URL=postgresql://gentle:gentle@127.0.0.1:5433/gentle_space_listings
+```
+
+Use gcloud as `CLOUDSDK_CORE_ACCOUNT=swami@stackgen.com` (and unset / override any Cursor `CLOUDSDK_CORE_PROJECT=blissful-axiom-271209`).
+
+Then: `npm run sync:preview` → `npm run embed:backfill` → `npm run dev` → search on `/spaces`.
+
 ## Getting Started
 
 First, run the development server:

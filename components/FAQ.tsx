@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 const FAQ_ITEMS = [
   {
     question: "How do fees work?",
@@ -7,12 +11,12 @@ const FAQ_ITEMS = [
   {
     question: "Which Bangalore locations do you cover?",
     answer:
-      "Gentle Space covers all areas in Bangalore and can meet any custom requirements, We can accelerate across high growth areas like Whitefield, Outer Ring Road, Koramangala, Indiranagar, HSR Layout, Electronic City, MG Road, and Sarjapur Road for office and commercial leasing in Bangalore.",
+      "Gentle Space covers all areas in Bangalore and can meet any custom requirements, We can accelerate across high growth areas like Whitefield, Outer Ring Road, Koramangala, Indiranagar, HSR Layout, Electronic City, MG Road, and Sarjapur Road.",
   },
   {
     question: "How are commercial real estate consultants different from property listings?",
     answer:
-      "Property listings are often inflated and mask crucial details that could present legal and commecial risk for client businesses. Gentle Space cater to highly customised needs for clients in a high trust environment ensuring that our clients get a market aligned deal that has been throughly vetted and legally safe.",
+      "Property listings are often inflated and mask crucial details that could present legal and commercial risk for client businesses. Gentle Space cater to highly customised needs for clients in a high trust manner.",
   },
   {
     question: "How long does the consulting process take?",
@@ -32,25 +36,62 @@ const FAQ_ITEMS = [
 ] as const;
 
 export function FAQ() {
-  return (
-    <section className="bg-[var(--surface)] px-6 py-24 lg:px-[160px]">
-      <div className="mx-auto flex max-w-[800px] flex-col items-center gap-12">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <p className="text-[13px] font-semibold uppercase tracking-[1.2px] text-[var(--accent)]">
-            FAQ
-          </p>
-          <h2 className="text-[28px] font-semibold tracking-tight text-[var(--ink)] lg:text-[34px]">
-            FAQs: commercial real estate consultants in Bangalore
-          </h2>
-        </div>
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-        <div className="flex w-full flex-col gap-8">
-          {FAQ_ITEMS.map((item) => (
-            <div key={item.question} className="flex flex-col gap-2.5 pb-7">
-              <h3 className="text-lg font-semibold text-[var(--ink)]">{item.question}</h3>
-              <p className="text-[15px] leading-[1.6] text-[var(--ink-secondary)]">{item.answer}</p>
-            </div>
-          ))}
+  return (
+    <section className="px-6 py-20 lg:px-[160px]">
+      <div className="max-w-[920px]">
+        <p className="text-sm font-semibold">
+          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
+            FAQ
+          </span>
+        </p>
+        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+          FAQs: commercial real estate consultants in Bangalore
+        </h2>
+
+        <div className="mt-10 space-y-3">
+          {FAQ_ITEMS.map((item, index) => {
+            const isOpen = openIndex === index;
+            const panelId = `faq-panel-${index}`;
+            const buttonId = `faq-button-${index}`;
+
+            return (
+              <div
+                key={item.question}
+                className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)]"
+              >
+                <button
+                  id={buttonId}
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  onClick={() => setOpenIndex(isOpen ? null : index)}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-[var(--surface-tint)]"
+                >
+                  <span className="text-base font-medium text-[var(--ink)]">{item.question}</span>
+                  <span
+                    aria-hidden="true"
+                    className="text-2xl leading-none text-[var(--accent-dark)]"
+                  >
+                    {isOpen ? "−" : "+"}
+                  </span>
+                </button>
+
+                <div
+                  id={panelId}
+                  role="region"
+                  aria-labelledby={buttonId}
+                  hidden={!isOpen}
+                  className="px-5 pb-5"
+                >
+                  <p className="max-w-[780px] text-sm leading-7 text-[var(--ink-secondary)]">
+                    {item.answer}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

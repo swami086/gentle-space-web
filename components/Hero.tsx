@@ -33,10 +33,10 @@ export function Hero() {
               {CONTENT.hero.primaryCta}
             </button>
             <a
-              href="#services"
+              href="/spaces"
               className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
             >
-              {CONTENT.hero.secondaryCta}
+              Browse Spaces
               <span aria-hidden="true">→</span>
             </a>
           </div>

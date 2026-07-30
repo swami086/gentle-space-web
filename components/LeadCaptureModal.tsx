@@ -24,11 +24,28 @@ function IconWhatsApp({ className }: { className?: string }) {
 }
 
 export function LeadCaptureModal() {
-  const { open, closeModal } = useLeadCapture();
+  const { open, propertyContext, closeModal } = useLeadCapture();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [need, setNeed] = useState<NeedType>("office");
   const [brief, setBrief] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setName("");
+      setPhone("");
+      setNeed("office");
+      setBrief("");
+      return;
+    }
+    if (propertyContext) {
+      setNeed("office");
+      setBrief(`Interested in: ${propertyContext.propertyName}\nListing: ${propertyContext.propertyUrl}`);
+    } else {
+      setNeed("office");
+      setBrief("");
+    }
+  }, [open, propertyContext]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,13 +63,36 @@ export function LeadCaptureModal() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSubmit) return;
-    window.open(buildWhatsAppUrl({ name, phone, need, brief }), "_blank", "noopener,noreferrer");
+    window.open(
+      buildWhatsAppUrl({
+        name,
+        phone,
+        need,
+        brief,
+        ...(propertyContext && {
+          propertyName: propertyContext.propertyName,
+          propertyUrl: propertyContext.propertyUrl,
+        }),
+      }),
+      "_blank",
+      "noopener,noreferrer",
+    );
     closeModal();
   };
 
+  const title = propertyContext ? "Message on WhatsApp" : "Get your private property e-brochure";
+  const headerHelper = propertyContext
+    ? `About: ${propertyContext.propertyName}`
+    : "Share your brief. We’ll send a private shortlist on WhatsApp.";
+  const briefLabel = propertyContext ? "Your brief (prefilled)" : "Your brief";
+  const submitLabel = propertyContext ? "Open WhatsApp draft" : "Send on WhatsApp";
+  const disclaimer = propertyContext
+    ? "We'll open WhatsApp with your message ready. Nothing is sent automatically."
+    : "Opens WhatsApp with your brief ready to send to Gentle Space.";
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(30,22,48,0.6)] px-4 py-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1E163099] px-4 py-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeModal();
       }}
@@ -66,11 +106,9 @@ export function LeadCaptureModal() {
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h2 id="lead-capture-title" className="text-2xl font-bold tracking-tight text-[var(--ink)]">
-              Get your private property e-brochure
+              {title}
             </h2>
-            <p className="text-[15px] leading-[1.5] text-[var(--muted)]">
-              Share your brief. We’ll send a private shortlist on WhatsApp.
-            </p>
+            <p className="text-[15px] leading-[1.45] text-[var(--muted)]">{headerHelper}</p>
           </div>
           <button
             type="button"
@@ -116,7 +154,7 @@ export function LeadCaptureModal() {
                     className={`rounded-[var(--radius-sm)] px-3.5 py-2.5 text-[13px] font-semibold transition ${
                       selected
                         ? "bg-[var(--accent)] text-[var(--on-accent)]"
-                        : "border border-[var(--border)] bg-[var(--surface-tint)] text-[var(--ink)]"
+                        : "border border-[var(--border)] bg-[var(--surface-tint)] text-[var(--accent)]"
                     }`}
                   >
                     {NEED_LABELS[option]}
@@ -127,7 +165,7 @@ export function LeadCaptureModal() {
           </fieldset>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">Your brief</span>
+            <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{briefLabel}</span>
             <textarea
               value={brief}
               onChange={(event) => setBrief(event.target.value)}
@@ -144,10 +182,10 @@ export function LeadCaptureModal() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <IconWhatsApp className="h-[18px] w-[18px]" />
-              Send on WhatsApp
+              {submitLabel}
             </button>
             <p className="text-center text-[13px] text-[var(--muted)]">
-              Opens WhatsApp with your brief ready to send to Gentle Space.
+              {disclaimer}
             </p>
           </div>
         </form>

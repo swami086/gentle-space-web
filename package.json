@@ -7,22 +7,31 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:listings": "tsx scripts/run-listings-sync.ts",
+    "sync:preview": "tsx --env-file=.env.local scripts/preview-listings-sync.ts",
+    "embed:backfill": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
+    "graph:rebuild": "tsx --env-file=.env.local scripts/rebuild-listing-graph.ts"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
     "next": "15.5.21",
+    "pg": "^8.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.15.12",
     "@tailwindcss/postcss": "^4",
+    "@types/google.maps": "^3.65.3",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.21",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

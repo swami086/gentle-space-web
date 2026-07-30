@@ -13,16 +13,30 @@ export type LeadPayload = {
   phone: string;
   need: NeedType;
   brief: string;
+  propertyName?: string;
+  propertyUrl?: string;
 };
 
 export function buildWhatsAppUrl(payload: LeadPayload): string {
-  const body = [
-    "Gentle Space — property e-brochure request",
-    "",
-    `Name: ${payload.name.trim()}`,
-    `WhatsApp: ${payload.phone.trim()}`,
-    `Need: ${NEED_LABELS[payload.need]}`,
-    `Brief: ${payload.brief.trim()}`,
-  ].join("\n");
+  const isProperty = Boolean(payload.propertyName && payload.propertyUrl);
+  const body = isProperty
+    ? [
+        "Gentle Space — property enquiry",
+        "",
+        `Property: ${payload.propertyName!.trim()}`,
+        `Listing: ${payload.propertyUrl!.trim()}`,
+        "",
+        `Name: ${payload.name.trim()}`,
+        `WhatsApp: ${payload.phone.trim()}`,
+        `Brief: ${payload.brief.trim()}`,
+      ].join("\n")
+    : [
+        "Gentle Space — property e-brochure request",
+        "",
+        `Name: ${payload.name.trim()}`,
+        `WhatsApp: ${payload.phone.trim()}`,
+        `Need: ${NEED_LABELS[payload.need]}`,
+        `Brief: ${payload.brief.trim()}`,
+      ].join("\n");
   return `https://wa.me/${SITE.phoneE164}?text=${encodeURIComponent(body)}`;
 }

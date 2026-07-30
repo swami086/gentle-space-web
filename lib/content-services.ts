@@ -2,7 +2,7 @@ export const SERVICES_CONTENT = {
   kicker: "WHAT WE DO",
   heading: "We specialise in custom commercial real estate requirements in Bangalore",
   subtext:
-    "Custom office and retail briefs for companies, and custom leasing mandates for property owners. End-to-end support includes verification, legal, and paperwork.",
+    "High Trust Property Consulting for Commercial Real Estate and custom leasing mandates for property owners. End-to-end support includes verification, legal, and paperwork.",
   groups: [
     {
       label: "CUSTOM REQUIREMENTS FOR COMPANIES",
