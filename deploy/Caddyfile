@@ -1,0 +1,3 @@
+gentlespacesolutions.com, www.gentlespacesolutions.com {
+	reverse_proxy web:3000
+}

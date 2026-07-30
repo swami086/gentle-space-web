@@ -1,0 +1,28 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm install
+
+COPY . .
+
+# Static pages (e.g. /spaces) fetch listings from the DB during `next build`,
+# so the build step needs a reachable DATABASE_URL (see deploy/docker-compose.yml build.network).
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time by Next.js,
+# so they must be build args too — env_file at runtime is too late for these.
+ARG NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY
+ENV NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_JS_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+
+RUN npm run build
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+CMD ["npm", "start"]
