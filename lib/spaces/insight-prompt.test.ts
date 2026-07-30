@@ -71,6 +71,19 @@ describe("buildFactPacket", () => {
     });
     expect(packet.facts.some((f) => f.id === "listing.description")).toBe(false);
   });
+
+  it("omits mandatory listing facts when values contain forbidden terms", () => {
+    const packet = buildFactPacket({
+      ...facts,
+      title: "Space with major pros",
+      area: "Bellandur drawbacks zone",
+      city: "Bengaluru considerations",
+    });
+
+    expect(packet.facts.some((f) => f.id === "listing.title")).toBe(false);
+    expect(packet.facts.some((f) => f.id === "listing.area")).toBe(false);
+    expect(packet.facts.some((f) => f.id === "listing.city")).toBe(false);
+  });
 });
 
 describe("buildInsightUserText", () => {
@@ -346,5 +359,51 @@ describe("parseInsightJson — evidence selection", () => {
       emptyInsightContent(),
     );
     expect(parseInsightJson("{}", facts)).toEqual(emptyInsightContent());
+  });
+
+  it("cannot render forbidden title, area, or city even when selected", () => {
+    const forbiddenFacts: InsightFacts = {
+      ...facts,
+      title: "Hidden pros space",
+      area: "Cons district",
+      city: "Downside city",
+    };
+
+    for (const id of ["listing.title", "listing.area", "listing.city"] as const) {
+      expect(
+        parseInsightJson(
+          selectionJson({ summaryEvidenceIds: [id], highlightEvidenceIds: [id] }),
+          forbiddenFacts,
+        ),
+      ).toEqual(emptyInsightContent());
+    }
+  });
+
+  it("preserves full exact distance label when truncating long Unicode place names", () => {
+    const distanceLabel = "~1.2 km";
+    const longName = "कैफ़".repeat(60);
+    const longFacts: InsightFacts = {
+      ...facts,
+      nearby: [
+        {
+          category: "cafe",
+          label: "Cafes",
+          places: [{ name: longName, distanceLabel }],
+        },
+      ],
+    };
+
+    const parsed = parseInsightJson(
+      selectionJson({
+        summaryEvidenceIds: ["listing.area"],
+        highlightEvidenceIds: ["nearby.cafe.0"],
+      }),
+      longFacts,
+    );
+
+    expect(parsed.highlights).toHaveLength(1);
+    expect(parsed.highlights[0].detail.endsWith(distanceLabel)).toBe(true);
+    expect(parsed.highlights[0].detail).toMatch(new RegExp(` ${distanceLabel.replace(".", "\\.")}$`));
+    expect(parsed.highlights[0].detail.length).toBeLessThanOrEqual(90);
   });
 });

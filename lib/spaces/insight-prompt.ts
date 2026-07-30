@@ -47,11 +47,19 @@ function factValueAllowed(value: string | undefined): boolean {
 }
 
 export function buildFactPacket(facts: InsightFacts): InsightFactPacket {
-  const entries: InsightFactEntry[] = [
-    { id: "listing.title", value: facts.title },
-    { id: "listing.area", value: facts.area || "unknown" },
-    { id: "listing.city", value: facts.city || "Bengaluru" },
-  ];
+  const entries: InsightFactEntry[] = [];
+
+  if (factValueAllowed(facts.title)) {
+    entries.push({ id: "listing.title", value: facts.title });
+  }
+  const area = facts.area || "unknown";
+  if (factValueAllowed(area)) {
+    entries.push({ id: "listing.area", value: area });
+  }
+  const city = facts.city || "Bengaluru";
+  if (factValueAllowed(city)) {
+    entries.push({ id: "listing.city", value: city });
+  }
 
   if (facts.propertyType && factValueAllowed(facts.propertyType)) {
     entries.push({ id: "listing.propertyType", value: facts.propertyType });
@@ -120,6 +128,13 @@ function truncateSafe(text: string, maxLen: number): string {
   return `${text.slice(0, end)}…`;
 }
 
+function renderNearbyDetail(name: string, distanceLabel: string): string | null {
+  const suffixLen = 1 + distanceLabel.length;
+  if (suffixLen > MAX_DETAIL_CHARS) return null;
+  const maxNameLen = MAX_DETAIL_CHARS - suffixLen;
+  return `${truncateSafe(name, maxNameLen)} ${distanceLabel}`;
+}
+
 function normalizeEvidenceIds(
   raw: unknown,
   knownIds: Set<string>,
@@ -171,9 +186,9 @@ function renderHighlight(fact: InsightFactEntry): InsightHighlight | null {
     return { label: "Details", detail: truncateSafe(fact.value, MAX_DETAIL_CHARS) };
   }
   if (fact.id.startsWith("nearby.") && fact.name && fact.distanceLabel && fact.groupLabel) {
-    const label = truncateSafe(fact.groupLabel, MAX_LABEL_CHARS);
-    const detail = truncateSafe(`${fact.name} ${fact.distanceLabel}`, MAX_DETAIL_CHARS);
-    return { label, detail };
+    const detail = renderNearbyDetail(fact.name, fact.distanceLabel);
+    if (!detail) return null;
+    return { label: truncateSafe(fact.groupLabel, MAX_LABEL_CHARS), detail };
   }
   return null;
 }
