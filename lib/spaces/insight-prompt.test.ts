@@ -379,6 +379,30 @@ describe("parseInsightJson — evidence selection", () => {
     }
   });
 
+  it("drops nearby highlight when distance suffix leaves zero name budget", () => {
+    const distanceLabel = "~".repeat(89);
+    const zeroBudgetFacts: InsightFacts = {
+      ...facts,
+      nearby: [
+        {
+          category: "cafe",
+          label: "Cafes",
+          places: [{ name: "Third Wave", distanceLabel }],
+        },
+      ],
+    };
+
+    const parsed = parseInsightJson(
+      selectionJson({
+        summaryEvidenceIds: ["listing.area"],
+        highlightEvidenceIds: ["nearby.cafe.0"],
+      }),
+      zeroBudgetFacts,
+    );
+
+    expect(parsed.highlights).toHaveLength(0);
+  });
+
   it("preserves full exact distance label when truncating long Unicode place names", () => {
     const distanceLabel = "~1.2 km";
     const longName = "कैफ़".repeat(60);

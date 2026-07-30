@@ -132,6 +132,7 @@ function renderNearbyDetail(name: string, distanceLabel: string): string | null 
   const suffixLen = 1 + distanceLabel.length;
   if (suffixLen > MAX_DETAIL_CHARS) return null;
   const maxNameLen = MAX_DETAIL_CHARS - suffixLen;
+  if (maxNameLen <= 0) return null;
   return `${truncateSafe(name, maxNameLen)} ${distanceLabel}`;
 }
 
