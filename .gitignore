@@ -42,6 +42,7 @@ yarn-error.log*
 next-env.d.ts
 .netlify
 .secrets/
+.firecrawl/
 backup-listings-*.sql
 
 # OpenMemory - IDE/Assistant specific rules

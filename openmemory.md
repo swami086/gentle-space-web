@@ -45,6 +45,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 - `embedListingsMissingEmbedding()` now reuses the chunked embed loop over `listListingsMissingEmbedding()` only; `scripts/backfill-embeddings.ts` now truly fills missing vectors instead of re-embedding every listing.
 - `syncListingGraph(changed)` now prepares extraction for every changed/reactivated listing before the first AGE write, then calls `replaceListingGraph()` per listing. Soft-hidden `Listing` nodes intentionally remain in AGE until `graph:rebuild`; vector search filters hidden SQL rows before graph scoring, and `rebuildListingGraph()` still does wipe-once + `upsertListingGraph()` recovery.
 - Map pins use approximate coords (`lib/listings/approximateCoords.ts`) for privacy.
+- 2026 Google Maps research baseline for `Spaces`: prefer client-only `@vis.gl/react-google-maps` in Next.js App Router, use cloud `mapId`, render price pins with `AdvancedMarker`, and reuse map instances where practical to avoid extra map-view cost.
 
 ## Local runtime setup (verified 2026-07-30)
 
