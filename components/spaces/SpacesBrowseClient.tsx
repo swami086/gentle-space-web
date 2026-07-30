@@ -157,12 +157,6 @@ export function SpacesBrowseClient({
       if (current.amenities.includes(chip)) {
         return { ...current, amenities: current.amenities.filter((value) => value !== chip) };
       }
-      if (chip === `≥ ₹${current.budgetMin?.toLocaleString("en-IN")}`) {
-        return { ...current, budgetMin: null };
-      }
-      if (chip === `≤ ₹${current.budgetMax?.toLocaleString("en-IN")}`) {
-        return { ...current, budgetMax: null };
-      }
       return current;
     });
   }, []);
