@@ -52,7 +52,7 @@ Listings sync behavior:
 
 ### Listing privacy (read boundary)
 
-Browse (`/spaces`), search JSON, and detail pages show **approximate location** (500m map circles, sanitized area + city in cards) and **"Ask for pricing"** — never exact coordinates, street address, price, or source URL. All server→client listing payloads pass through `toPublicListing()` in `lib/listings/public.ts`; raw DB values stay server-side for sync, embeddings, graph scoring, and Places lookups.
+Browse (`/spaces`), search JSON, and detail pages show **approximate location** (500m map circles, sanitized area + city in cards) and **"Ask for pricing"** — never exact coordinates, street address, price, or source URL. All server→client listing payloads pass through `toPublicListing()` in `lib/listings/public.ts`; raw DB values stay server-side for sync, embeddings, graph scoring, and Places lookups. AI search embeds two vectors per listing — `structured_embedding` (title/area/city/type/price/amenities) and `description_embedding` (teaser + description) — and takes the higher cosine similarity of the two at query time (`GREATEST(...)` in `searchListingsByEmbedding()`), so a fact buried in a long description can surface a listing on its own instead of being diluted by a single blended vector.
 
 ### AI search insight ("Why this fits")
 
