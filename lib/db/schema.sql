@@ -23,12 +23,17 @@ CREATE TABLE IF NOT EXISTS listings (
   missing_runs INT NOT NULL DEFAULT 0,
   content_hash TEXT,
   embed_hash TEXT,
-  embedding vector(768),
+  structured_embedding vector(768),
+  description_embedding vector(768),
   UNIQUE (source, source_id)
 );
 
-CREATE INDEX IF NOT EXISTS listings_embedding_ivfflat
-  ON listings USING ivfflat (embedding vector_cosine_ops)
+CREATE INDEX IF NOT EXISTS listings_structured_embedding_ivfflat
+  ON listings USING ivfflat (structured_embedding vector_cosine_ops)
+  WITH (lists = 100);
+
+CREATE INDEX IF NOT EXISTS listings_description_embedding_ivfflat
+  ON listings USING ivfflat (description_embedding vector_cosine_ops)
   WITH (lists = 100);
 
 CREATE INDEX IF NOT EXISTS listings_source_missing_idx

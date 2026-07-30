@@ -19,6 +19,7 @@ docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/003_pgvector_768.sql
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/004_age.sql
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/005_incremental_sync.sql
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/006_split_embeddings.sql
 ```
 
 ### Vertex AI (local, cheapest models)
