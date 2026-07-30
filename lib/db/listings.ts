@@ -98,6 +98,18 @@ export async function getListingBySlug(slug: string): Promise<Listing | null> {
   return rows[0] ? rowToListing(rows[0]) : null;
 }
 
+export async function getListingById(id: string): Promise<Listing | null> {
+  if (!process.env.DATABASE_URL) return null;
+  const visibleLimit = getListingMissingRunsLimit();
+
+  const { rows } = await getPool().query<ListingRow>(
+    "SELECT * FROM listings WHERE id = $1 AND missing_runs < $2 LIMIT 1",
+    [id, visibleLimit],
+  );
+
+  return rows[0] ? rowToListing(rows[0]) : null;
+}
+
 export async function fullReplaceListings(rows: Listing[]): Promise<void> {
   const client = await getPool().connect();
 
