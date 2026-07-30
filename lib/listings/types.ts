@@ -23,6 +23,17 @@ export type Listing = {
 
 export type SyncRunStatus = "success" | "failed";
 
+export type SourceSyncOutcome = {
+  status: "success" | "failed";
+  discovered: number;
+  scraped: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  hidden: number;
+  error: string | null;
+};
+
 export type SyncRun = {
   id: string;
   startedAt: string;
@@ -30,6 +41,7 @@ export type SyncRun = {
   status: SyncRunStatus | "running";
   count: number | null;
   error: string | null;
+  sources: Partial<Record<ListingSource, SourceSyncOutcome>>;
 };
 
 export const SOURCE_PRIORITY: Record<ListingSource, number> = {

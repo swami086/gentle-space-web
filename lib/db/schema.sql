@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS listings (
   property_type TEXT,
   source_url TEXT NOT NULL,
   synced_at TIMESTAMPTZ NOT NULL,
+  last_seen_at TIMESTAMPTZ NOT NULL,
+  missing_runs INT NOT NULL DEFAULT 0,
+  content_hash TEXT,
+  embed_hash TEXT,
   embedding vector(768),
   UNIQUE (source, source_id)
 );
@@ -27,13 +31,17 @@ CREATE INDEX IF NOT EXISTS listings_embedding_ivfflat
   ON listings USING ivfflat (embedding vector_cosine_ops)
   WITH (lists = 100);
 
+CREATE INDEX IF NOT EXISTS listings_source_missing_idx
+  ON listings (source, missing_runs);
+
 CREATE TABLE IF NOT EXISTS sync_runs (
   id UUID PRIMARY KEY,
   started_at TIMESTAMPTZ NOT NULL,
   finished_at TIMESTAMPTZ,
   status TEXT NOT NULL CHECK (status IN ('running','success','failed')),
   count INT,
-  error TEXT
+  error TEXT,
+  sources JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 -- Apache AGE graph bootstrap (requires gentle-space-pg:pg16-age image)

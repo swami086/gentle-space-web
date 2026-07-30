@@ -8,9 +8,15 @@ type SyncRunRow = {
   status: "running" | "success" | "failed";
   count: number | null;
   error: string | null;
+  sources: unknown;
 };
 
 function rowToSyncRun(row: SyncRunRow): SyncRun {
+  const sources =
+    row.sources && typeof row.sources === "object" && !Array.isArray(row.sources)
+      ? row.sources
+      : {};
+
   return {
     id: row.id,
     startedAt: row.started_at.toISOString(),
@@ -18,6 +24,7 @@ function rowToSyncRun(row: SyncRunRow): SyncRun {
     status: row.status,
     count: row.count,
     error: row.error,
+    sources: sources as SyncRun["sources"],
   };
 }
 
@@ -47,11 +54,12 @@ export async function finishSyncRun(
   status: "success" | "failed",
   count: number | null,
   error: string | null,
+  sources: SyncRun["sources"] = {},
 ): Promise<void> {
   await getPool().query(
     `UPDATE sync_runs
-     SET finished_at = NOW(), status = $2, count = $3, error = $4
+     SET finished_at = NOW(), status = $2, count = $3, error = $4, sources = $5::jsonb
      WHERE id = $1`,
-    [id, status, count, error],
+    [id, status, count, error, JSON.stringify(sources)],
   );
 }

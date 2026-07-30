@@ -83,7 +83,7 @@ beforeEach(() => {
   vi.mocked(startSyncRun).mockResolvedValue(undefined);
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
   vi.mocked(fullReplaceListings).mockResolvedValue(undefined);
-  vi.mocked(embedAllListings).mockResolvedValue(undefined);
+  vi.mocked(embedAllListings).mockResolvedValue(0);
   vi.mocked(rebuildListingGraph).mockResolvedValue({ listings: 0, skipped: true });
 });
 

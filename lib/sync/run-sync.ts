@@ -45,6 +45,7 @@ export async function runListingsSync(): Promise<SyncRun> {
       status: "failed",
       count: null,
       error,
+      sources: {},
     };
   }
 
@@ -81,5 +82,6 @@ export async function runListingsSync(): Promise<SyncRun> {
     status: "success",
     count: deduped.length,
     error: null,
+    sources: {},
   };
 }

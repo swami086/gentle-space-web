@@ -30,6 +30,7 @@ const sampleRow = {
   property_type: "Coworking",
   source_url: "https://example.com/wework",
   synced_at: new Date("2026-01-01T00:00:00Z"),
+  missing_runs: 0,
   embedding: "[0.1,0.2,0.3]",
 };
 
@@ -57,8 +58,9 @@ describe("searchListingsByEmbedding", () => {
       expect.stringContaining(
         "SELECT *, (1 - (embedding <=> $1::vector))::float8 AS vector_similarity",
       ),
-      ["[0.1,0.2,0.3]", 5],
+      ["[0.1,0.2,0.3]", 3, 20],
     );
+    expect(query.mock.calls[0]?.[0]).toContain("missing_runs < $2");
     expect(results).toHaveLength(1);
     expect(results[0].listing.slug).toBe("wework-prestige");
     expect(results[0].vectorSimilarity).toBe(0.83);
