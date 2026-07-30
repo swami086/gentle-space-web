@@ -1,14 +1,19 @@
 import { extractSearchEntitiesBatchStrict, isAiSearchConfigured } from "@/lib/ai/client";
-import { listListings } from "@/lib/db/listings";
+import {
+  listListingExtractedEntities,
+  listListings,
+  updateListingExtractedEntities,
+} from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
-import { forEachChunkPaced } from "../sync/pace";
+import { hashEmbeddingText } from "@/lib/sync/content-hash";
+import { forEachChunkPaced } from "@/lib/sync/pace";
 import { normalizeQueryEntities } from "./normalize";
 import {
   isAgeAvailable,
   replaceListingGraphs,
   type ListingInput,
-  upsertListingGraphs,
   wipeGentleSpaceGraph,
+  upsertListingGraphs,
 } from "./age";
 import { emptyQueryEntities, type QueryEntities } from "./types";
 import type { Listing } from "@/lib/listings/types";
@@ -34,56 +39,31 @@ function seedListingEntities(listing: Awaited<ReturnType<typeof listListings>>[n
   };
 }
 
-// Gemini call count (and cost) scales with batches, not listings — 50/call turns
-// a 704-listing rebuild into ~14 generateContent requests instead of 704.
 const EXTRACT_BATCH_SIZE = 50;
-// ~0.5 requests/min at batch=50 (one call every ~2 min). Fresh projects often
-// only get single-digit Gemini RPM; the prior 20/batch @ 30 listings/min still
-// 429'd mid-rebuild after an embedding backfill had already heated the project.
 const ITEMS_PER_MINUTE = 25;
 
-async function prepareListingGraphInputs(listings: Listing[]): Promise<ListingInput[]> {
-  const prepared: ListingInput[] = [];
-  let useLlm = true;
-
-  await forEachChunkPaced(listings, EXTRACT_BATCH_SIZE, ITEMS_PER_MINUTE, async (chunk) => {
-    let extracted: QueryEntities[];
-    if (!useLlm) {
-      extracted = chunk.map(() => emptyQueryEntities());
-    } else {
-      try {
-        extracted = await extractSearchEntitiesBatchStrict(chunk.map(buildListingEmbeddingText));
-      } catch (error) {
-        console.error(
-          "extract batch failed; finishing graph prepare with seeded entities only",
-          error,
-        );
-        useLlm = false;
-        extracted = chunk.map(() => emptyQueryEntities());
-      }
-    }
-
-    chunk.forEach((listing, j) => {
-      prepared.push({
-        id: listing.id,
-        slug: listing.slug,
-        title: listing.title,
-        entities: normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted[j])),
-      });
-    });
-  });
-
-  return prepared;
+function listingToGraphInput(listing: Listing, extracted: QueryEntities): ListingInput {
+  return {
+    id: listing.id,
+    slug: listing.slug,
+    title: listing.title,
+    entities: normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted)),
+  };
 }
 
 export async function rebuildListingGraph(): Promise<{ listings: number; skipped: boolean }> {
-  if (!isAiSearchConfigured() || !(await isAgeAvailable())) {
+  if (!process.env.DATABASE_URL || !(await isAgeAvailable())) {
     console.info("graph rebuild skipped");
     return { listings: 0, skipped: true };
   }
 
-  const listings = await listListings();
-  const preparedListings = await prepareListingGraphInputs(listings);
+  const [listings, extractedByListingId] = await Promise.all([
+    listListings(),
+    listListingExtractedEntities(),
+  ]);
+  const preparedListings = listings.map((listing) =>
+    listingToGraphInput(listing, extractedByListingId.get(listing.id) ?? emptyQueryEntities()),
+  );
 
   await wipeGentleSpaceGraph();
   await upsertListingGraphs(preparedListings);
@@ -103,7 +83,17 @@ export async function syncListingGraph(
     return { listings: 0, skipped: false };
   }
 
-  const preparedListings = await prepareListingGraphInputs(changed);
+  const preparedListings: ListingInput[] = [];
+  await forEachChunkPaced(changed, EXTRACT_BATCH_SIZE, ITEMS_PER_MINUTE, async (chunk) => {
+    const extracted = await extractSearchEntitiesBatchStrict(chunk.map(buildListingEmbeddingText));
+
+    for (const [index, listing] of chunk.entries()) {
+      const extractedEntities = extracted[index] ?? emptyQueryEntities();
+      await updateListingExtractedEntities(listing.id, extractedEntities, hashEmbeddingText(listing));
+      preparedListings.push(listingToGraphInput(listing, extractedEntities));
+    }
+  });
+
   await replaceListingGraphs(preparedListings);
 
   // ponytail: soft-hidden Listing nodes remain until graph:rebuild; vector search

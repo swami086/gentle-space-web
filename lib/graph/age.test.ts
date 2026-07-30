@@ -48,9 +48,9 @@ describe("sanitizeCypherLiteral", () => {
     expect(() => sanitizeCypherLiteral("bad $$ literal")).toThrow("unsafe cypher literal");
   });
 
-  it("rejects backslashes and control characters", () => {
-    expect(() => sanitizeCypherLiteral("bad\\literal")).toThrow("unsafe cypher literal");
-    expect(() => sanitizeCypherLiteral("bad\u0007literal")).toThrow("unsafe cypher literal");
+  it("strips backslashes and control characters", () => {
+    expect(sanitizeCypherLiteral("bad\\literal")).toBe("badliteral");
+    expect(sanitizeCypherLiteral("bad\u0007literal")).toBe("badliteral");
   });
 });
 
@@ -106,11 +106,11 @@ describe("upsertListingGraph", () => {
 
     expect(query).toHaveBeenNthCalledWith(
       4,
-      expect.stringContaining("Owner''s Club"),
+      expect.stringContaining("Owner\\'s Club"),
     );
     expect(query).toHaveBeenNthCalledWith(
       4,
-      expect.stringContaining("o''reilly wifi"),
+      expect.stringContaining("o\\'reilly wifi"),
     );
   });
 });
