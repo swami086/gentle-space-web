@@ -46,6 +46,12 @@ Listings sync behavior:
 - `npm run sync:preview` is Coworker-only, respects `PREVIEW_MAX_DETAILS`, writes listings through the same non-destructive incremental path, disables missing-run tracking, and skips downstream embedding/graph work so it does not spend Vertex/Gemini tokens.
 - Use `npm run sync:listings` for the full incremental pipeline, or `npm run embed:backfill` / `npm run graph:rebuild` after a preview run if you want local embeddings or graph state refreshed.
 - `npm run sync:check` is a live CoFynd operational check. It does one real discovery pass plus one real detail scrape on the first run, writes or refreshes a single listing, skips downstream embeddings/graph work, and proves an immediate second run does zero detail scrapes.
+- `npm run graph:check` is a live Apache AGE operational check: scores one known listing against its own area and asserts non-zero graph overlap.
+- `npm run insight:check` is a live AI insight operational check: builds one "Why this fits" insight (Places API (New) + Gemini) for a Coworker listing with real coordinates and asserts non-empty highlights and at least one nearby place.
+
+### AI search insight ("Why this fits")
+
+AI search results expose an on-demand **"Why this fits"** panel. The button appears only after a successful search (not in plain browse mode). Expanding a result calls `POST /api/spaces/insight`, which selects nearby categories from the search's extracted entities, queries Google Places API (New) around the listing's real server-side coordinates, and asks Gemini to phrase query-relevant highlights using only those facts. Requires `GOOGLE_PLACES_API_KEY` (server-only; authorize for Places API (New)). Nearby lookup is best-effort and degrades to highlights-only when Places is unavailable; the client receives place names and coarse distance labels only (never exact addresses or raw coordinates).
 
 ## Getting Started
 

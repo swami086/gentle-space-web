@@ -13,7 +13,8 @@
     "sync:check": "tsx --env-file=.env.local scripts/check-incremental-sync.ts",
     "embed:backfill": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
     "graph:rebuild": "tsx --env-file=.env.local scripts/rebuild-listing-graph.ts",
-    "graph:check": "tsx --env-file=.env.local scripts/check-graph-boost.ts"
+    "graph:check": "tsx --env-file=.env.local scripts/check-graph-boost.ts",
+    "insight:check": "tsx --env-file=.env.local scripts/check-insight.ts"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
