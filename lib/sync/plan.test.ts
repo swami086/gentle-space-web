@@ -8,6 +8,7 @@ const discovered = [
   { sourceId: "stale", url: "https://example.com/stale" },
   { sourceId: "new", url: "https://example.com/new" },
   { sourceId: "hidden", url: "https://example.com/hidden" },
+  { sourceId: "unknown", url: "https://example.com/unknown" },
 ];
 
 const existing: ExistingListingSyncState[] = [
@@ -53,7 +54,12 @@ describe("planSourceSync", () => {
   it("scrapes new, stale, unknown-hash, and reactivated listings only", () => {
     const plan = planSourceSync(discovered, existing, now, 7 * 86_400_000, 3);
 
-    expect(plan.toScrape.map((item) => item.sourceId)).toEqual(["stale", "new", "hidden"]);
+    expect(plan.toScrape.map((item) => item.sourceId)).toEqual([
+      "stale",
+      "new",
+      "hidden",
+      "unknown",
+    ]);
     expect(plan.toTouch.map((item) => item.sourceId)).toEqual(["fresh"]);
   });
 
