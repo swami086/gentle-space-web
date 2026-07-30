@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "openmemory": {
+      "alwaysAllow": [
+        "add_memories",
+        "search_memory",
+        "list_memories",
+        "delete_all_memories"
+      ],
+      "url": "http://100.71.169.23:8770/mcp/cursor/sse/GentleSpace"
+    }
+  }
+}

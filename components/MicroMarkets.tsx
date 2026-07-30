@@ -8,7 +8,7 @@ export function MicroMarkets() {
           </span>
         </p>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
-          We cover all of Bangalore.
+          We cover all locations in and around Bengaluru.
         </h2>
       </div>
     </section>

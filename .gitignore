@@ -49,3 +49,5 @@ backup-listings-*.sql
 .cursor/rules/openmemory.mdc
 .worktrees/
 .superpowers/
+CLAUDE.md
+AGENTS.md
