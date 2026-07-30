@@ -18,3 +18,7 @@ export async function embedAllListings(): Promise<number> {
   }
   return n;
 }
+
+export async function embedListingsMissingEmbedding(): Promise<number> {
+  return embedAllListings();
+}

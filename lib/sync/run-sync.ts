@@ -1,96 +1,244 @@
-import { fullReplaceListings } from "../db/listings";
-import { embedAllListings } from "./embed-listings";
+import {
+  applySourceSync,
+  countVisibleListings,
+  listExistingForSource,
+} from "../db/listings";
 import { finishSyncRun, startSyncRun } from "../db/sync-runs";
-import { rebuildListingGraph } from "../graph/rebuild";
-import { dedupeListings } from "../listings/dedupe";
+import { syncListingGraph } from "../graph/rebuild";
 import { slugifyTitle } from "../listings/slug";
-import type { Listing, SyncRun } from "../listings/types";
+import type { Listing, SourceSyncOutcome, SyncRun } from "../listings/types";
 import { mapSettledWithConcurrency } from "./concurrency";
+import { contentHash, embedHash } from "./content-hash";
+import { getListingDetailTtlMs, getListingMissingRunsLimit } from "./config";
+import { embedListingsMissingEmbedding } from "./embed-listings";
+import { planSourceSync } from "./plan";
 import {
   cofyndAdapter,
   coworkerAdapter,
   gofloatersAdapter,
   myhqAdapter,
 } from "./sources";
-import type { RawListing, SourceAdapter } from "./sources/types";
+import type { SourceAdapter } from "./sources/types";
 
-async function scrapeAdapter(adapter: SourceAdapter): Promise<RawListing[]> {
-  const discovered = await adapter.discover();
-  const results = await mapSettledWithConcurrency(discovered, 3, ({ url }) => adapter.fetchDetail(url));
-  return results.flatMap((result) =>
-    result.status === "fulfilled" && result.value ? [result.value] : [],
-  );
+export type RunListingsSyncOptions = {
+  adapters?: SourceAdapter[];
+  maxDetailScrapes?: number;
+  trackMissing?: boolean;
+  skipDownstream?: boolean;
+  now?: Date;
+  ttlMs?: number;
+};
+
+type SourceRunResult = {
+  outcome: SourceSyncOutcome;
+  graphListings: Listing[];
+  newlyHiddenIds: string[];
+};
+
+const DEFAULT_ADAPTERS: SourceAdapter[] = [
+  coworkerAdapter,
+  myhqAdapter,
+  cofyndAdapter,
+  gofloatersAdapter,
+];
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-export async function runListingsSync(): Promise<SyncRun> {
-  const runId = crypto.randomUUID();
-  const startedAt = new Date().toISOString();
-  await startSyncRun(runId);
+function failureOutcome(
+  error: unknown,
+  discovered: number,
+): SourceSyncOutcome {
+  return {
+    status: "failed",
+    discovered,
+    scraped: 0,
+    inserted: 0,
+    updated: 0,
+    unchanged: 0,
+    hidden: 0,
+    error: errorMessage(error),
+  };
+}
 
-  const results = await Promise.allSettled([
-    scrapeAdapter(coworkerAdapter),
-    scrapeAdapter(myhqAdapter),
-    scrapeAdapter(cofyndAdapter),
-    scrapeAdapter(gofloatersAdapter),
-  ]);
+async function runSourceSync(
+  adapter: SourceAdapter,
+  options: Required<Pick<RunListingsSyncOptions, "now" | "ttlMs" | "trackMissing">> &
+    Pick<RunListingsSyncOptions, "maxDetailScrapes">,
+): Promise<SourceRunResult> {
+  let discoveredCount = 0;
 
-  const raw: RawListing[] = [];
-  let sourcesOk = 0;
+  try {
+    const discovered = await adapter.discover();
+    discoveredCount = discovered.length;
 
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value.length) {
-      sourcesOk++;
-      raw.push(...r.value);
+    if (discovered.length === 0) {
+      throw new Error(`${adapter.source} discovered zero URLs`);
     }
-  }
 
-  if (sourcesOk < 1 || raw.length < 10) {
-    const error = `abort: sourcesOk=${sourcesOk} count=${raw.length}`;
-    await finishSyncRun(runId, "failed", null, error);
+    const existing = await listExistingForSource(adapter.source);
+    const missingLimit = getListingMissingRunsLimit();
+    const plan = planSourceSync(
+      discovered,
+      existing,
+      options.now,
+      options.ttlMs,
+      missingLimit,
+    );
+    const plannedScrapes =
+      options.maxDetailScrapes == null
+        ? plan.toScrape
+        : plan.toScrape.slice(0, options.maxDetailScrapes);
+    const settled = await mapSettledWithConcurrency(
+      plannedScrapes,
+      3,
+      (item) => adapter.fetchDetail(item.url),
+    );
+    const existingById = new Map(existing.map((row) => [row.sourceId, row]));
+    const scraped = settled.flatMap((result, index) => {
+      if (result.status !== "fulfilled" || result.value == null) {
+        return [];
+      }
+
+      const raw = result.value;
+      const discoveredRow = plannedScrapes[index];
+      if (
+        raw.source !== adapter.source ||
+        raw.sourceId !== discoveredRow.sourceId
+      ) {
+        return [];
+      }
+
+      const previous = existingById.get(raw.sourceId);
+      const listing: Listing = {
+        ...raw,
+        id: previous?.id ?? crypto.randomUUID(),
+        slug: previous?.slug ?? slugifyTitle(raw.title, raw.sourceId),
+        syncedAt: options.now.toISOString(),
+      };
+
+      return [
+        {
+          listing,
+          contentHash: contentHash(raw),
+          embedHash: embedHash(raw),
+          isNew: previous == null,
+          previousContentHash: previous?.contentHash ?? null,
+          previousEmbedHash: previous?.embedHash ?? null,
+          wasHidden: (previous?.missingRuns ?? 0) >= missingLimit,
+        },
+      ];
+    });
+
+    const write = await applySourceSync({
+      source: adapter.source,
+      discoveredSourceIds: discovered.map((row) => row.sourceId),
+      scraped,
+      missingLimit,
+      trackMissing: options.trackMissing,
+    });
+
     return {
-      id: runId,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-      status: "failed",
-      count: null,
-      error,
-      sources: {},
+      outcome: {
+        status: "success",
+        discovered: discovered.length,
+        scraped: scraped.length,
+        inserted: write.inserted,
+        updated: write.updated,
+        unchanged: write.unchanged,
+        hidden: write.newlyHiddenIds.length,
+        error: null,
+      },
+      graphListings: write.graphListings,
+      newlyHiddenIds: write.newlyHiddenIds,
+    };
+  } catch (error) {
+    return {
+      outcome: failureOutcome(error, discoveredCount),
+      graphListings: [],
+      newlyHiddenIds: [],
     };
   }
+}
 
-  const syncedAt = new Date().toISOString();
-  const mapped: Listing[] = raw.map((r) => ({
-    ...r,
-    id: crypto.randomUUID(),
-    slug: slugifyTitle(r.title, r.sourceId),
-    syncedAt,
-  }));
-  const deduped = dedupeListings(mapped);
+export async function runListingsSync(
+  options: RunListingsSyncOptions = {},
+): Promise<SyncRun> {
+  const adapters = options.adapters ?? DEFAULT_ADAPTERS;
+  const trackMissing = options.trackMissing ?? true;
+  const skipDownstream = options.skipDownstream ?? false;
+  const now = options.now ?? new Date();
+  const ttlMs = options.ttlMs ?? getListingDetailTtlMs();
+  const runId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+  let finishedAt: string | null = null;
+  let status: SyncRun["status"] = "running";
+  let count: number | null = null;
+  let error: string | null = null;
+  const sources: SyncRun["sources"] = {};
+  let started = false;
 
-  await fullReplaceListings(deduped);
-  await finishSyncRun(runId, "success", deduped.length, null);
+  try {
+    await startSyncRun(runId);
+    started = true;
 
-  if (process.env.AI_PROVIDER === "vertex" || process.env.OPENAI_API_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    try {
-      await embedAllListings();
-    } catch (err) {
-      console.error("embed failed:", err);
+    const graphListings: Listing[] = [];
+    const newlyHiddenIds: string[] = [];
+
+    for (const adapter of adapters) {
+      const result = await runSourceSync(adapter, {
+        now,
+        ttlMs,
+        trackMissing,
+        maxDetailScrapes: options.maxDetailScrapes,
+      });
+      sources[adapter.source] = result.outcome;
+      graphListings.push(...result.graphListings);
+      newlyHiddenIds.push(...result.newlyHiddenIds);
     }
 
-    try {
-      await rebuildListingGraph();
-    } catch (err) {
-      console.error("graph rebuild failed:", err);
+    const anySuccess = Object.values(sources).some(
+      (source) => source?.status === "success",
+    );
+
+    if (anySuccess && !skipDownstream) {
+      try {
+        await embedListingsMissingEmbedding();
+      } catch (downstreamError) {
+        console.error("embedding sync failed:", downstreamError);
+      }
+
+      try {
+        // ponytail: Task 5 keeps the downstream hook thin; Task 6 makes it truly incremental.
+        await syncListingGraph(graphListings);
+      } catch (downstreamError) {
+        console.error("graph sync failed:", downstreamError);
+      }
+    }
+
+    void newlyHiddenIds;
+    count = await countVisibleListings();
+    status = anySuccess ? "success" : "failed";
+    error = anySuccess ? null : "all sources failed";
+  } catch (runError) {
+    status = "failed";
+    count = null;
+    error = errorMessage(runError);
+  } finally {
+    finishedAt = new Date().toISOString();
+    if (started) {
+      await finishSyncRun(runId, status === "success" ? "success" : "failed", count, error, sources);
     }
   }
 
   return {
     id: runId,
     startedAt,
-    finishedAt: new Date().toISOString(),
-    status: "success",
-    count: deduped.length,
-    error: null,
-    sources: {},
+    finishedAt,
+    status,
+    count,
+    error,
+    sources,
   };
 }

@@ -1,8 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DiscoveredListing, RawListing } from "./sources/types";
+import type { RawListing } from "./sources/types";
+
+const adapters = vi.hoisted(() => ({
+  coworker: {
+    source: "coworker" as const,
+    discover: vi.fn(),
+    fetchDetail: vi.fn(),
+  },
+  myhq: {
+    source: "myhq" as const,
+    discover: vi.fn(),
+    fetchDetail: vi.fn(),
+  },
+  cofynd: {
+    source: "cofynd" as const,
+    discover: vi.fn(),
+    fetchDetail: vi.fn(),
+  },
+  gofloaters: {
+    source: "gofloaters" as const,
+    discover: vi.fn(),
+    fetchDetail: vi.fn(),
+  },
+}));
 
 vi.mock("../db/listings", () => ({
-  fullReplaceListings: vi.fn(),
+  applySourceSync: vi.fn(),
+  countVisibleListings: vi.fn(),
+  listExistingForSource: vi.fn(),
 }));
 
 vi.mock("../db/sync-runs", () => ({
@@ -11,31 +36,31 @@ vi.mock("../db/sync-runs", () => ({
 }));
 
 vi.mock("./embed-listings", () => ({
-  embedAllListings: vi.fn(),
+  embedListingsMissingEmbedding: vi.fn(),
 }));
 
 vi.mock("../graph/rebuild", () => ({
-  rebuildListingGraph: vi.fn(),
+  syncListingGraph: vi.fn(),
 }));
 
 vi.mock("./sources", () => ({
-  coworkerAdapter: { source: "coworker", discover: vi.fn(), fetchDetail: vi.fn() },
-  myhqAdapter: { source: "myhq", discover: vi.fn(), fetchDetail: vi.fn() },
-  cofyndAdapter: { source: "cofynd", discover: vi.fn(), fetchDetail: vi.fn() },
-  gofloatersAdapter: { source: "gofloaters", discover: vi.fn(), fetchDetail: vi.fn() },
+  coworkerAdapter: adapters.coworker,
+  myhqAdapter: adapters.myhq,
+  cofyndAdapter: adapters.cofynd,
+  gofloatersAdapter: adapters.gofloaters,
 }));
 
-import { fullReplaceListings } from "../db/listings";
-import { finishSyncRun, startSyncRun } from "../db/sync-runs";
-import { rebuildListingGraph } from "../graph/rebuild";
-import { runListingsSync } from "./run-sync";
-import { embedAllListings } from "./embed-listings";
 import {
-  cofyndAdapter,
-  coworkerAdapter,
-  gofloatersAdapter,
-  myhqAdapter,
-} from "./sources";
+  applySourceSync,
+  countVisibleListings,
+  listExistingForSource,
+} from "../db/listings";
+import { finishSyncRun, startSyncRun } from "../db/sync-runs";
+import { syncListingGraph } from "../graph/rebuild";
+import { embedListingsMissingEmbedding } from "./embed-listings";
+import { runListingsSync } from "./run-sync";
+
+const { coworker, cofynd, gofloaters, myhq } = adapters;
 
 const rawListing = (over: Partial<RawListing> = {}): RawListing => ({
   source: "coworker",
@@ -50,183 +75,201 @@ const rawListing = (over: Partial<RawListing> = {}): RawListing => ({
   lng: 77.62,
   amenities: ["WiFi"],
   images: ["https://example.com/img.jpg"],
-  pricingHint: "₹5000",
+  pricingHint: "5000 INR",
   propertyType: "Coworking",
   sourceUrl: "https://example.com/wework",
   ...over,
 });
 
-const makeListings = (count: number, source: RawListing["source"] = "coworker") =>
-  Array.from({ length: count }, (_, i) =>
-    rawListing({
-      source,
-      sourceId: `${source}-${i}`,
-      title: `${source} Space ${i}`,
-    }),
-  );
-
-const makeDiscovered = (
-  count: number,
-  source: RawListing["source"] = "coworker",
-): DiscoveredListing[] =>
-  Array.from({ length: count }, (_, i) => ({
-    sourceId: `${source}-${i}`,
-    url: `https://example.com/${source}/${i}`,
-  }));
-
-function mockDetailFetch(
-  fetchDetail: (typeof coworkerAdapter)["fetchDetail"],
-  source: RawListing["source"],
-  discovered: DiscoveredListing[],
-): void {
-  vi.mocked(fetchDetail).mockImplementation(async (url: string) => {
-    const match = discovered.find((item) => item.url === url);
-    const suffix = match?.url.split("/").at(-1) ?? match?.sourceId ?? "0";
-    return match
-      ? rawListing({
-          source,
-          sourceId: match.sourceId,
-          title: `${source} Space ${suffix}`,
-          sourceUrl: match.url,
-        })
-      : null;
-  });
-}
-
 beforeEach(() => {
-  delete process.env.AI_PROVIDER;
-  delete process.env.OPENAI_API_KEY;
-  delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-
   vi.mocked(startSyncRun).mockReset();
   vi.mocked(finishSyncRun).mockReset();
-  vi.mocked(fullReplaceListings).mockReset();
-  vi.mocked(embedAllListings).mockReset();
-  vi.mocked(rebuildListingGraph).mockReset();
-  vi.mocked(coworkerAdapter.discover).mockReset();
-  vi.mocked(coworkerAdapter.fetchDetail).mockReset();
-  vi.mocked(myhqAdapter.discover).mockReset();
-  vi.mocked(myhqAdapter.fetchDetail).mockReset();
-  vi.mocked(cofyndAdapter.discover).mockReset();
-  vi.mocked(cofyndAdapter.fetchDetail).mockReset();
-  vi.mocked(gofloatersAdapter.discover).mockReset();
-  vi.mocked(gofloatersAdapter.fetchDetail).mockReset();
+  vi.mocked(applySourceSync).mockReset();
+  vi.mocked(countVisibleListings).mockReset();
+  vi.mocked(listExistingForSource).mockReset();
+  vi.mocked(embedListingsMissingEmbedding).mockReset();
+  vi.mocked(syncListingGraph).mockReset();
+
+  vi.mocked(coworker.discover).mockReset();
+  vi.mocked(coworker.fetchDetail).mockReset();
+  vi.mocked(myhq.discover).mockReset();
+  vi.mocked(myhq.fetchDetail).mockReset();
+  vi.mocked(cofynd.discover).mockReset();
+  vi.mocked(cofynd.fetchDetail).mockReset();
+  vi.mocked(gofloaters.discover).mockReset();
+  vi.mocked(gofloaters.fetchDetail).mockReset();
 
   vi.mocked(startSyncRun).mockResolvedValue(undefined);
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
-  vi.mocked(fullReplaceListings).mockResolvedValue(undefined);
-  vi.mocked(embedAllListings).mockResolvedValue(0);
-  vi.mocked(rebuildListingGraph).mockResolvedValue({ listings: 0, skipped: true });
+  vi.mocked(countVisibleListings).mockResolvedValue(0);
+  vi.mocked(embedListingsMissingEmbedding).mockResolvedValue(0);
+  vi.mocked(syncListingGraph).mockResolvedValue({ listings: 0, skipped: true });
 });
 
 describe("runListingsSync", () => {
-  it("aborts when no source returns listings", async () => {
-    vi.mocked(coworkerAdapter.discover).mockResolvedValue([]);
-    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
-
-    const run = await runListingsSync();
-
-    expect(run.status).toBe("failed");
-    expect(run.error).toBe("abort: sourcesOk=0 count=0");
-    expect(startSyncRun).toHaveBeenCalledOnce();
-    expect(finishSyncRun).toHaveBeenCalledWith(
-      expect.any(String),
-      "failed",
-      null,
-      "abort: sourcesOk=0 count=0",
-    );
-    expect(fullReplaceListings).not.toHaveBeenCalled();
-  });
-
-  it("aborts when total raw count is below 10", async () => {
-    const coworkerDiscovered = makeDiscovered(5);
-    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
-    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
-    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
-
-    const run = await runListingsSync();
-
-    expect(run.status).toBe("failed");
-    expect(finishSyncRun).toHaveBeenCalledWith(
-      expect.any(String),
-      "failed",
-      null,
-      "abort: sourcesOk=1 count=5",
-    );
-    expect(fullReplaceListings).not.toHaveBeenCalled();
-  });
-
-  it("replaces listings when at least one source succeeds with 10+ rows", async () => {
-    const coworkerDiscovered = makeDiscovered(10);
-    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
-    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
-    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
-
-    const run = await runListingsSync();
-
-    expect(run.status).toBe("success");
-    expect(run.count).toBe(10);
-    expect(fullReplaceListings).toHaveBeenCalledOnce();
-    const inserted = vi.mocked(fullReplaceListings).mock.calls[0][0];
-    expect(inserted).toHaveLength(10);
-    expect(inserted[0]).toMatchObject({
-      source: "coworker",
-      slug: expect.stringMatching(/^coworker-space-\d+-coworker-\d+$/),
-      syncedAt: expect.any(String),
+  it("upserts one successful source while leaving a failed source untouched", async () => {
+    vi.mocked(coworker.discover).mockRejectedValue(new Error("network"));
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
     });
-    expect(finishSyncRun).toHaveBeenCalledWith(
-      expect.any(String),
-      "success",
-      10,
-      null,
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+
+    const run = await runListingsSync({
+      adapters: [coworker, cofynd],
+      skipDownstream: true,
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
+
+    expect(run.status).toBe("success");
+    expect(run.sources.coworker?.status).toBe("failed");
+    expect(run.sources.cofynd).toMatchObject({ status: "success", scraped: 1, inserted: 1 });
+    expect(applySourceSync).toHaveBeenCalledOnce();
+  });
+
+  it("touches a fresh listing without calling Firecrawl detail scrape", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    vi.mocked(listExistingForSource).mockResolvedValue([
+      {
+        sourceId: "c1",
+        id: "id",
+        slug: "slug",
+        syncedAt: new Date("2026-07-29T00:00:00Z"),
+        contentHash: "content",
+        embedHash: "embed",
+        missingRuns: 0,
+      },
+    ]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 0,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+
+    const run = await runListingsSync({
+      adapters: [cofynd],
+      skipDownstream: true,
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
+
+    expect(cofynd.fetchDetail).not.toHaveBeenCalled();
+    expect(applySourceSync).toHaveBeenCalledWith(
+      expect.objectContaining({ discoveredSourceIds: ["c1"], scraped: [] }),
+    );
+    expect(run.sources.cofynd?.scraped).toBe(0);
+  });
+
+  it("does not count an empty discovery as a successful missing run", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([]);
+    vi.mocked(countVisibleListings).mockResolvedValue(10);
+
+    const run = await runListingsSync({ adapters: [cofynd], skipDownstream: true });
+
+    expect(run.status).toBe("failed");
+    expect(applySourceSync).not.toHaveBeenCalled();
+    expect(run.sources.cofynd?.error).toMatch(/zero URLs/);
+  });
+
+  it("limits detail scrapes while still touching every discovered sourceId", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([
+      { sourceId: "c1", url: "https://cofynd/c1" },
+      { sourceId: "c2", url: "https://cofynd/c2" },
+    ]);
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+
+    const run = await runListingsSync({
+      adapters: [cofynd],
+      maxDetailScrapes: 1,
+      skipDownstream: true,
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
+
+    expect(run.status).toBe("success");
+    expect(cofynd.fetchDetail).toHaveBeenCalledOnce();
+    expect(applySourceSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discoveredSourceIds: ["c1", "c2"],
+        scraped: [
+          expect.objectContaining({
+            listing: expect.objectContaining({ sourceId: "c1" }),
+          }),
+        ],
+      }),
     );
   });
 
-  it("keeps rebuilding the graph even if embedding fails", async () => {
-    process.env.AI_PROVIDER = "openai";
-    process.env.OPENAI_API_KEY = "test-key";
+  it("finishes the run as failed when a post-write step throws", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockRejectedValue(new Error("count failed"));
 
-    const coworkerDiscovered = makeDiscovered(10);
-    vi.mocked(coworkerAdapter.discover).mockResolvedValue(coworkerDiscovered);
-    mockDetailFetch(coworkerAdapter.fetchDetail, "coworker", coworkerDiscovered);
-    vi.mocked(myhqAdapter.discover).mockResolvedValue([]);
-    vi.mocked(cofyndAdapter.discover).mockResolvedValue([]);
-    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
-    vi.mocked(embedAllListings).mockRejectedValueOnce(new Error("embed failed"));
+    const run = await runListingsSync({
+      adapters: [cofynd],
+      skipDownstream: true,
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
 
-    const run = await runListingsSync();
-
-    expect(run.status).toBe("success");
-    expect(embedAllListings).toHaveBeenCalledOnce();
-    expect(rebuildListingGraph).toHaveBeenCalledOnce();
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatch(/count failed/);
+    expect(run.sources.cofynd?.status).toBe("success");
+    expect(finishSyncRun).toHaveBeenLastCalledWith(
+      expect.any(String),
+      "failed",
+      null,
+      "count failed",
+      expect.objectContaining({
+        cofynd: expect.objectContaining({ status: "success" }),
+      }),
+    );
   });
 
-  it("ignores rejected adapters and still succeeds on combined rows", async () => {
-    vi.mocked(coworkerAdapter.discover).mockRejectedValue(new Error("network"));
-    const myhqDiscovered = makeDiscovered(6, "myhq");
-    vi.mocked(myhqAdapter.discover).mockResolvedValue(myhqDiscovered);
-    mockDetailFetch(myhqAdapter.fetchDetail, "myhq", myhqDiscovered);
-    const cofyndDiscovered = makeDiscovered(5, "cofynd");
-    vi.mocked(cofyndAdapter.discover).mockResolvedValue(cofyndDiscovered);
-    mockDetailFetch(cofyndAdapter.fetchDetail, "cofynd", cofyndDiscovered);
-    vi.mocked(gofloatersAdapter.discover).mockResolvedValue([]);
+  it("soft-fails downstream hooks after a successful source write", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+    vi.mocked(embedListingsMissingEmbedding).mockRejectedValueOnce(new Error("embed failed"));
 
-    const run = await runListingsSync();
+    const run = await runListingsSync({
+      adapters: [cofynd],
+      now: new Date("2026-07-30T00:00:00Z"),
+    });
 
     expect(run.status).toBe("success");
-    expect(run.count).toBe(11);
-    expect(fullReplaceListings).toHaveBeenCalledOnce();
-    expect(finishSyncRun).toHaveBeenCalledWith(
-      expect.any(String),
-      "success",
-      11,
-      null,
-    );
+    expect(embedListingsMissingEmbedding).toHaveBeenCalledOnce();
+    expect(syncListingGraph).toHaveBeenCalledOnce();
   });
 });

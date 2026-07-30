@@ -55,3 +55,10 @@ export async function rebuildListingGraph(): Promise<{ listings: number; skipped
 
   return { listings: listings.length, skipped: false };
 }
+
+export async function syncListingGraph(
+  _changed: Awaited<ReturnType<typeof listListings>>,
+): Promise<{ listings: number; skipped: boolean }> {
+  // ponytail: Task 5 keeps the old full rebuild behind the new hook; Task 6 replaces this with per-listing updates.
+  return rebuildListingGraph();
+}
