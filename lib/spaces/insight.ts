@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { explainListingFit } from "../ai/client";
 import type { QueryEntities } from "../graph/types";
+import { redactSensitiveText } from "../listings/redact";
 import type { Listing } from "../listings/types";
 import { selectNearbyCategories } from "../places/categories";
 import { isPlacesConfigured, searchNearby } from "../places/client";
@@ -38,7 +39,7 @@ export function insightFingerprint(input: {
   entities: QueryEntities;
   listing: Pick<
     Listing,
-    "title" | "area" | "city" | "propertyType" | "pricingHint" | "amenities" | "description"
+    "title" | "area" | "city" | "propertyType" | "amenities" | "description"
   >;
   nearby: NearbyGroup[];
 }): string {
@@ -50,9 +51,8 @@ export function insightFingerprint(input: {
       area: input.listing.area,
       city: input.listing.city,
       propertyType: input.listing.propertyType ?? "",
-      pricingHint: input.listing.pricingHint ?? "",
       amenities: [...input.listing.amenities].sort((a, b) => a.localeCompare(b)),
-      description: input.listing.description.slice(0, MAX_DESCRIPTION_CHARS),
+      description: redactSensitiveText(input.listing.description).slice(0, MAX_DESCRIPTION_CHARS),
     },
     nearby: canonicalNearbyPayload(input.nearby),
   };
@@ -144,9 +144,8 @@ export async function buildInsight(input: {
         area: input.listing.area,
         city: input.listing.city,
         propertyType: input.listing.propertyType,
-        pricingHint: input.listing.pricingHint,
         amenities: input.listing.amenities,
-        description: input.listing.description,
+        description: redactSensitiveText(input.listing.description),
         query: input.query,
         nearby,
       });

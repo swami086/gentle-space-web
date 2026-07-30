@@ -203,6 +203,28 @@ describe("buildInsight", () => {
     expect(insight.highlights).toHaveLength(1);
     expect(insight.nearby).toEqual([]);
   });
+
+  it("passes redacted description to AI without pricing facts", async () => {
+    vi.mocked(searchNearby).mockResolvedValue([]);
+    const sensitiveDescription =
+      "Located at RMZ Ecoworld, Bellandur. High-speed wireless internet and meeting rooms are available.";
+
+    await buildInsight({
+      listing: { ...listing, description: sensitiveDescription, pricingHint: "₹9000/month" },
+      query: "coffee nearby",
+      entities,
+    });
+
+    expect(explainListingFit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "High-speed wireless internet and meeting rooms are available.",
+        query: "coffee nearby",
+      }),
+    );
+    expect(explainListingFit).toHaveBeenCalledWith(
+      expect.not.objectContaining({ pricingHint: expect.anything() }),
+    );
+  });
 });
 
 describe("insightFingerprint", () => {
@@ -211,7 +233,6 @@ describe("insightFingerprint", () => {
     area: listing.area,
     city: listing.city,
     propertyType: listing.propertyType,
-    pricingHint: listing.pricingHint,
     amenities: listing.amenities,
     description: listing.description,
   };
@@ -243,6 +264,26 @@ describe("insightFingerprint", () => {
       ],
     });
     expect(a).toBe(b);
+  });
+
+  it("uses redacted description in fingerprint", () => {
+    const nearby: never[] = [];
+    const raw =
+      "Located at RMZ Ecoworld, Bellandur. High-speed wireless internet and meeting rooms are available.";
+    const redacted = "High-speed wireless internet and meeting rooms are available.";
+    const withRaw = insightFingerprint({
+      query: "coffee",
+      entities,
+      listing: { ...baseListing, description: raw },
+      nearby,
+    });
+    const withRedacted = insightFingerprint({
+      query: "coffee",
+      entities,
+      listing: { ...baseListing, description: redacted },
+      nearby,
+    });
+    expect(withRaw).toBe(withRedacted);
   });
 
   it("keeps delimiter-like field values distinct (no pre-hash collision)", () => {

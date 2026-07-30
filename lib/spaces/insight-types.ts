@@ -15,7 +15,6 @@ export type InsightFacts = {
   area: string;
   city: string;
   propertyType: string | null;
-  pricingHint: string | null;
   amenities: string[];
   description: string;
   query: string;

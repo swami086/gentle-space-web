@@ -6,7 +6,6 @@ const facts: InsightFacts = {
   area: "Bellandur",
   city: "Bengaluru",
   propertyType: null,
-  pricingHint: null,
   amenities: [],
   description: "",
   query: "coworking in bellandur",

@@ -12,7 +12,6 @@ const facts: InsightFacts = {
   area: "Bellandur",
   city: "Bengaluru",
   propertyType: "Coworking",
-  pricingHint: "₹9000",
   amenities: ["WiFi", "Parking"],
   description: "A large format shared office space.",
   query: "coworking near metro with coffee",
@@ -49,7 +48,6 @@ describe("buildFactPacket", () => {
       "listing.area",
       "listing.city",
       "listing.propertyType",
-      "listing.pricingHint",
       "listing.amenity.0",
       "listing.amenity.1",
       "listing.description",
@@ -231,7 +229,7 @@ describe("parseInsightJson — evidence selection", () => {
           "listing.title",
           "listing.city",
           "listing.propertyType",
-          "listing.pricingHint",
+          "listing.description",
           "listing.amenity.0",
           "listing.amenity.1",
         ],
@@ -244,7 +242,7 @@ describe("parseInsightJson — evidence selection", () => {
       "Space",
       "City",
       "Space type",
-      "Pricing",
+      "Details",
     ]);
   });
 
@@ -254,7 +252,6 @@ describe("parseInsightJson — evidence selection", () => {
       ["listing.area", { label: "Location", detail: "In Bellandur" }],
       ["listing.city", { label: "City", detail: "Bengaluru" }],
       ["listing.propertyType", { label: "Space type", detail: "Coworking" }],
-      ["listing.pricingHint", { label: "Pricing", detail: "₹9000" }],
       ["listing.amenity.1", { label: "Amenity", detail: "WiFi listed" }],
       ["listing.description", { label: "Details", detail: "A large format shared office space." }],
     ];

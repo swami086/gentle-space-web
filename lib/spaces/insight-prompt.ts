@@ -64,9 +64,6 @@ export function buildFactPacket(facts: InsightFacts): InsightFactPacket {
   if (facts.propertyType && factValueAllowed(facts.propertyType)) {
     entries.push({ id: "listing.propertyType", value: facts.propertyType });
   }
-  if (facts.pricingHint && factValueAllowed(facts.pricingHint)) {
-    entries.push({ id: "listing.pricingHint", value: facts.pricingHint });
-  }
 
   const amenities = [...facts.amenities]
     .filter((amenity) => factValueAllowed(amenity))
@@ -176,9 +173,6 @@ function renderHighlight(fact: InsightFactEntry): InsightHighlight | null {
   }
   if (fact.id === "listing.propertyType" && fact.value) {
     return { label: "Space type", detail: truncateSafe(fact.value, MAX_DETAIL_CHARS) };
-  }
-  if (fact.id === "listing.pricingHint" && fact.value) {
-    return { label: "Pricing", detail: truncateSafe(fact.value, MAX_DETAIL_CHARS) };
   }
   if (fact.id.startsWith("listing.amenity.") && fact.value) {
     return { label: "Amenity", detail: truncateSafe(`${fact.value} listed`, MAX_DETAIL_CHARS) };
