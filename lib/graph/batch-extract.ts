@@ -1,4 +1,4 @@
-import { EXTRACT_SYSTEM, parseExtractedEntitiesJson } from "./extract";
+import { EXTRACT_SYSTEM, parseExtractedEntities } from "./extract";
 import type { QueryEntities } from "./types";
 
 const LISTING_ID_RE =
@@ -36,6 +36,14 @@ function extractResponseText(response: unknown): string | null {
   const parts = (content as { parts?: unknown }).parts;
   if (!Array.isArray(parts) || parts.length === 0) return null;
   return readText(parts[0]);
+}
+
+function parseResponseEntities(responseText: string): QueryEntities | null {
+  try {
+    return parseExtractedEntities(JSON.parse(responseText));
+  } catch {
+    return null;
+  }
 }
 
 export function buildEntityBatchJsonlLine(listingId: string, listingText: string): string {
@@ -80,7 +88,10 @@ export function parseEntityBatchOutputLine(line: string): {
   const responseText = extractResponseText(row.response);
   if (!responseText) return { listingId, entities: null, failed: false };
 
-  return { listingId, entities: parseExtractedEntitiesJson(responseText), failed: false };
+  const entities = parseResponseEntities(responseText);
+  if (!entities) return { listingId, entities: null, failed: true };
+
+  return { listingId, entities, failed: false };
 }
 
 export function parseEntityBatchOutput(files: string[]): {

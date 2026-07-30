@@ -104,6 +104,32 @@ describe("parseEntityBatchOutputLine", () => {
     });
   });
 
+  it("treats unparseable response text as a failed listing", () => {
+    expect(
+      parseEntityBatchOutputLine(
+        JSON.stringify({
+          status: "",
+          request: {
+            contents: [{ parts: [{ text: `LISTING_ID: ${LISTING_ID}\nhello` }] }],
+          },
+          response: {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: "{\"areas\": [" }],
+                },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual({
+      listingId: LISTING_ID,
+      entities: null,
+      failed: true,
+    });
+  });
+
   it("returns a null listing id when the request text lacks a UUID", () => {
     expect(
       parseEntityBatchOutputLine(
