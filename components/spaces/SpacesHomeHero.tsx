@@ -2,7 +2,7 @@
 
 import { SpaceCard } from "@/components/spaces/SpaceCard";
 import { SpacesAiSearch } from "@/components/spaces/SpacesAiSearch";
-import type { Listing } from "@/lib/listings/types";
+import type { PublicListing } from "@/lib/listings/public";
 
 type SpacesHomeHeroProps = {
   query: string;
@@ -11,7 +11,7 @@ type SpacesHomeHeroProps = {
   onClear: () => void;
   loading?: boolean;
   error?: string | null;
-  featured: Listing[];
+  featured: PublicListing[];
 };
 
 export function SpacesHomeHero({

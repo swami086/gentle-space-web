@@ -23,6 +23,7 @@ import {
   rewriteSearchQuery,
 } from "@/lib/ai/client";
 import { searchListingsByEmbedding } from "@/lib/db/listings";
+import { toPublicListing } from "../../../../lib/listings/public";
 import { scoreListingsAgainstQuery } from "../../../../lib/graph/age";
 import { POST } from "./route";
 
@@ -113,7 +114,7 @@ describe("POST /api/spaces/search", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       interpretedQuery: "Private cabin · Metro",
-      listings: [boostedListing, sampleListing],
+      listings: [boostedListing, sampleListing].map(toPublicListing),
       matchedEntities: {
         areas: ["koramangala"],
         amenities: [],
@@ -137,6 +138,40 @@ describe("POST /api/spaces/search", () => {
     expect(searchListingsByEmbedding).toHaveBeenCalledWith([0.1, 0.2, 0.3], 20);
   });
 
+  it("masks listing privacy fields in the JSON payload", async () => {
+    vi.mocked(rewriteSearchQuery).mockResolvedValue("Private cabin · Metro");
+    vi.mocked(extractSearchEntities).mockResolvedValue({
+      areas: ["koramangala"],
+      amenities: [],
+      deskTypes: [],
+      landmarks: [],
+      budgetSignals: [],
+    });
+    vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2, 0.3]]);
+    vi.mocked(searchListingsByEmbedding).mockResolvedValue([
+      { listing: sampleListing, vectorSimilarity: 0.9 },
+      { listing: boostedListing, vectorSimilarity: 0.8 },
+    ]);
+    vi.mocked(scoreListingsAgainstQuery).mockResolvedValue(
+      new Map([
+        ["def", { overlap: 3, matched: { areas: ["koramangala"], amenities: [], deskTypes: [], landmarks: [], budgetSignals: [] } }],
+      ]),
+    );
+
+    const res = await postSearch({ query: "quiet cabin near metro" });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const raw = JSON.stringify(body.listings);
+    expect(raw).not.toMatch(/"address"/);
+    expect(raw).not.toMatch(/"pricingHint"/);
+    expect(raw).not.toMatch(/"sourceUrl"/);
+    expect(raw).not.toMatch(/"sourceId"/);
+    expect(raw).not.toMatch(/"lat"/);
+    expect(raw).not.toMatch(/"lng"/);
+    expect(raw).toMatch(/"approxLat"/);
+  });
+
   it("returns vector order when graph boost fails", async () => {
     vi.mocked(rewriteSearchQuery).mockResolvedValue("Private cabin · Metro");
     vi.mocked(extractSearchEntities).mockResolvedValue({
@@ -158,7 +193,7 @@ describe("POST /api/spaces/search", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       interpretedQuery: "Private cabin · Metro",
-      listings: [sampleListing, boostedListing],
+      listings: [sampleListing, boostedListing].map(toPublicListing),
       matchedEntities: {
         areas: ["koramangala"],
         amenities: [],

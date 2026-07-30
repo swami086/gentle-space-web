@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { emptyQueryEntities, type QueryEntities } from "@/lib/graph/types";
-import type { Listing, ListingSource } from "@/lib/listings/types";
+import { displayLocationLine } from "@/lib/listings/redact";
+import type { PublicListing } from "@/lib/listings/public";
+import type { ListingSource } from "@/lib/listings/types";
 import { entitySignature } from "@/lib/spaces/entity-signature";
 import { spaceListingUrl } from "@/lib/site";
 import { LikeSpaceButton } from "./LikeSpaceButton";
@@ -18,7 +20,7 @@ const SOURCE_LABELS: Record<ListingSource, string> = {
 };
 
 type SpaceCardProps = {
-  listing: Listing;
+  listing: PublicListing;
   active?: boolean;
   onActivate?: (id: string) => void;
   searchQuery?: string;
@@ -70,8 +72,10 @@ export function SpaceCard({
             <h2 className="text-[17px] font-semibold leading-snug text-[var(--ink)] transition group-hover:text-[var(--accent-dark)]">
               {listing.title}
             </h2>
-            {listing.area ? (
-              <p className="mt-1 text-[13px] text-[var(--ink-secondary)]">{listing.area}</p>
+            {listing.area || listing.city ? (
+              <p className="mt-1 text-[13px] text-[var(--ink-secondary)]">
+                {displayLocationLine(listing.area, listing.city)}
+              </p>
             ) : null}
           </Link>
           <LikeSpaceButton

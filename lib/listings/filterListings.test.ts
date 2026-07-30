@@ -5,6 +5,7 @@ import {
   EMPTY_FILTERS,
   type SpacesFilterState,
 } from "./filterListings";
+import { toPublicListing } from "./public";
 import type { Listing } from "./types";
 
 function listing(partial: Partial<Listing> & Pick<Listing, "id" | "title">): Listing {
@@ -29,9 +30,13 @@ function listing(partial: Partial<Listing> & Pick<Listing, "id" | "title">): Lis
   };
 }
 
+function publicListing(partial: Partial<Listing> & Pick<Listing, "id" | "title">) {
+  return toPublicListing(listing(partial));
+}
+
 describe("applySpacesFilters", () => {
   const rows = [
-    listing({
+    publicListing({
       id: "1",
       title: "A",
       area: "Koramangala",
@@ -39,7 +44,7 @@ describe("applySpacesFilters", () => {
       pricingHint: "From ₹12,000/mo",
       amenities: ["Near Metro", "Parking"],
     }),
-    listing({
+    publicListing({
       id: "2",
       title: "B",
       area: "HSR Layout",

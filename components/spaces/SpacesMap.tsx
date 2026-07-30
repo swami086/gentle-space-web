@@ -2,13 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
-import type { Listing } from "@/lib/listings/types";
-import { approximateCoords } from "@/lib/listings/approximateCoords";
+import type { PublicListing } from "@/lib/listings/public";
 
 const BANGALORE = { lat: 12.9716, lng: 77.5946 };
 
 type SpacesMapProps = {
-  listings: Listing[];
+  listings: PublicListing[];
   activeId: string | null;
   onActivate: (id: string) => void;
 };
@@ -69,31 +68,27 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
     let pinCount = 0;
 
     for (const listing of listings) {
-      if (listing.lat == null || listing.lng == null) continue;
-      const display = approximateCoords(listing.lat, listing.lng, listing.id);
+      if (listing.approxLat == null || listing.approxLng == null) continue;
+      const position = { lat: listing.approxLat, lng: listing.approxLng };
       const marker = new google.maps.Marker({
         map,
-        position: display,
+        position,
         title: listing.title,
       });
       marker.addListener("mouseover", () => onActivateRef.current(listing.id));
       marker.addListener("click", () => {
         onActivateRef.current(listing.id);
-        const hint = listing.pricingHint
-          ? `<div style="font-size:12px;margin-top:4px">${escapeHtml(listing.pricingHint)}</div>`
-          : "";
         infoRef.current?.setContent(
           `<div style="max-width:220px;padding:4px">
             <a href="/spaces/${encodeURIComponent(listing.slug)}" style="font-weight:600;color:#111">
               ${escapeHtml(listing.title)}
             </a>
-            ${hint}
           </div>`,
         );
         infoRef.current?.open({ map, anchor: marker });
       });
       markersRef.current.set(listing.id, marker);
-      bounds.extend(display);
+      bounds.extend(position);
       pinCount += 1;
     }
 

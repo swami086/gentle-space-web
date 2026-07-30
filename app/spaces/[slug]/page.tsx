@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LikeSpaceButton } from "@/components/spaces/LikeSpaceButton";
-import { MapEmbed } from "@/components/spaces/MapEmbed";
 import { SpaceGallery } from "@/components/spaces/SpaceGallery";
 import { getListingBySlug } from "@/lib/db/listings";
+import { toPublicListing } from "@/lib/listings/public";
+import { displayLocationLine, redactSensitiveText } from "@/lib/listings/redact";
 import { spaceListingUrl } from "@/lib/site";
 
 type PageProps = {
@@ -15,17 +16,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const listing = await getListingBySlug(slug);
   if (!listing) return { title: "Space not found | Gentle Space" };
 
+  const teaser = redactSensitiveText(listing.shortTeaser || listing.description);
   return {
     title: `${listing.title} | Gentle Space`,
-    description: listing.shortTeaser || listing.description.slice(0, 160),
+    description: teaser.slice(0, 160),
   };
 }
 
 export default async function SpaceDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const listing = await getListingBySlug(slug);
-  if (!listing) notFound();
+  const raw = await getListingBySlug(slug);
+  if (!raw) notFound();
 
+  const listing = toPublicListing(raw);
+  const locationLine = displayLocationLine(listing.area, listing.city);
   const propertyUrl = spaceListingUrl(listing.slug);
 
   return (
@@ -40,11 +44,7 @@ export default async function SpaceDetailPage({ params }: PageProps) {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <h1 className="text-[28px] font-bold text-[var(--ink)]">{listing.title}</h1>
-                <p className="mt-1 text-[15px] text-[var(--ink-secondary)]">
-                  {[listing.area, listing.city === "Bengaluru" ? "Bangalore" : listing.city]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
+                <p className="mt-1 text-[15px] text-[var(--ink-secondary)]">{locationLine}</p>
               </div>
               <LikeSpaceButton
                 variant="pill"
@@ -81,14 +81,15 @@ export default async function SpaceDetailPage({ params }: PageProps) {
               </div>
             ) : null}
 
-            <MapEmbed lat={listing.lat} lng={listing.lng} address={listing.address} />
+            {/* Task 6: replace with ApproxAreaMap using approxLat/approxLng */}
+            <p className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-tint)] px-4 py-6 text-sm text-[var(--muted)]">
+              Approximate area — {locationLine}
+            </p>
           </div>
         </div>
 
         <aside className="flex w-full flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] p-6 lg:sticky lg:top-24 lg:w-[340px] lg:shrink-0">
-          <p className="text-[22px] font-bold text-[var(--ink)]">
-            {listing.pricingHint ?? "Ask for pricing"}
-          </p>
+          <p className="text-[22px] font-bold text-[var(--ink)]">Ask for pricing</p>
           <p className="text-[13px] text-[var(--muted)]">Ask for pricing. Desks and cabins vary.</p>
           <LikeSpaceButton
             variant="cta"

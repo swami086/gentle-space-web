@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Listing } from "@/lib/listings/types";
+import type { PublicListing } from "@/lib/listings/public";
 import {
   EMPTY_FILTERS,
   type SpacesFilterState,
@@ -12,7 +12,7 @@ const AMENITY_PRESETS = ["Near Metro", "Parking", "Meeting rooms", "24×7", "Qui
 
 type Props = {
   open: boolean;
-  listings: Listing[];
+  listings: PublicListing[];
   value: SpacesFilterState;
   onChange: (next: SpacesFilterState) => void;
   onClose: () => void;

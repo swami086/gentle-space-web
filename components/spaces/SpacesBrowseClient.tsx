@@ -16,19 +16,20 @@ import {
   type SpacesFilterState,
 } from "@/lib/listings/filterListings";
 import type { QueryEntities } from "@/lib/graph/types";
-import type { Listing, SyncRun } from "@/lib/listings/types";
+import type { PublicListing } from "@/lib/listings/public";
+import type { SyncRun } from "@/lib/listings/types";
 
 type MetaMode = "sync" | "matches" | "empty-search";
 
 type SpacesBrowseClientProps = {
-  initialListings: Listing[];
+  initialListings: PublicListing[];
   lastSync: SyncRun | null;
   stale: boolean;
 };
 
 type SearchResponse = {
   interpretedQuery: string;
-  listings: Listing[];
+  listings: PublicListing[];
   matchedEntities?: QueryEntities;
 };
 

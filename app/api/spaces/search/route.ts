@@ -14,6 +14,7 @@ import {
 import { emptyQueryEntities } from "../../../../lib/graph/types";
 import { normalizeQueryEntities } from "../../../../lib/graph/normalize";
 import { scoreListingsAgainstQuery } from "../../../../lib/graph/age";
+import { toPublicListing } from "../../../../lib/listings/public";
 
 export async function POST(req: Request) {
   if (!isAiSearchConfigured()) {
@@ -64,7 +65,11 @@ export async function POST(req: Request) {
       console.error("graph boost failed; vector-only", err);
     }
 
-    return NextResponse.json({ interpretedQuery, listings, matchedEntities });
+    return NextResponse.json({
+      interpretedQuery,
+      listings: listings.map(toPublicListing),
+      matchedEntities,
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "search failed" }, { status: 502 });

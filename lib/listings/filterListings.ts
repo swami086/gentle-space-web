@@ -1,4 +1,4 @@
-import type { Listing } from "./types";
+import type { PublicListing } from "./public";
 
 export type SpacesFilterState = {
   deskTypes: string[];
@@ -13,9 +13,9 @@ export const EMPTY_FILTERS: SpacesFilterState = {
 };
 
 export function applySpacesFilters(
-  listings: Listing[],
+  listings: PublicListing[],
   filters: SpacesFilterState,
-): Listing[] {
+): PublicListing[] {
   return listings.filter((listing) => {
     if (filters.deskTypes.length > 0) {
       const propertyType = (listing.propertyType ?? "").toLowerCase();
