@@ -30,11 +30,17 @@ export function contentHash(row: RawListing): string {
   });
 }
 
-export function embedHash(row: RawListing): string {
+export function hashEmbeddingText(
+  fields: Parameters<typeof buildListingEmbeddingText>[0],
+): string {
   return sha256(
     buildListingEmbeddingText({
-      ...row,
-      amenities: sortedUnique(row.amenities),
+      ...fields,
+      amenities: sortedUnique(fields.amenities),
     }),
   );
+}
+
+export function embedHash(row: RawListing): string {
+  return hashEmbeddingText(row);
 }

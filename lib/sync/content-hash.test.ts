@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawListing } from "./sources/types";
-import { contentHash, embedHash } from "./content-hash";
+import { contentHash, embedHash, hashEmbeddingText } from "./content-hash";
 
 const row = (over: Partial<RawListing> = {}): RawListing => ({
   source: "coworker",
@@ -22,6 +22,38 @@ const row = (over: Partial<RawListing> = {}): RawListing => ({
 });
 
 describe("listing content hashes", () => {
+  it("hashEmbeddingText matches embedHash for the same embedding fields", () => {
+    const r = row();
+    expect(
+      hashEmbeddingText({
+        title: r.title,
+        area: r.area,
+        city: r.city,
+        propertyType: r.propertyType,
+        pricingHint: r.pricingHint,
+        shortTeaser: r.shortTeaser,
+        description: r.description,
+        amenities: ["Coffee", "WiFi"],
+      }),
+    ).toBe(embedHash(r));
+  });
+
+  it("hashEmbeddingText is stable under amenity reorder", () => {
+    const fields = {
+      title: "A",
+      area: "B",
+      city: "Bengaluru",
+      propertyType: null,
+      pricingHint: null,
+      shortTeaser: "",
+      description: "d",
+      amenities: ["WiFi", "Coffee"],
+    };
+    expect(hashEmbeddingText(fields)).toBe(
+      hashEmbeddingText({ ...fields, amenities: ["Coffee", "WiFi"] }),
+    );
+  });
+
   it("is deterministic and ignores amenity ordering", () => {
     expect(contentHash(row())).toBe(contentHash(row({ amenities: ["Coffee", "WiFi"] })));
     expect(embedHash(row())).toBe(embedHash(row({ amenities: ["Coffee", "WiFi"] })));
