@@ -48,3 +48,4 @@ backup-listings-*.sql
 # OpenMemory - IDE/Assistant specific rules
 .cursor/rules/openmemory.mdc
 .worktrees/
+.superpowers/
