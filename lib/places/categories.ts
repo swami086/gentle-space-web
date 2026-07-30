@@ -6,7 +6,7 @@ export const MAX_CATEGORIES = 3;
 const TRANSIT: NearbyCategory = {
   key: "transit",
   label: "Transit",
-  includedTypes: ["subway_station", "train_station"],
+  includedTypes: ["subway_station", "transit_station"],
 };
 const RESTAURANT: NearbyCategory = {
   key: "restaurant",

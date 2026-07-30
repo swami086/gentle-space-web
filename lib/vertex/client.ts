@@ -7,6 +7,8 @@ import {
 } from "../spaces/insight-prompt";
 import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
+const VERTEX_INSIGHT_TIMEOUT_MS = 15_000;
+
 const REWRITE_SYSTEM = `You rewrite coworking/office search queries for Bangalore.
 Return one short line: desk/cabin type, amenities, area, budget if present.
 Use " · " between clauses. Do not invent neighborhoods. No markdown.`;
@@ -132,6 +134,7 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
         maxOutputTokens: 320,
       },
     }),
+    signal: AbortSignal.timeout(VERTEX_INSIGHT_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`vertex insight failed: ${res.status} ${await res.text()}`);
@@ -140,5 +143,5 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
   const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
-  return parseInsightJson(content);
+  return parseInsightJson(content, facts);
 }

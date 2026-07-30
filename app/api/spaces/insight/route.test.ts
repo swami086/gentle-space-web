@@ -46,7 +46,7 @@ function postInsight(body: unknown) {
     new Request("http://localhost/api/spaces/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: typeof body === "string" ? body : JSON.stringify(body),
     }),
   );
 }
@@ -66,6 +66,33 @@ describe("POST /api/spaces/insight", () => {
     expect(await res.json()).toEqual({ error: "insight unavailable" });
   });
 
+  it("returns 400 for invalid JSON", async () => {
+    const res = await postInsight("{not-json");
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid json" });
+    expect(getListingById).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for null body", async () => {
+    const res = await postInsight(null);
+
+    expect(res.status).toBe(400);
+    expect(getListingById).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for array body", async () => {
+    const res = await postInsight([LISTING_ID, "coffee"]);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for non-string listingId or query", async () => {
+    expect((await postInsight({ listingId: 123, query: "coffee" })).status).toBe(400);
+    expect((await postInsight({ listingId: LISTING_ID, query: ["coffee"] })).status).toBe(400);
+    expect(getListingById).not.toHaveBeenCalled();
+  });
+
   it("returns 400 for a malformed listing id", async () => {
     const res = await postInsight({ listingId: "not-a-uuid", query: "coffee" });
 
@@ -77,6 +104,92 @@ describe("POST /api/spaces/insight", () => {
     const res = await postInsight({ listingId: LISTING_ID, query: "  " });
 
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a query longer than 500 chars", async () => {
+    const res = await postInsight({ listingId: LISTING_ID, query: "x".repeat(501) });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for malformed entities", async () => {
+    const res = await postInsight({
+      listingId: LISTING_ID,
+      query: "coffee",
+      entities: { areas: "bellandur" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(buildInsight).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for oversized entity lists and items", async () => {
+    const tooMany = await postInsight({
+      listingId: LISTING_ID,
+      query: "coffee",
+      entities: {
+        areas: Array.from({ length: 21 }, (_, i) => `area-${i}`),
+        amenities: [],
+        deskTypes: [],
+        landmarks: [],
+        budgetSignals: [],
+      },
+    });
+    expect(tooMany.status).toBe(400);
+
+    const tooLong = await postInsight({
+      listingId: LISTING_ID,
+      query: "coffee",
+      entities: {
+        areas: ["x".repeat(101)],
+        amenities: [],
+        deskTypes: [],
+        landmarks: [],
+        budgetSignals: [],
+      },
+    });
+    expect(tooLong.status).toBe(400);
+  });
+
+  it("returns 400 for malformed input even when AI is unavailable", async () => {
+    vi.mocked(isAiSearchConfigured).mockReturnValue(false);
+
+    const res = await postInsight({ listingId: "bad", query: "coffee" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("passes validated entities through to buildInsight", async () => {
+    vi.mocked(getListingById).mockResolvedValue(listing);
+    vi.mocked(buildInsight).mockResolvedValue({
+      listingId: LISTING_ID,
+      summary: "Fits your ask.",
+      highlights: [],
+      nearby: [],
+    });
+
+    const entities = {
+      areas: [" Bellandur "],
+      amenities: ["coffee"],
+      deskTypes: [],
+      landmarks: [],
+      budgetSignals: [],
+    };
+
+    const res = await postInsight({ listingId: LISTING_ID, query: "coffee nearby", entities });
+
+    expect(res.status).toBe(200);
+    expect(buildInsight).toHaveBeenCalledWith({
+      listing,
+      query: "coffee nearby",
+      entities: {
+        areas: ["Bellandur"],
+        amenities: ["coffee"],
+        deskTypes: [],
+        landmarks: [],
+        budgetSignals: [],
+      },
+    });
   });
 
   it("returns 404 when the listing is missing", async () => {

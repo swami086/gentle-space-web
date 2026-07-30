@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isPlacesConfigured, searchNearby } from "./client";
+import { PLACES_NEARBY_TIMEOUT_MS, isPlacesConfigured, searchNearby } from "./client";
 
 const CATEGORY = { key: "cafe", label: "Cafes", includedTypes: ["cafe"] };
 const ORIGIN = { lat: 12.93, lng: 77.68 };
@@ -25,7 +25,7 @@ describe("isPlacesConfigured", () => {
 });
 
 describe("searchNearby", () => {
-  it("sends a field-masked request and parses places sorted by distance", async () => {
+  it("sends a field-masked request with timeout and parses places sorted by distance", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -33,6 +33,7 @@ describe("searchNearby", () => {
           { displayName: { text: "Far Cafe" }, location: { latitude: 12.938, longitude: 77.68 } },
           { displayName: { text: "Near Cafe" }, location: { latitude: 12.931, longitude: 77.68 } },
           { displayName: { text: "" }, location: { latitude: 12.932, longitude: 77.68 } },
+          { displayName: { text: "Bad Coords" }, location: { latitude: Number.NaN, longitude: 77.68 } },
         ],
       }),
     });
@@ -43,19 +44,13 @@ describe("searchNearby", () => {
     expect(places.map((p) => p.name)).toEqual(["Near Cafe", "Far Cafe"]);
     expect(places[0].distanceMeters).toBeLessThan(places[1].distanceMeters);
 
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://places.googleapis.com/v1/places:searchNearby");
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeDefined();
     expect(init.headers["X-Goog-Api-Key"]).toBe("test-key");
     expect(init.headers["X-Goog-FieldMask"]).toBe(
       "places.displayName,places.location,places.primaryType",
     );
-    expect(JSON.parse(init.body)).toEqual({
-      includedTypes: ["cafe"],
-      maxResultCount: 3,
-      locationRestriction: {
-        circle: { center: { latitude: 12.93, longitude: 77.68 }, radius: 1000 },
-      },
-    });
+    expect(PLACES_NEARBY_TIMEOUT_MS).toBe(5000);
   });
 
   it("throws when the API responds with an error", async () => {

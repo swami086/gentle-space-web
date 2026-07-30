@@ -5,6 +5,7 @@ const PLACES_URL = "https://places.googleapis.com/v1/places:searchNearby";
 const FIELD_MASK = "places.displayName,places.location,places.primaryType";
 const RADIUS_METERS = 1000;
 const MAX_PER_CATEGORY = 3;
+export const PLACES_NEARBY_TIMEOUT_MS = 5_000;
 
 function apiKey(): string {
   const key = process.env.GOOGLE_PLACES_API_KEY;
@@ -37,6 +38,7 @@ export async function searchNearby(
         },
       },
     }),
+    signal: AbortSignal.timeout(PLACES_NEARBY_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -53,13 +55,12 @@ export async function searchNearby(
   const places: NearbyPlace[] = [];
   for (const place of body.places ?? []) {
     const name = place.displayName?.text?.trim();
-    if (!name || !place.location) continue;
+    const lat = place.location?.latitude;
+    const lng = place.location?.longitude;
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     places.push({
       name,
-      distanceMeters: haversineMeters(origin, {
-        lat: place.location.latitude,
-        lng: place.location.longitude,
-      }),
+      distanceMeters: haversineMeters(origin, { lat: lat!, lng: lng! }),
     });
   }
 

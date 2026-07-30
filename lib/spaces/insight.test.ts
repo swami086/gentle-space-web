@@ -86,6 +86,26 @@ describe("buildInsight", () => {
     expect(explainListingFit).toHaveBeenCalledTimes(1);
   });
 
+  it("deduplicates concurrent cache misses to one Places and one AI call", async () => {
+    vi.mocked(searchNearby).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([{ name: "Third Wave", distanceMeters: 300 }]), 20)),
+    );
+    vi.mocked(explainListingFit).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({
+        summary: "Fits your Bellandur ask.",
+        highlights: [{ label: "Cafes", detail: "Third Wave ~300 m" }],
+      }), 20)),
+    );
+
+    await Promise.all([
+      buildInsight({ listing, query: "coffee nearby", entities }),
+      buildInsight({ listing, query: "coffee nearby", entities }),
+    ]);
+
+    expect(searchNearby).toHaveBeenCalledTimes(1);
+    expect(explainListingFit).toHaveBeenCalledTimes(1);
+  });
+
   it("still returns highlights when the nearby lookup fails", async () => {
     vi.mocked(searchNearby).mockRejectedValue(new Error("places down"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -143,6 +163,35 @@ describe("buildInsight", () => {
     await buildInsight({ listing, query: "coffee nearby", entities: orderB });
 
     expect(explainListingFit).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls AI again when raw query differs even with identical entities", async () => {
+    vi.mocked(searchNearby).mockResolvedValue([
+      { name: "Third Wave", distanceMeters: 300 },
+    ]);
+
+    await buildInsight({ listing, query: "coffee nearby", entities });
+    await buildInsight({ listing, query: "COFFEE   nearby", entities });
+
+    expect(explainListingFit).toHaveBeenCalledTimes(1);
+
+    await buildInsight({ listing, query: "tea nearby", entities });
+    expect(explainListingFit).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls AI again when listing facts change for the same id", async () => {
+    vi.mocked(searchNearby).mockResolvedValue([
+      { name: "Third Wave", distanceMeters: 300 },
+    ]);
+
+    await buildInsight({ listing, query: "coffee nearby", entities });
+    await buildInsight({
+      listing: { ...listing, title: "CoWrks Ecoworld Phase 2" },
+      query: "coffee nearby",
+      entities,
+    });
+
+    expect(explainListingFit).toHaveBeenCalledTimes(2);
   });
 
   it("returns summary and highlights without calling Places when unconfigured", async () => {

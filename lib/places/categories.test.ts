@@ -11,7 +11,7 @@ describe("selectNearbyCategories", () => {
     });
 
     expect(picked.map((c) => c.key)).toEqual(["transit", "cafe"]);
-    expect(picked[0].includedTypes).toContain("subway_station");
+    expect(picked[0].includedTypes).toEqual(["subway_station", "transit_station"]);
     expect(picked[1].includedTypes).toEqual(["cafe"]);
     expect(picked[0].label).toBe("Transit");
   });

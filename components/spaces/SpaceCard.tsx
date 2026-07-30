@@ -1,9 +1,14 @@
 import Link from "next/link";
-import type { QueryEntities } from "@/lib/graph/types";
+import { emptyQueryEntities, type QueryEntities } from "@/lib/graph/types";
 import type { Listing, ListingSource } from "@/lib/listings/types";
+import { entitySignature } from "@/lib/spaces/insight";
 import { spaceListingUrl } from "@/lib/site";
 import { LikeSpaceButton } from "./LikeSpaceButton";
 import { SpaceInsightPanel } from "./SpaceInsightPanel";
+
+function insightPanelKey(listingId: string, query: string, entities?: QueryEntities): string {
+  return `${listingId}:${query}:${entitySignature(entities ?? emptyQueryEntities())}`;
+}
 
 const SOURCE_LABELS: Record<ListingSource, string> = {
   coworker: "Coworker",
@@ -86,7 +91,7 @@ export function SpaceCard({
 
         {searchQuery ? (
           <SpaceInsightPanel
-            key={`${listing.id}:${searchQuery}`}
+            key={insightPanelKey(listing.id, searchQuery, searchEntities)}
             listingId={listing.id}
             query={searchQuery}
             entities={searchEntities}

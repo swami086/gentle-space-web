@@ -7,6 +7,7 @@ import {
 import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
+const OPENAI_INSIGHT_TIMEOUT_MS = 15_000;
 
 function apiKey(): string {
   const key = process.env.OPENAI_API_KEY;
@@ -113,12 +114,14 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
     body: JSON.stringify({
       model: "gpt-4o-mini",
       temperature: 0.2,
+      max_tokens: 320,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: INSIGHT_SYSTEM },
         { role: "user", content: buildInsightUserText(facts) },
       ],
     }),
+    signal: AbortSignal.timeout(OPENAI_INSIGHT_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`insight failed: ${res.status} ${await res.text()}`);
@@ -127,5 +130,5 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
     choices: { message?: { content?: string | null } }[];
   };
   const content = body.choices[0]?.message?.content?.trim() || "{}";
-  return parseInsightJson(content);
+  return parseInsightJson(content, facts);
 }
