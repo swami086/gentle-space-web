@@ -111,10 +111,15 @@ async function runSourceSync(
       }
 
       const previous = existingById.get(raw.sourceId);
+      // ponytail: slug suffix must be the listing's own UUID, not a truncated
+      // sourceId — many source URLs share a common area/city prefix in their
+      // first 12 chars, which previously caused unrelated listings to collide
+      // on `listings_slug_key` and roll back the entire source's sync batch.
+      const id = previous?.id ?? crypto.randomUUID();
       const listing: Listing = {
         ...raw,
-        id: previous?.id ?? crypto.randomUUID(),
-        slug: previous?.slug ?? slugifyTitle(raw.title, raw.sourceId),
+        id,
+        slug: previous?.slug ?? slugifyTitle(raw.title, id),
         syncedAt: options.now.toISOString(),
       };
 

@@ -46,3 +46,30 @@ export function parseExtractedEntitiesJson(raw: string): QueryEntities {
     return emptyQueryEntities();
   }
 }
+
+export const EXTRACT_BATCH_SYSTEM = `You extract coworking space entities from Bangalore search text.
+You will receive a JSON array of listing texts under "items".
+Return only JSON with this shape:
+{
+  "results": [
+    { "areas": [], "amenities": [], "deskTypes": [], "landmarks": [], "budgetSignals": [] }
+  ]
+}
+Return exactly one result per item in "items", in the same order — no more, no fewer.
+Use only the values that appear in each item's text or are directly implied by it.
+Do not invent locations or amenities. Do not mix entities across items.
+Keep responses short and machine-readable.`;
+
+// ponytail: batch parsing always returns exactly `expectedCount` entries (padding
+// with empty entities on short/malformed model output) so callers can zip results
+// back onto their input array by index without extra bounds checks.
+export function parseExtractedEntitiesBatchJson(raw: string, expectedCount: number): QueryEntities[] {
+  let results: unknown[] = [];
+  try {
+    const parsed = JSON.parse(raw) as { results?: unknown };
+    if (Array.isArray(parsed.results)) results = parsed.results;
+  } catch {
+    results = [];
+  }
+  return Array.from({ length: expectedCount }, (_, i) => parseExtractedEntities(results[i]));
+}

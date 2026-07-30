@@ -1,4 +1,10 @@
-import { EXTRACT_SYSTEM, parseExtractedEntitiesJson } from "../graph/extract";
+import {
+  EXTRACT_BATCH_SYSTEM,
+  EXTRACT_SYSTEM,
+  parseExtractedEntitiesBatchJson,
+  parseExtractedEntitiesJson,
+} from "../graph/extract";
+import type { QueryEntities } from "../graph/types";
 import {
   INSIGHT_SYSTEM,
   buildInsightUserText,
@@ -102,6 +108,38 @@ export async function extractSearchEntities(text: string) {
 
 export async function extractListingEntities(text: string) {
   return extractEntities(text);
+}
+
+async function extractEntitiesBatch(texts: string[]): Promise<QueryEntities[]> {
+  if (texts.length === 0) return [];
+  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: EXTRACT_BATCH_SYSTEM },
+        { role: "user", content: JSON.stringify({ items: texts }) },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`extract batch failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    choices: { message?: { content?: string | null } }[];
+  };
+  const content = body.choices[0]?.message?.content?.trim() || "{}";
+  return parseExtractedEntitiesBatchJson(content, texts.length);
+}
+
+export async function extractSearchEntitiesBatch(texts: string[]) {
+  return extractEntitiesBatch(texts);
 }
 
 export async function explainListingFit(facts: InsightFacts): Promise<InsightContent> {

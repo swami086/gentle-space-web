@@ -1,6 +1,7 @@
-import { extractSearchEntities, isAiSearchConfigured } from "@/lib/ai/client";
+import { extractSearchEntitiesBatch, isAiSearchConfigured } from "@/lib/ai/client";
 import { listListings } from "@/lib/db/listings";
 import { buildListingEmbeddingText } from "@/lib/listings/embedding-text";
+import { forEachChunkPaced } from "../sync/pace";
 import { normalizeQueryEntities } from "./normalize";
 import {
   isAgeAvailable,
@@ -33,16 +34,31 @@ function seedListingEntities(listing: Awaited<ReturnType<typeof listListings>>[n
   };
 }
 
-async function prepareListingGraphInput(listing: Listing): Promise<ListingInput> {
-  const extracted = await extractSearchEntities(buildListingEmbeddingText(listing));
-  const entities = normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted));
+// Gemini call count is what costs money and burns per-minute quota, not listing
+// count — batching N listings per call turns e.g. 340 calls into ~17.
+const EXTRACT_BATCH_SIZE = 20;
+// Fresh GCP projects default to very low per-minute Gemini/Vertex quotas.
+// Pacing to ~30 listings/min keeps large backfills under that ceiling without
+// requiring a quota increase, while adding no delay to small incremental runs.
+const ITEMS_PER_MINUTE = 30;
 
-  return {
-    id: listing.id,
-    slug: listing.slug,
-    title: listing.title,
-    entities,
-  };
+async function prepareListingGraphInputs(listings: Listing[]): Promise<ListingInput[]> {
+  const prepared: ListingInput[] = [];
+
+  await forEachChunkPaced(listings, EXTRACT_BATCH_SIZE, ITEMS_PER_MINUTE, async (chunk) => {
+    const extracted = await extractSearchEntitiesBatch(chunk.map(buildListingEmbeddingText));
+
+    chunk.forEach((listing, j) => {
+      prepared.push({
+        id: listing.id,
+        slug: listing.slug,
+        title: listing.title,
+        entities: normalizeQueryEntities(mergeEntities(seedListingEntities(listing), extracted[j])),
+      });
+    });
+  });
+
+  return prepared;
 }
 
 export async function rebuildListingGraph(): Promise<{ listings: number; skipped: boolean }> {
@@ -52,11 +68,7 @@ export async function rebuildListingGraph(): Promise<{ listings: number; skipped
   }
 
   const listings = await listListings();
-  const preparedListings = [];
-
-  for (const listing of listings) {
-    preparedListings.push(await prepareListingGraphInput(listing));
-  }
+  const preparedListings = await prepareListingGraphInputs(listings);
 
   await wipeGentleSpaceGraph();
 
@@ -75,10 +87,7 @@ export async function syncListingGraph(
     return { listings: 0, skipped: true };
   }
 
-  const preparedListings = [];
-  for (const listing of changed) {
-    preparedListings.push(await prepareListingGraphInput(listing));
-  }
+  const preparedListings = await prepareListingGraphInputs(changed);
 
   for (const listing of preparedListings) {
     await replaceListingGraph(listing);

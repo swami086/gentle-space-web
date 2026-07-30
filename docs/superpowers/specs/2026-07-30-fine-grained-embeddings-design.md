@@ -6,7 +6,7 @@
 
 ## Goal
 
-Improve AI search relevance for queries that hinge on free-text nuance (facts buried in a listing's description) without changing embedding API call volume, without touching the entity-graph layer, and without adding query-time cost.
+Improve AI search relevance for queries that hinge on free-text nuance (facts buried in a listing's description) while keeping the sync-side Vertex call rate safely under the existing quota, without touching the entity-graph layer, and without adding query-time cost.
 
 ## Problem
 
@@ -38,7 +38,7 @@ Replace the single `embedding vector(768)` column with two:
 | `structured_embedding vector(768)` | `title · area · city · propertyType · pricingHint · amenities` | Categorical/factual signal |
 | `description_embedding vector(768)` | `shortTeaser · description` | Free-text nuance |
 
-Migration `lib/db/migrations/004_split_embeddings.sql` (mirrors the drop-and-recreate pattern already used in `003_pgvector_768.sql`):
+Migration `lib/db/migrations/006_split_embeddings.sql` (next number after the existing `002`–`005`; mirrors the drop-and-recreate pattern already used in `003_pgvector_768.sql`):
 
 ```sql
 DROP INDEX IF EXISTS listings_embedding_ivfflat;
@@ -55,9 +55,9 @@ CREATE INDEX IF NOT EXISTS listings_description_embedding_ivfflat
 
 **Entity extraction is unchanged.** `extractSearchEntitiesBatch` in `lib/graph/rebuild.ts` keeps using the existing combined `buildListingEmbeddingText()` — extraction benefits from full context and this pipeline stays untouched.
 
-## Backfill / sync (embedding-cost-neutral)
+## Backfill / sync (same per-call batch size, stays under quota)
 
-`lib/sync/embed-listings.ts` changes its chunking from "32 listings' combined text per call" to **"16 listings × 2 texts (structured + description) = 32 texts per call"**. Same `CHUNK = 32`, same number of Vertex `embedTexts()` calls as today — just half as many listings represented per call, with results de-interleaved back into the two columns:
+`lib/sync/embed-listings.ts` changes its chunking from "32 listings' combined text per call" to **"16 listings × 2 texts (structured + description) = 32 texts per call"**. The per-call batch size stays at 32 texts (same as today), but since each listing now needs 2 texts instead of 1, only 16 listings fit per call instead of 32 — so call *frequency* roughly doubles (from ~0.9 calls/min to ~1.9 calls/min at the existing 30-listings/min pace target). That's still well under Vertex's 5 requests/min default quota for `text-embedding-004`, so no quota increase is needed. Results are de-interleaved back into the two columns:
 
 ```
 for each chunk of 16 listings:
@@ -106,11 +106,11 @@ above, revisited only if scale demands it.
 
 | File | Change | Depends on |
 |---|---|---|
-| `lib/db/migrations/004_split_embeddings.sql` | New migration: drop `embedding`, add `structured_embedding` + `description_embedding` + 2 IVFFlat indexes | — |
+| `lib/db/migrations/006_split_embeddings.sql` | New migration: drop `embedding`, add `structured_embedding` + `description_embedding` + 2 IVFFlat indexes | — |
 | `lib/db/schema.sql` | Updated column/index definitions for fresh installs | — |
 | `lib/listings/embedding-text.ts` | Add `buildStructuredEmbeddingText()` + `buildDescriptionEmbeddingText()`; existing `buildListingEmbeddingText()` untouched (still used for entity extraction) | none (pure) |
 | `lib/sync/embed-listings.ts` | Interleaved dual-text chunking; `updateListingEmbedding` → `updateListingEmbeddings(id, { structured, description })` | `lib/ai/client`, `lib/db/listings`, `lib/sync/pace` |
-| `lib/db/listings.ts` | `updateListingEmbeddings()` (replaces `updateListingEmbedding`), `searchListingsByEmbedding()` (GREATEST query), `listListingsMissingEmbedding()` (either column null) | — |
+| `lib/db/listings.ts` | `updateListingEmbeddings()` (replaces `updateListingEmbedding`), `searchListingsByEmbedding()` (GREATEST query), `listListingsMissingEmbedding()` (either column null), and the `ON CONFLICT` clause in `applySourceSync()` — its `embedding = CASE WHEN embed_hash changed THEN NULL ELSE listings.embedding END` directly references the column being dropped and must become two CASE clauses, one per new column | — |
 | `app/api/spaces/search/route.ts` | No logic change — same single query-embed call; consumes the same `vector_similarity` shape it already does | — |
 
 ## Testing

@@ -44,6 +44,21 @@ export async function extractSearchEntities(text: string): Promise<QueryEntities
   }
 }
 
+// Batches many listings into one LLM call instead of one call per listing —
+// cuts request count (and cost) by ~chunk-size×, and incidentally keeps sync
+// runs well under per-minute Gemini quota instead of firing one request per row.
+export async function extractSearchEntitiesBatch(texts: string[]): Promise<QueryEntities[]> {
+  if (texts.length === 0) return [];
+  try {
+    return aiProvider() === "vertex"
+      ? await vertex.extractSearchEntitiesBatch(texts)
+      : await openai.extractSearchEntitiesBatch(texts);
+  } catch (error) {
+    console.error("extractSearchEntitiesBatch failed", error);
+    return texts.map(() => emptyQueryEntities());
+  }
+}
+
 export async function extractListingEntities(text: string): Promise<QueryEntities> {
   try {
     return aiProvider() === "vertex"
