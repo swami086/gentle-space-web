@@ -124,25 +124,21 @@ describe("scoreListingsAgainstQuery", () => {
           {
             listing_id: '"listing-1"',
             rel: '"IN_AREA"',
-            elabel: '"Area"',
             name: '"Koramangala"',
           },
           {
             listing_id: '"listing-1"',
             rel: '"HAS_AMENITY"',
-            elabel: '"Amenity"',
             name: '"WiFi"',
           },
           {
             listing_id: '"listing-2"',
             rel: '"HAS_BUDGET"',
-            elabel: '"BudgetSignal"',
             name: '"Under_15k"',
           },
           {
             listing_id: '"listing-2"',
             rel: '"HAS_AMENITY"',
-            elabel: '"Amenity"',
             name: '"Printer"',
           },
         ],

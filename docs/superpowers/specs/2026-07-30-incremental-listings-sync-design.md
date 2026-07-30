@@ -51,7 +51,7 @@ Configuration: `LISTING_DETAIL_TTL_DAYS` (default `7`) and `LISTING_MISSING_RUNS
 ## Architecture
 
 ```
-runListingsSync({ sources?, maxDetailScrapes? })
+runListingsSync({ adapters?, maxDetailScrapes?, trackMissing?, skipDownstream? })
   for each source, independently:
     1. discover()                     -> DiscoveredListing[] { sourceId, url }
     2. listExistingForSource(source)  -> metadata only, no descriptions or vectors
@@ -66,7 +66,7 @@ runListingsSync({ sources?, maxDetailScrapes? })
     8. record per-source outcome
   then, once:
     embedListingsMissingEmbedding()   -> only rows whose embedding was cleared
-    syncListingGraph(changed, hidden) -> only changed rows; no full wipe
+    syncListingGraph(changed)         -> only embedding-relevant changes; no full wipe
 ```
 
 Boundaries:
@@ -168,23 +168,30 @@ Three rules inside the upsert:
    embedding incremental — `embedListingsMissingEmbedding()` is then just
    `WHERE embedding IS NULL`.
 3. Visibility filters are added to all three read paths — `listListings`,
-   `getListingBySlug`, and `searchListingsByEmbedding`. Hiding from browse while still
-   serving the detail page would leave live URLs for delisted spaces; hiding everywhere
-   also matches today's behavior, since full-replace deleted the row and the page 404'd.
+  `getListingBySlug`, and `searchListingsByEmbedding`. Hiding from browse while still
+  serving the detail page would leave live URLs for delisted spaces; hiding everywhere
+  also matches today's behavior, since full-replace deleted the row and the page 404'd.
+  Because incremental storage retains every source's row, browse and vector-search results
+  also apply the existing `dedupeListings()` source-priority rule at read time. Vector
+  search fetches up to `k * 4` candidates (four sources), dedupes, then slices to `k`.
+  This preserves lower-priority rows as fallbacks without showing duplicate spaces.
 
-Graph (`lib/graph/`): add `syncListingGraph(changed, hidden)` — one
-`extractSearchEntities` call per *changed* listing, reusing `upsertListingGraph`, plus a
-new `deleteListingFromGraph(id)` for newly hidden rows. The full wipe-and-rebuild stays
-behind `npm run graph:rebuild`. Known simplification, to be marked with a `ponytail:`
-comment: deleting a listing leaves orphaned `Area`/`Amenity` vertices, which is harmless
-because scoring only traverses outward from `Listing`.
+Graph (`lib/graph/`): add `syncListingGraph(changed)` — one
+`extractSearchEntities` call only when embedding-relevant content changed (or a listing
+reactivated). `replaceListingGraph()` atomically deletes and recreates that listing node
+so removed amenities/areas do not leave stale edges. Soft-hidden listing nodes remain in
+AGE: vector search filters hidden database rows before graph scoring, so they are never
+candidates, and retaining the node makes discovery-only reactivation safe even if its
+detail scrape fails. `npm run graph:rebuild` remains the cleanup/recovery path and removes
+hidden nodes during its full wipe.
 
 Firecrawl client: `firecrawlScrape(url, { includeLinks })`. Detail scrapes drop the
 `links` format they never use — only discovery needs it — shrinking every detail response
 (`lib/firecrawl/client.ts:30-34`).
 
-Orchestrator options `sources` and `maxDetailScrapes` also give the pipeline the
-single-source and capped-run controls it currently lacks.
+Orchestrator options `adapters` and `maxDetailScrapes` give the pipeline single-source and
+capped-run controls it currently lacks. `trackMissing: false` and
+`skipDownstream: true` are explicit operational-check safeguards, not production defaults.
 
 ## Where the savings come from
 
@@ -194,7 +201,7 @@ single-source and capped-run controls it currently lacks.
 | Firecrawl response size | `markdown` + `links` on every detail page | `markdown` only |
 | Firecrawl discovery fan-out | Unbounded `Promise.all` on GoFloaters localities | Bounded concurrency |
 | Vertex embeddings | Whole catalog, every run | Only rows whose embedding text changed |
-| Gemini entity extraction | Whole catalog, every run, after a graph wipe | Only changed rows |
+| Gemini entity extraction | Whole catalog, every run, after a graph wipe | Only embedding-relevant changes/reactivations |
 
 On a stable catalog, a run performs discovery calls plus zero detail scrapes, zero
 embeddings, and zero Gemini calls.
@@ -228,16 +235,19 @@ Unit tests (vitest, no live network):
 | Upsert | Re-syncing identical content reports `unchanged` and leaves `embedding` intact |
 
 Live Firecrawl check — `scripts/check-incremental-sync.ts`, exposed as `npm run
-sync:check`. It runs the real orchestrator against **one** source with
-`maxDetailScrapes: 1`, twice in a row, and asserts the token-efficiency claim end to end:
+sync:check`. It discovers CoFynd once, wraps the adapter to expose one selected listing,
+disables missing-run advancement and AI downstream work, then runs that constrained
+adapter twice:
 
 - Run 1: one real Firecrawl detail scrape; the listing is inserted or updated.
 - Run 2, immediately after: TTL has not expired, so `sources[x].scraped === 0`, the
-  listing reports `unchanged`, `last_seen_at` advances, and `embedding` is preserved.
+  stable row is touched and `last_seen_at` advances without changing `synced_at`.
 
 CoFynd is the source to use: its discovery is one `/map` plus one index scrape (~18 detail
-URLs found), versus Coworker walking up to 50 list pages. Total live cost is roughly three
-Firecrawl calls per invocation. This check is manual/ops, not CI.
+URLs found), versus Coworker walking up to 50 list pages. Total live cost for the full
+two-pass check is one discovery plus one detail scrape; the second pass uses the
+already-constrained discovery result. This check is manual/ops, not CI. Unit tests, not
+the live check, prove unchanged embeddings are preserved.
 
 ## Rollout
 

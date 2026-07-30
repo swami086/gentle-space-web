@@ -206,14 +206,13 @@ export async function scoreListingsAgainstQuery(
     const result = await client.query<{
       listing_id: unknown;
       rel: unknown;
-      elabel: unknown;
       name: unknown;
     }>(
       `SELECT * FROM cypher('gentle_space', $$ 
         MATCH (l:Listing)-[r]->(e)
         WHERE l.id IN ${cypherStringList(uniqueListingIds)}
-        RETURN l.id AS listing_id, type(r) AS rel, label(e)[0] AS elabel, e.name AS name
-      $$) AS (listing_id agtype, rel agtype, elabel agtype, name agtype)`,
+        RETURN l.id AS listing_id, type(r) AS rel, e.name AS name
+      $$) AS (listing_id agtype, rel agtype, name agtype)`,
     );
 
     const scored = new Map<string, ScoredListing>();
