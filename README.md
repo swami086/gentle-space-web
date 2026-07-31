@@ -162,3 +162,20 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Listing enrichment
+
+Batch-heal weak location/price rows via Firecrawl Extract (tail of sync, or CLI).
+
+```bash
+npm run enrich:listings              # dry-run (log only)
+npm run enrich:listings -- --apply   # write gated fields
+```
+
+Env knobs:
+
+- `ENRICH_DISABLED=1` — skip enrich in sync
+- `ENRICH_WEB_LIMIT` — max Pass 2 URLs (default 100)
+- `ENRICH_COOLDOWN_DAYS` — skip recently accepted (default 7)
+
+First VM deploy: keep disabled or dry-run until ~20 hand-checked accepts.
