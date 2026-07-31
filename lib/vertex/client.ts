@@ -42,7 +42,16 @@ function modelUrl(model: string, method: "predict" | "generateContent"): string 
   return `${base}/projects/${projectId()}/locations/${location()}/publishers/google/models/${model}:${method}`;
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+/**
+ * text-embedding models produce different vectors for the same text depending on whether
+ * it is being stored or searched with. Mixing the two silently degrades every search.
+ */
+export type EmbeddingKind = "document" | "query";
+
+export async function embedTexts(
+  texts: string[],
+  kind: EmbeddingKind = "document",
+): Promise<number[][]> {
   if (texts.length === 0) return [];
   const token = await getVertexAccessToken();
   const res = await fetch(modelUrl(embedModel(), "predict"), {
@@ -54,7 +63,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     body: JSON.stringify({
       instances: texts.map((content) => ({
         content,
-        task_type: "RETRIEVAL_DOCUMENT",
+        task_type: kind === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT",
       })),
     }),
   });

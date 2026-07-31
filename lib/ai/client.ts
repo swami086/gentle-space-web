@@ -23,8 +23,13 @@ export function isAiSearchConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
-  return aiProvider() === "vertex" ? vertex.embedTexts(texts) : openai.embedTexts(texts);
+export async function embedTexts(
+  texts: string[],
+  kind: vertex.EmbeddingKind = "document",
+): Promise<number[][]> {
+  return aiProvider() === "vertex"
+    ? vertex.embedTexts(texts, kind)
+    : openai.embedTexts(texts); // OpenAI embeddings have no task-type distinction
 }
 
 export async function rewriteSearchQuery(query: string): Promise<string> {

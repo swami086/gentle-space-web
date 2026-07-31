@@ -71,7 +71,7 @@ it("sends 32 interleaved texts for a full 16-listing chunk", async () => {
   await expect(embedListingsMissingEmbedding()).resolves.toBe(16);
 
   expect(embedTexts).toHaveBeenCalledTimes(1);
-  expect(embedTexts.mock.calls[0][0]).toHaveLength(32);
+  expect(vi.mocked(embedTexts).mock.calls[0][0]).toHaveLength(32);
   expect(updateListingEmbeddings).toHaveBeenCalledWith("listing-0", {
     structured: [0],
     description: [1],
@@ -105,8 +105,8 @@ it("splits into multiple chunks when more than 16 listings need embedding", asyn
   await expect(resultPromise).resolves.toBe(17);
 
   expect(embedTexts).toHaveBeenCalledTimes(2);
-  expect(embedTexts.mock.calls[0][0]).toHaveLength(32);
-  expect(embedTexts.mock.calls[1][0]).toHaveLength(2);
+  expect(vi.mocked(embedTexts).mock.calls[0][0]).toHaveLength(32);
+  expect(vi.mocked(embedTexts).mock.calls[1][0]).toHaveLength(2);
   expect(updateListingEmbeddings).toHaveBeenCalledWith("listing-16", {
     structured: [100],
     description: [101],
