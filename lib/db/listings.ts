@@ -1,6 +1,7 @@
 import type { Listing, ListingSource } from "@/lib/listings/types";
 import { parseExtractedEntities } from "../graph/extract";
 import type { QueryEntities } from "../graph/types";
+import type { EnrichCandidate } from "../sync/enrich-weak";
 import { dedupeListings } from "../listings/dedupe";
 import type { ExistingListingSyncState } from "../sync/plan";
 import { getListingMissingRunsLimit } from "../sync/config";
@@ -396,6 +397,115 @@ export async function listListingsMissingEmbedding(): Promise<Listing[]> {
   );
 
   return rows.map(rowToListing);
+}
+
+export async function listEnrichmentCandidates(): Promise<EnrichCandidate[]> {
+  if (!process.env.DATABASE_URL) return [];
+
+  const { rows } = await getPool().query<{
+    id: string;
+    title: string;
+    source_url: string;
+    area: string | null;
+    address: string | null;
+    pricing_hint: string | null;
+    lat: number | null;
+    lng: number | null;
+    synced_at: Date;
+  }>(
+    `SELECT id, title, source_url, area, address, pricing_hint, lat, lng, synced_at
+     FROM listings
+     WHERE missing_runs < $1
+     ORDER BY synced_at DESC`,
+    [getListingMissingRunsLimit()],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    sourceUrl: row.source_url,
+    area: row.area ?? "",
+    address: row.address ?? "",
+    pricingHint: row.pricing_hint,
+    lat: row.lat,
+    lng: row.lng,
+    syncedAt: row.synced_at.toISOString(),
+  }));
+}
+
+export async function listRecentlyAcceptedEnrichmentIds(
+  cooldownDays: number,
+): Promise<Map<string, string>> {
+  if (!process.env.DATABASE_URL) return new Map();
+
+  const { rows } = await getPool().query<{ listing_id: string; created_at: Date }>(
+    `SELECT DISTINCT ON (listing_id) listing_id, created_at
+     FROM public.listing_enrichment_log
+     WHERE accepted = true
+       AND created_at >= now() - ($1::text || ' days')::interval
+     ORDER BY listing_id, created_at DESC`,
+    [String(cooldownDays)],
+  );
+
+  return new Map(rows.map((row) => [row.listing_id, row.created_at.toISOString()]));
+}
+
+export async function applyListingEnrichment(
+  id: string,
+  patch: {
+    area?: string;
+    address?: string;
+    pricingHint?: string;
+    locationChanged: boolean;
+    priceChanged: boolean;
+  },
+): Promise<void> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (patch.area !== undefined) {
+    values.push(patch.area);
+    sets.push(`area = $${values.length}`);
+  }
+
+  if (patch.address !== undefined) {
+    values.push(patch.address);
+    sets.push(`address = $${values.length}`);
+  }
+
+  if (patch.pricingHint !== undefined) {
+    values.push(patch.pricingHint);
+    sets.push(`pricing_hint = $${values.length}`);
+  }
+
+  if (patch.locationChanged) {
+    sets.push("lat = NULL", "lng = NULL", "structured_embedding = NULL", "embed_hash = NULL");
+  } else if (patch.priceChanged) {
+    sets.push("structured_embedding = NULL", "embed_hash = NULL");
+  }
+
+  if (sets.length === 0) return;
+
+  values.push(id);
+  await getPool().query(
+    `UPDATE listings
+     SET ${sets.join(", ")}
+     WHERE id = $${values.length}`,
+    values,
+  );
+}
+
+export async function insertEnrichmentLog(row: {
+  listingId: string;
+  pass: "page" | "web";
+  accepted: boolean;
+  payload: unknown;
+}): Promise<void> {
+  await getPool().query(
+    `INSERT INTO public.listing_enrichment_log (listing_id, pass, accepted, payload)
+     VALUES ($1, $2, $3, $4::jsonb)`,
+    [row.listingId, row.pass, row.accepted, JSON.stringify(row.payload ?? {})],
+  );
 }
 
 export async function countVisibleListings(): Promise<number> {
