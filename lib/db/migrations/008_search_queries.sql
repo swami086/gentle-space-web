@@ -1,6 +1,9 @@
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS search_queries (
+-- Schema-qualified on purpose: the deployed role has search_path
+-- "ag_catalog, $user, public" for Apache AGE, so an unqualified CREATE TABLE
+-- lands this app table inside the extension's schema.
+CREATE TABLE IF NOT EXISTS public.search_queries (
   id BIGSERIAL PRIMARY KEY,
   query TEXT NOT NULL,
   interpreted_query TEXT NOT NULL DEFAULT '',
@@ -10,6 +13,6 @@ CREATE TABLE IF NOT EXISTS search_queries (
 );
 
 CREATE INDEX IF NOT EXISTS search_queries_created_at_idx
-  ON search_queries (created_at DESC);
+  ON public.search_queries (created_at DESC);
 
 COMMIT;
