@@ -1,3 +1,10 @@
+# Production domain (auto HTTPS via Let's Encrypt)
 gentlespacesolutions.com, www.gentlespacesolutions.com {
+	reverse_proxy web:3000
+}
+
+# Raw VM IP — HTTP only (no TLS cert for IP). Avoids Caddy's default
+# http→https redirect that breaks mobile browsers opening http://34.x.x.x
+http://34.47.192.145 {
 	reverse_proxy web:3000
 }
