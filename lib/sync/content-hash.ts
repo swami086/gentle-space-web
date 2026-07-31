@@ -34,15 +34,19 @@ export function contentHash(row: RawListing): string {
   });
 }
 
+export function listingEmbeddingTextForHash(
+  fields: Parameters<typeof buildListingEmbeddingText>[0],
+): string {
+  return buildListingEmbeddingText({
+    ...fields,
+    amenities: sortedUnique(fields.amenities),
+  });
+}
+
 export function hashEmbeddingText(
   fields: Parameters<typeof buildListingEmbeddingText>[0],
 ): string {
-  return hashEmbeddingTextValue(
-    buildListingEmbeddingText({
-      ...fields,
-      amenities: sortedUnique(fields.amenities),
-    }),
-  );
+  return hashEmbeddingTextValue(listingEmbeddingTextForHash(fields));
 }
 
 export function embedHash(row: RawListing): string {

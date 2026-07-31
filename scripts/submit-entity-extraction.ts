@@ -1,7 +1,6 @@
 import { listListings, listListingEntityHashes } from "../lib/db/listings";
-import { buildListingEmbeddingText } from "../lib/listings/embedding-text";
 import { buildEntityBatchJsonl } from "../lib/graph/batch-extract";
-import { hashEmbeddingText } from "../lib/sync/content-hash";
+import { hashEmbeddingText, listingEmbeddingTextForHash } from "../lib/sync/content-hash";
 import { createBatchPredictionJob, putGcsObject } from "../lib/vertex/batch";
 
 function requiredEnv(name: string): string {
@@ -40,7 +39,7 @@ async function main(): Promise<void> {
     inputObject,
     buildEntityBatchJsonl(selected.map((listing) => ({
       id: listing.id,
-      text: buildListingEmbeddingText(listing),
+      text: listingEmbeddingTextForHash(listing),
     }))),
     "application/jsonl",
   );

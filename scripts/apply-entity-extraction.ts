@@ -38,8 +38,13 @@ async function main(): Promise<void> {
   if (!outputDirectory) throw new Error("batch job missing outputInfo.gcsOutputDirectory");
 
   const { bucket, prefix } = parseGcsOutputDirectory(outputDirectory);
-  const resultFiles = (await listGcsObjects(bucket, prefix)).filter((name) =>
-    name.includes("prediction.results-"),
+  // Gemini batch writes predictions.jsonl; classic custom-model jobs use
+  // prediction.results-N-of-M. Accept both under the job output directory.
+  const resultFiles = (await listGcsObjects(bucket, prefix)).filter(
+    (name) =>
+      name.includes("prediction.results-") ||
+      name.endsWith("/predictions.jsonl") ||
+      name.endsWith("predictions.jsonl"),
   );
   const contents = await Promise.all(resultFiles.map((object) => getGcsObject(bucket, object)));
   const { applied, failed, skipped } = parseEntityBatchOutput(contents);

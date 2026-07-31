@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildListingEmbeddingText } from "../listings/embedding-text";
 import type { RawListing } from "./sources/types";
-import { contentHash, embedHash, hashEmbeddingText, hashEmbeddingTextValue } from "./content-hash";
+import {
+  contentHash,
+  embedHash,
+  hashEmbeddingText,
+  hashEmbeddingTextValue,
+  listingEmbeddingTextForHash,
+} from "./content-hash";
 
 const row = (over: Partial<RawListing> = {}): RawListing => ({
   source: "coworker",
@@ -55,11 +60,11 @@ describe("listing content hashes", () => {
     );
   });
 
-  it("hashEmbeddingTextValue matches hashEmbeddingText for submitted batch text", () => {
-    const r = row();
-    expect(
-      hashEmbeddingTextValue(buildListingEmbeddingText({ ...r, amenities: ["Coffee", "WiFi"] })),
-    ).toBe(hashEmbeddingText(r));
+  it("listingEmbeddingTextForHash matches what hashEmbeddingText hashes", () => {
+    const r = row({ amenities: ["WiFi", "Coffee"] });
+    const text = listingEmbeddingTextForHash(r);
+    expect(hashEmbeddingTextValue(text)).toBe(embedHash(r));
+    expect(text).toBe(listingEmbeddingTextForHash({ ...r, amenities: ["Coffee", "WiFi"] }));
   });
 
   it("is deterministic and ignores amenity ordering", () => {
