@@ -306,8 +306,20 @@ export async function applySourceSync(input: {
            address = EXCLUDED.address,
            area = EXCLUDED.area,
            city = EXCLUDED.city,
-           lat = EXCLUDED.lat,
-           lng = EXCLUDED.lng,
+           -- Prefer scraped coords; otherwise keep the geocoded ones, but drop them when
+           -- the address or area moved so the geocode pass re-derives from the new location.
+           lat = CASE
+             WHEN EXCLUDED.lat IS NOT NULL THEN EXCLUDED.lat
+             WHEN listings.address IS DISTINCT FROM EXCLUDED.address
+               OR listings.area IS DISTINCT FROM EXCLUDED.area
+               THEN NULL ELSE listings.lat
+           END,
+           lng = CASE
+             WHEN EXCLUDED.lng IS NOT NULL THEN EXCLUDED.lng
+             WHEN listings.address IS DISTINCT FROM EXCLUDED.address
+               OR listings.area IS DISTINCT FROM EXCLUDED.area
+               THEN NULL ELSE listings.lng
+           END,
            amenities = EXCLUDED.amenities,
            images = EXCLUDED.images,
            pricing_hint = EXCLUDED.pricing_hint,

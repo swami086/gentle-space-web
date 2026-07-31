@@ -64,6 +64,12 @@ it("upserts scraped rows, touches every discovered id, and increments only unsee
   expect(result.updated).toBe(1);
   expect(result.newlyHiddenIds).toEqual(["hidden-id"]);
   expect(query.mock.calls[1][0]).toContain("ON CONFLICT (source, source_id)");
+  // lat/lng are derived from address/area, so a changed address must clear them and let
+  // the geocode hook re-derive. Keeping stale coords leaves the pin at the old building.
+  expect(query.mock.calls[1][0]).toContain("listings.address IS DISTINCT FROM EXCLUDED.address");
+  expect(query.mock.calls[1][0]).toContain("listings.area IS DISTINCT FROM EXCLUDED.area");
+  expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.lat");
+  expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.lng");
   expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.structured_embedding");
   expect(query.mock.calls[1][0]).toContain("THEN NULL ELSE listings.description_embedding");
   expect(query.mock.calls[2][0]).toContain("missing_runs = 0");
