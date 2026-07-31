@@ -42,6 +42,9 @@ vi.mock("./embed-listings", () => ({
 vi.mock("./geocode-listings", () => ({
   geocodeListingsMissingCoords: vi.fn(),
 }));
+vi.mock("./enrich-listings", () => ({
+  enrichListings: vi.fn(),
+}));
 
 vi.mock("../graph/rebuild", () => ({
   syncListingGraph: vi.fn(),
@@ -63,6 +66,7 @@ import { finishSyncRun, startSyncRun } from "../db/sync-runs";
 import { syncListingGraph } from "../graph/rebuild";
 import { embedListingsMissingEmbedding } from "./embed-listings";
 import { geocodeListingsMissingCoords } from "./geocode-listings";
+import { enrichListings } from "./enrich-listings";
 import { runListingsSync } from "./run-sync";
 
 const { coworker, cofynd, gofloaters, myhq } = adapters;
@@ -94,6 +98,7 @@ beforeEach(() => {
   vi.mocked(listExistingForSource).mockReset();
   vi.mocked(embedListingsMissingEmbedding).mockReset();
   vi.mocked(geocodeListingsMissingCoords).mockReset();
+  vi.mocked(enrichListings).mockReset();
   vi.mocked(syncListingGraph).mockReset();
 
   vi.mocked(coworker.discover).mockReset();
@@ -109,6 +114,13 @@ beforeEach(() => {
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
   vi.mocked(countVisibleListings).mockResolvedValue(0);
   vi.mocked(embedListingsMissingEmbedding).mockResolvedValue(0);
+  vi.mocked(enrichListings).mockResolvedValue({
+    scanned: 0,
+    queued: 0,
+    pageAccepted: 0,
+    webAccepted: 0,
+    skippedCooldown: 0,
+  });
   vi.mocked(geocodeListingsMissingCoords).mockResolvedValue({
     updated: 0,
     skipped: 0,
@@ -325,6 +337,7 @@ describe("runListingsSync", () => {
       newlyHiddenIds: [],
     });
     vi.mocked(countVisibleListings).mockResolvedValue(1);
+    vi.mocked(enrichListings).mockRejectedValueOnce(new Error("enrich failed"));
     vi.mocked(embedListingsMissingEmbedding).mockRejectedValueOnce(new Error("embed failed"));
     vi.mocked(geocodeListingsMissingCoords).mockRejectedValueOnce(new Error("geocode failed"));
 
@@ -334,8 +347,46 @@ describe("runListingsSync", () => {
     });
 
     expect(run.status).toBe("success");
+    expect(enrichListings).toHaveBeenCalledOnce();
     expect(embedListingsMissingEmbedding).toHaveBeenCalledOnce();
     expect(geocodeListingsMissingCoords).toHaveBeenCalledOnce();
     expect(syncListingGraph).toHaveBeenCalledWith([changedListing]);
+  });
+
+  it("runs enrich before embed and geocode", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    const changedListing = {
+      ...rawListing({ source: "cofynd", sourceId: "c1" }),
+      id: "listing-1",
+      slug: "wework-prestige",
+      syncedAt: "2026-07-30T00:00:00.000Z",
+    };
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [changedListing],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(countVisibleListings).mockResolvedValue(1);
+
+    const order: string[] = [];
+    vi.mocked(enrichListings).mockImplementation(async () => {
+      order.push("enrich");
+      return { scanned: 0, queued: 0, pageAccepted: 0, webAccepted: 0, skippedCooldown: 0 };
+    });
+    vi.mocked(embedListingsMissingEmbedding).mockImplementation(async () => {
+      order.push("embed");
+      return 0;
+    });
+    vi.mocked(geocodeListingsMissingCoords).mockImplementation(async () => {
+      order.push("geocode");
+      return { updated: 0, skipped: 0, failed: 0, scanned: 0 };
+    });
+
+    await runListingsSync({ adapters: [cofynd], now: new Date("2026-07-30T00:00:00Z") });
+    expect(order.slice(0, 3)).toEqual(["enrich", "embed", "geocode"]);
   });
 });

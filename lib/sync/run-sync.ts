@@ -12,6 +12,7 @@ import { contentHash, embedHash } from "./content-hash";
 import { getListingDetailTtlMs, getListingMissingRunsLimit } from "./config";
 import { embedListingsMissingEmbedding } from "./embed-listings";
 import { geocodeListingsMissingCoords } from "./geocode-listings";
+import { enrichListings } from "./enrich-listings";
 import { planSourceSync } from "./plan";
 import {
   cofyndAdapter,
@@ -209,6 +210,12 @@ export async function runListingsSync(
     );
 
     if (anySuccess && !skipDownstream) {
+      try {
+        await enrichListings();
+      } catch (downstreamError) {
+        console.error("enrichment sync failed:", downstreamError);
+      }
+
       try {
         await embedListingsMissingEmbedding();
       } catch (downstreamError) {
