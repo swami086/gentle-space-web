@@ -11,19 +11,7 @@ docker compose -f docker-compose.listings.yml up -d
 Set `DATABASE_URL` in `.env.local` (not committed), e.g. `postgresql://gentle:gentle@127.0.0.1:5433/gentle_space_listings`.
 For batch entity extraction, also set `VERTEX_BATCH_BUCKET=gentle-space-entity-batch-us-central1` before using `npm run entities:submit`.
 
-Apply schema and the pgvector/AGE migrations (768-d for Vertex `text-embedding-004`):
-
-```bash
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/schema.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/002_pgvector.sql
-# if upgrading from an older 1536-d local DB:
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/003_pgvector_768.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/004_age.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/005_incremental_sync.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/006_split_embeddings.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/007_entity_extraction_cache.sql
-docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/009_listing_enrichment_log.sql
-```
+ 
 
 ### Vertex AI (local, cheapest models)
 
@@ -98,6 +86,7 @@ docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/005_incremental_sync.sql
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/006_split_embeddings.sql
 docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/007_entity_extraction_cache.sql
+docker exec -i gentle-space-pg psql -U gentle -d gentle_space_listings < lib/db/migrations/009_listing_enrichment_log.sql
 ```
 
 ### Vertex AI (local, cheapest models)
