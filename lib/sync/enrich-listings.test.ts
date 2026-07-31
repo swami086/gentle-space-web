@@ -191,6 +191,68 @@ describe("enrichListings", () => {
     );
   });
 
+  it("uses the gated Pass 1 locality for Pass 2 agreement when Pass 1 locality is null", async () => {
+    vi.mocked(listEnrichmentCandidates).mockResolvedValue([weakEmpty]);
+    vi.mocked(firecrawlExtract)
+      .mockResolvedValueOnce(
+        new Map([
+          [
+            "https://ex.com/1",
+            {
+              locality: null,
+              address: "2nd Floor, #108, 27th Main, HSR Layout, Bengaluru, Karnataka 560102, India",
+              monthly_price_inr: null,
+              price_basis: null,
+              brand_match: true,
+              confidence: "medium",
+              evidence: "page",
+            },
+          ],
+        ]),
+      )
+      .mockResolvedValueOnce(
+        new Map([
+          [
+            "https://ex.com/1",
+            {
+              locality: "HSR Layout",
+              address: null,
+              monthly_price_inr: null,
+              price_basis: null,
+              brand_match: true,
+              confidence: "low",
+              evidence: "web",
+            },
+          ],
+        ]),
+      );
+
+    const result = await enrichListings({ webLimit: 10 });
+
+    expect(result.pageAccepted).toBe(1);
+    expect(result.webAccepted).toBe(1);
+    expect(applyListingEnrichment).toHaveBeenNthCalledWith(
+      1,
+      "1",
+      expect.objectContaining({
+        area: "HSR Layout",
+        address: "2nd Floor, #108, 27th Main, HSR Layout, Bengaluru, Karnataka 560102, India",
+        locationChanged: true,
+        priceChanged: false,
+      }),
+    );
+    expect(applyListingEnrichment).toHaveBeenNthCalledWith(
+      2,
+      "1",
+      expect.objectContaining({
+        area: "HSR Layout",
+        address: "",
+        locationChanged: true,
+        priceChanged: false,
+      }),
+    );
+  });
+
   it("updates the in-memory candidate after Pass 1 so Pass 2 only queues remaining weak fields", async () => {
     vi.mocked(listEnrichmentCandidates).mockResolvedValue([weakEmpty]);
     vi.mocked(firecrawlExtract)

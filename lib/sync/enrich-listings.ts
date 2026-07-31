@@ -165,7 +165,8 @@ export async function enrichListings(
   for (let index = 0; index < queued.length; index += 1) {
     const candidate = queued[index]!;
     const pass1 = pass1Results.get(candidate.sourceUrl);
-    pass1LocalityById.set(candidate.id, pass1?.locality ?? null);
+    const pass1Location = pass1 ? gateLocation(pass1) : null;
+    pass1LocalityById.set(candidate.id, pass1Location?.accept ? pass1Location.area : pass1?.locality ?? null);
     const patch = buildPatch(candidate, pass1);
 
     await logAttempt(candidate, "page", patch != null, pass1);
