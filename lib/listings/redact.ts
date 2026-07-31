@@ -1,3 +1,5 @@
+import { looksLikeLocality, stripScraperJunk } from "./address";
+
 const SENTENCE_SPLIT = /(?<=[.!?])\s+/;
 
 const SENSITIVE = [
@@ -23,16 +25,8 @@ export function redactSensitiveText(text: string): string {
 }
 
 export function sanitizeArea(area: string): string {
-  const trimmed = area.trim();
-  if (!trimmed) return "";
-  if (trimmed.length > 40) return "";
-  if (trimmed.includes(",")) return "";
-  if (/https?:\/\//i.test(trimmed) || /!\[[^\]]*\]\(/.test(trimmed)) return "";
-  if (/\bplot\b/i.test(trimmed) || /\bno\s*:/i.test(trimmed) || /\bsurvey\b/i.test(trimmed)) {
-    return "";
-  }
-  if (/\b5\d{5}\b/.test(trimmed)) return "";
-  return trimmed;
+  const cleaned = stripScraperJunk(area);
+  return looksLikeLocality(cleaned) ? cleaned : "";
 }
 
 function cityLabel(city: string): string {

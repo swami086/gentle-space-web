@@ -11,6 +11,7 @@ import { mapSettledWithConcurrency } from "./concurrency";
 import { contentHash, embedHash } from "./content-hash";
 import { getListingDetailTtlMs, getListingMissingRunsLimit } from "./config";
 import { embedListingsMissingEmbedding } from "./embed-listings";
+import { geocodeListingsMissingCoords } from "./geocode-listings";
 import { planSourceSync } from "./plan";
 import {
   cofyndAdapter,
@@ -212,6 +213,12 @@ export async function runListingsSync(
         await embedListingsMissingEmbedding();
       } catch (downstreamError) {
         console.error("embedding sync failed:", downstreamError);
+      }
+
+      try {
+        await geocodeListingsMissingCoords();
+      } catch (downstreamError) {
+        console.error("geocode sync failed:", downstreamError);
       }
 
       try {

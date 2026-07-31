@@ -1,4 +1,6 @@
 import { firecrawlScrape } from "@/lib/firecrawl/client";
+import { localityFromAddress } from "@/lib/listings/address";
+import { formatPricingHint } from "./price";
 import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const COWORKER_LIST_BASE = "https://www.coworker.com/india/bengaluru";
@@ -74,17 +76,17 @@ function titleFromSlug(slug: string): string {
 }
 
 function parsePricingHint(markdown: string): string | null {
-  const coworkingFrom = firstMatch(
-    markdown,
-    /Coworking Space[\s\S]{0,80}?from\s*₹\s*([\d,]+)/i,
-  );
-  if (coworkingFrom) return `from ₹${coworkingFrom}/month`;
+  // Detail pages end with a "Spaces Near …" block that quotes *other* venues'
+  // rates, so price must only ever be read from the subject's Pricing Plans.
+  const plansIndex = markdown.search(/##\s+Pricing Plans/i);
+  if (plansIndex < 0) return null;
+  const plans = markdown.slice(plansIndex);
 
-  const monthly = firstMatch(markdown, /###\s+Monthly\s*\n+\s*₹\s*([\d,]+)/i);
-  if (monthly) return `₹ ${monthly}/month`;
+  const monthly = firstMatch(plans, /###\s+Monthly\s*\n+\s*₹\s*([\d,]+)/i);
+  if (monthly) return formatPricingHint(monthly, "month");
 
-  const genericFrom = firstMatch(markdown, /from\s*₹\s*([\d,]+)/i);
-  if (genericFrom) return `from ₹${genericFrom}/month`;
+  const daily = firstMatch(plans, /###\s+Daily\s*\n+\s*₹\s*([\d,]+)/i);
+  if (daily) return formatPricingHint(daily, "day");
 
   return null;
 }
@@ -103,7 +105,7 @@ export function parseCoworkerDetail(markdown: string, sourceUrl: string): RawLis
       markdown,
       /([A-Za-z0-9][^\n]{2,120},\s*Bengaluru,\s*Karnataka\s+\d{6},\s*India)/,
     ) ?? "";
-  const area = address ? (address.split(",")[0]?.trim() ?? "") : "";
+  const area = localityFromAddress(address);
 
   const overview = markdown.match(/##\s+Overview of[^\n]*\n+([\s\S]*?)(?=\n##\s|$)/i);
   const description = (overview?.[1] ?? "")

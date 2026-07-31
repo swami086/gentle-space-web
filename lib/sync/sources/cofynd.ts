@@ -1,4 +1,5 @@
 import { firecrawlMap, firecrawlScrape } from "@/lib/firecrawl/client";
+import { extractPricingHint } from "./price";
 import type { DiscoveredListing, RawListing, SourceAdapter } from "./types";
 
 export const COFYND_INDEX_URL = "https://cofynd.com/coworking/bangalore";
@@ -129,7 +130,8 @@ export function parseCofyndDetail(markdown: string, sourceUrl: string): RawListi
     .replace(/\s+/g, " ")
     .trim();
 
-  const pricingHint = firstMatch(markdown, /(₹[\d,]+(?:\/\*|\/mo|\/month|\/seat)?[^\s]*)/i);
+  // cofynd writes the unit after a footnote marker, e.g. "₹5,999/\* month".
+  const pricingHint = extractPricingHint(markdown);
 
   const propertyType =
     firstMatch(markdown, /#####\s+(Premium Coworking|Coworking|Managed Office|Coliving)/i) ??

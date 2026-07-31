@@ -51,12 +51,21 @@ describe("redactSensitiveText", () => {
 });
 
 describe("sanitizeArea", () => {
-  it("blanks cofynd markdown blob", () => {
+  it("extracts locality after cofynd markdown blob", () => {
     expect(
       sanitizeArea(
         "![Location](https://cofynd.com/assets/images/icons/co-location-icon.svg) Ashok Nagar",
       ),
-    ).toBe("");
+    ).toBe("Ashok Nagar");
+  });
+
+  it("extracts locality after truncated map_marker.svg junk", () => {
+    expect(sanitizeArea("ap_marker.svg)   BNR Complex")).toBe("BNR Complex");
+    expect(
+      sanitizeArea(
+        "img/img_location_map_marker.svg)   Prema Narayana Enclave",
+      ),
+    ).toBe("Prema Narayana Enclave");
   });
 
   it("blanks address-like plot values", () => {

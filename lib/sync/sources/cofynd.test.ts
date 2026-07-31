@@ -34,7 +34,7 @@ WorkHome Koramangala, Bangalore, offers a premium workspace with top-notch ameni
 
 Koramangala, Bangalore
 
-₹6,999/*
+Starting₹6,999/\* month
 
 12.9352, 77.6245
 `;
@@ -84,7 +84,7 @@ describe("parseCofyndDetail", () => {
       area: "Koramangala",
       city: "Bengaluru",
       address: "Koramangala, Bangalore",
-      pricingHint: "₹6,999/*",
+      pricingHint: "₹6,999/month",
       propertyType: "Premium Coworking",
       sourceUrl: "https://cofynd.com/coworking/workhome",
       lat: 12.9352,

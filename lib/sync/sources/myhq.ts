@@ -82,7 +82,7 @@ export function parseMyhqDetail(markdown: string, sourceUrl: string): RawListing
 
   const pricingHint = firstMatch(
     markdown,
-    /(₹[\d,]+(?:\s*\/\s*desk\s*\/\s*month|\/mo|\/month|\/day)?[^\n]*)/i,
+    /(₹[\d,]+(?:\s*\/\s*desk\s*\/\s*month|\/mo|\/month|\/day)?)/i,
   );
 
   const afterTitle = markdown.split(/^#\s+/m)[1] ?? markdown;

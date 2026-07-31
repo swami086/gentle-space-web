@@ -115,7 +115,7 @@ describe("parseMyhqDetail", () => {
       area: "Koramangala",
       city: "Bengaluru",
       address: "Prestige Atlanta, 80 Feet Rd, Koramangala 1A Block, Koramangala, Bengaluru, Karnataka",
-      pricingHint: "₹15,499/ desk / monthQuoted price (negotiable)",
+      pricingHint: "₹15,499/ desk / month",
       propertyType: "Coworking",
       sourceUrl: "https://myhq.in/dedicated/coworking-space/wework-prestige-atlanta",
     });

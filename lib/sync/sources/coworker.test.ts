@@ -90,6 +90,41 @@ describe("extractCoworkerDetailUrls", () => {
 });
 
 describe("parseCoworkerDetail", () => {
+  it("takes area from the locality, not the leading address fragment", () => {
+    // Regression: `area` used to be `address.split(",")[0]`, which yielded
+    // "2nd & 3rd Floor" for this real address and then geocoded to the wrong place.
+    const markdown = `## Overview of Hustlehub Tech Park
+
+A workspace in south Bengaluru.
+
+2nd & 3rd Floor, #108, Opposite Corner House, 27th Main Road, Sector 2, HSR Layout, Bengaluru, Karnataka 560102, India
+`;
+    const listing = parseCoworkerDetail(
+      markdown,
+      "https://www.coworker.com/india/bengaluru/hustlehub-tech-park",
+    );
+
+    expect(listing?.area).toBe("HSR Layout");
+    expect(listing?.address).toBe(
+      "2nd & 3rd Floor, #108, Opposite Corner House, 27th Main Road, Sector 2, HSR Layout, Bengaluru, Karnataka 560102, India",
+    );
+  });
+
+  it("leaves area empty rather than guessing when the address has no locality", () => {
+    const markdown = `## Overview of Nameless Space
+
+Somewhere.
+
+Bengaluru, Karnataka 560001, India
+`;
+    const listing = parseCoworkerDetail(
+      markdown,
+      "https://www.coworker.com/india/bengaluru/nameless-space",
+    );
+
+    expect(listing?.area).toBe("");
+  });
+
   it("parses markdown fixture into RawListing", () => {
     const listing = parseCoworkerDetail(
       detailFixture,
@@ -103,7 +138,7 @@ describe("parseCoworkerDetail", () => {
       area: "Bellandur",
       city: "Bengaluru",
       address: "Bellandur, Bengaluru, Karnataka 560103, India",
-      pricingHint: "₹ 20000/month",
+      pricingHint: "₹20,000/month",
       propertyType: "Coworking Space",
       sourceUrl: "https://www.coworker.com/india/bengaluru/cowrks-ecoworld",
       lat: null,
@@ -115,6 +150,45 @@ describe("parseCoworkerDetail", () => {
       "https://coworker.imgix.net/photos/india/bengaluru/cowrks-ecoworld/main-1489041240.jpg",
     );
     expect(listing?.amenities).toEqual(expect.arrayContaining(["WiFi", "Air Conditioning"]));
+  });
+
+  it("never takes a price from the Spaces Near block", () => {
+    const unpricedFixture = `## Overview of Cubic Business Centre
+
+Affordable office spaces in Koramangala.
+
+## Pricing Plans
+
+Coworking SpacePrivate Office
+
+### Daily
+
+Price on request
+
+price / person
+
+### Monthly
+
+Price on request
+
+price / person
+
+### Spaces Near 83/A, 16th
+
+![icon](https://d2w68ocb6l47bj.cloudfront.net/v20251122/_redesign/img/marker.png)
+139, First Cross Road, V Block, 5th Block, Koramangala
+
+From ₹450 /pp/day
+
+##### Coworking Space: Abode Nestor
+`;
+
+    const listing = parseCoworkerDetail(
+      unpricedFixture,
+      "https://www.coworker.com/india/bengaluru/cubic-business-centre",
+    );
+
+    expect(listing?.pricingHint).toBeNull();
   });
 
   it("returns null for non-detail URLs", () => {

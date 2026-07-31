@@ -39,6 +39,10 @@ vi.mock("./embed-listings", () => ({
   embedListingsMissingEmbedding: vi.fn(),
 }));
 
+vi.mock("./geocode-listings", () => ({
+  geocodeListingsMissingCoords: vi.fn(),
+}));
+
 vi.mock("../graph/rebuild", () => ({
   syncListingGraph: vi.fn(),
 }));
@@ -58,6 +62,7 @@ import {
 import { finishSyncRun, startSyncRun } from "../db/sync-runs";
 import { syncListingGraph } from "../graph/rebuild";
 import { embedListingsMissingEmbedding } from "./embed-listings";
+import { geocodeListingsMissingCoords } from "./geocode-listings";
 import { runListingsSync } from "./run-sync";
 
 const { coworker, cofynd, gofloaters, myhq } = adapters;
@@ -88,6 +93,7 @@ beforeEach(() => {
   vi.mocked(countVisibleListings).mockReset();
   vi.mocked(listExistingForSource).mockReset();
   vi.mocked(embedListingsMissingEmbedding).mockReset();
+  vi.mocked(geocodeListingsMissingCoords).mockReset();
   vi.mocked(syncListingGraph).mockReset();
 
   vi.mocked(coworker.discover).mockReset();
@@ -103,6 +109,12 @@ beforeEach(() => {
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
   vi.mocked(countVisibleListings).mockResolvedValue(0);
   vi.mocked(embedListingsMissingEmbedding).mockResolvedValue(0);
+  vi.mocked(geocodeListingsMissingCoords).mockResolvedValue({
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    scanned: 0,
+  });
   vi.mocked(syncListingGraph).mockResolvedValue({ listings: 0, skipped: true });
 });
 
@@ -314,6 +326,7 @@ describe("runListingsSync", () => {
     });
     vi.mocked(countVisibleListings).mockResolvedValue(1);
     vi.mocked(embedListingsMissingEmbedding).mockRejectedValueOnce(new Error("embed failed"));
+    vi.mocked(geocodeListingsMissingCoords).mockRejectedValueOnce(new Error("geocode failed"));
 
     const run = await runListingsSync({
       adapters: [cofynd],
@@ -322,6 +335,7 @@ describe("runListingsSync", () => {
 
     expect(run.status).toBe("success");
     expect(embedListingsMissingEmbedding).toHaveBeenCalledOnce();
+    expect(geocodeListingsMissingCoords).toHaveBeenCalledOnce();
     expect(syncListingGraph).toHaveBeenCalledWith([changedListing]);
   });
 });
