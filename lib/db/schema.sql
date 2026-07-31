@@ -51,6 +51,18 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   sources JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
+CREATE TABLE IF NOT EXISTS search_queries (
+  id BIGSERIAL PRIMARY KEY,
+  query TEXT NOT NULL,
+  interpreted_query TEXT NOT NULL DEFAULT '',
+  entities JSONB NOT NULL DEFAULT '{}',
+  result_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS search_queries_created_at_idx
+  ON search_queries (created_at DESC);
+
 -- Apache AGE graph bootstrap (requires gentle-space-pg:pg16-age image)
 CREATE EXTENSION IF NOT EXISTS age;
 LOAD 'age';

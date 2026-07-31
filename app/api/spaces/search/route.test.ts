@@ -134,7 +134,7 @@ describe("POST /api/spaces/search", () => {
         budgetSignals: [],
       },
     );
-    expect(embedTexts).toHaveBeenCalledWith(["Private cabin · Metro"]);
+    expect(embedTexts).toHaveBeenCalledWith(["Private cabin · Metro"], "query");
     expect(searchListingsByEmbedding).toHaveBeenCalledWith([0.1, 0.2, 0.3], 20);
   });
 

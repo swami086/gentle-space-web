@@ -1,20 +1,9 @@
 import { NextResponse } from "next/server";
-import {
-  embedTexts,
-  extractSearchEntities,
-  isAiSearchConfigured,
-  rewriteSearchQuery,
-} from "@/lib/ai/client";
-import { searchListingsByEmbedding } from "@/lib/db/listings";
-import {
-  maxPossibleOverlap,
-  mergeVectorAndGraphScores,
-  graphBoostLambda,
-} from "../../../../lib/graph/score";
-import { emptyQueryEntities } from "../../../../lib/graph/types";
-import { normalizeQueryEntities } from "../../../../lib/graph/normalize";
-import { scoreListingsAgainstQuery } from "../../../../lib/graph/age";
+import { isAiSearchConfigured } from "@/lib/ai/client";
+import { maxPossibleOverlap } from "../../../../lib/graph/score";
 import { toPublicListing } from "../../../../lib/listings/public";
+import { retrieveListings } from "../../../../lib/search/retrieve";
+import { logSearchQuery } from "../../../../lib/search/query-log";
 
 export async function POST(req: Request) {
   if (!isAiSearchConfigured()) {
@@ -31,39 +20,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid query" }, { status: 400 });
   }
   try {
-    const interpretedQuery = await rewriteSearchQuery(query);
-    const queryEntities = normalizeQueryEntities(await extractSearchEntities(query));
-    const k = Number(process.env.GRAPH_VECTOR_K ?? 20) || 20;
-    const [embedding] = await embedTexts([interpretedQuery]);
-    const scored = await searchListingsByEmbedding(embedding, k);
-    let listings = scored.slice(0, 10).map((s) => s.listing);
+    const { interpretedQuery, queryEntities, listings } = await retrieveListings(query);
     const matchedEntities = maxPossibleOverlap(queryEntities) > 0 ? queryEntities : undefined;
 
-    try {
-      if (maxPossibleOverlap(queryEntities) > 0 && scored.length > 0) {
-        const overlapMap = await scoreListingsAgainstQuery(
-          scored.map((s) => s.listing.id),
-          queryEntities,
-        );
-        const ranked = mergeVectorAndGraphScores(
-          scored.map((s) => {
-            const hit = overlapMap.get(s.listing.id);
-            return {
-              id: s.listing.id,
-              vectorSimilarity: s.vectorSimilarity,
-              graphOverlap: hit?.overlap ?? 0,
-              matchedEntities: hit?.matched ?? emptyQueryEntities(),
-            };
-          }),
-          graphBoostLambda(),
-          maxPossibleOverlap(queryEntities),
-        );
-        const byId = new Map(scored.map((s) => [s.listing.id, s.listing]));
-        listings = ranked.slice(0, 10).map((candidate) => byId.get(candidate.id)!);
-      }
-    } catch (err) {
-      console.error("graph boost failed; vector-only", err);
-    }
+    await logSearchQuery({
+      query,
+      interpretedQuery,
+      entities: queryEntities,
+      resultCount: listings.length,
+    });
 
     return NextResponse.json({
       interpretedQuery,
