@@ -1,4 +1,5 @@
 import {
+  cleanAddress,
   hasCityMarker,
   localityFromAddress,
   looksLikeLocality,
@@ -19,6 +20,7 @@ export type ExtractResult = {
 
 const BARE_CITY = /^(?:Bengaluru|Bangalore)$/i;
 const JUNK_LOCALITY = /\b(?:floor|door|plot)\b/i;
+const NON_BANGALORE = /\b(?:Gurugram|Gurgaon|Mumbai|New Delhi|Delhi|Hyderabad|Chennai|Pune|Noida|Kolkata)\b/i;
 
 export function normalizeLocalityKey(locality: string): string {
   return locality.trim().toLowerCase().replace(/\s+/g, " ");
@@ -28,10 +30,13 @@ export function gateLocation(
   result: ExtractResult,
   opts: { pass2Locality?: string | null } = {},
 ): { accept: true; area: string; address: string } | { accept: false } {
-  const rawAddress = result.address?.trim() || "";
+  const rawAddress = cleanAddress(result.address?.trim() || "");
   const fromAddress = rawAddress && hasCityMarker(rawAddress) ? localityFromAddress(rawAddress) : "";
   const locality = (result.locality ?? "").trim() || fromAddress;
   if (!locality || BARE_CITY.test(locality) || JUNK_LOCALITY.test(locality) || !looksLikeLocality(locality)) {
+    return { accept: false };
+  }
+  if (NON_BANGALORE.test(rawAddress) || NON_BANGALORE.test(locality)) {
     return { accept: false };
   }
 

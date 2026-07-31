@@ -52,6 +52,7 @@ describe("enrichListings", () => {
       pageAccepted: 0,
       webAccepted: 0,
       skippedCooldown: 0,
+      acceptedIds: [],
     });
     expect(listEnrichmentCandidates).not.toHaveBeenCalled();
   });
@@ -86,6 +87,7 @@ describe("enrichListings", () => {
       pageAccepted: 1,
       webAccepted: 0,
       skippedCooldown: 0,
+      acceptedIds: ["1"],
     });
     expect(applyListingEnrichment).toHaveBeenCalledWith(
       "1",
@@ -98,7 +100,7 @@ describe("enrichListings", () => {
     expect(firecrawlExtract).toHaveBeenCalledWith(["https://ex.com/1"], { enableWebSearch: false });
   });
 
-  it("skips cooldown when last accept is at or after syncedAt", async () => {
+  it("skips cooldown whenever the listing was recently accepted", async () => {
     vi.mocked(listEnrichmentCandidates).mockResolvedValue([weakEmpty]);
     vi.mocked(listRecentlyAcceptedEnrichmentIds).mockResolvedValue(
       new Map([["1", "2026-07-31T00:00:00.000Z"]]),
@@ -177,6 +179,7 @@ describe("enrichListings", () => {
 
     expect(result.pageAccepted).toBe(0);
     expect(result.webAccepted).toBe(1);
+    expect(result.acceptedIds).toEqual(["1"]);
     expect(firecrawlExtract).toHaveBeenNthCalledWith(2, ["https://ex.com/1"], { enableWebSearch: true });
     expect(applyListingEnrichment).toHaveBeenCalledWith(
       "1",
@@ -191,7 +194,7 @@ describe("enrichListings", () => {
     );
   });
 
-  it("uses the gated Pass 1 locality for Pass 2 agreement when Pass 1 locality is null", async () => {
+  it("keeps the Pass 1 postal address when Pass 2 only repeats the same locality", async () => {
     vi.mocked(listEnrichmentCandidates).mockResolvedValue([weakEmpty]);
     vi.mocked(firecrawlExtract)
       .mockResolvedValueOnce(
@@ -230,7 +233,8 @@ describe("enrichListings", () => {
     const result = await enrichListings({ webLimit: 10 });
 
     expect(result.pageAccepted).toBe(1);
-    expect(result.webAccepted).toBe(1);
+    expect(result.webAccepted).toBe(0);
+    expect(result.acceptedIds).toEqual(["1"]);
     expect(applyListingEnrichment).toHaveBeenNthCalledWith(
       1,
       "1",
@@ -241,14 +245,59 @@ describe("enrichListings", () => {
         priceChanged: false,
       }),
     );
+    expect(applyListingEnrichment).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a Pass 1 postal address when Pass 2 only improves locality and price", async () => {
+    vi.mocked(listEnrichmentCandidates).mockResolvedValue([weakEmpty]);
+    vi.mocked(firecrawlExtract)
+      .mockResolvedValueOnce(
+        new Map([
+          [
+            "https://ex.com/1",
+            {
+              locality: null,
+              address: "2nd Floor, #108, 27th Main, HSR Layout, Bengaluru, Karnataka 560102, India",
+              monthly_price_inr: null,
+              price_basis: null,
+              brand_match: true,
+              confidence: "medium",
+              evidence: "page",
+            },
+          ],
+        ]),
+      )
+      .mockResolvedValueOnce(
+        new Map([
+          [
+            "https://ex.com/1",
+            {
+              locality: "HSR Layout",
+              address: null,
+              monthly_price_inr: 22000,
+              price_basis: "exact",
+              brand_match: true,
+              confidence: "medium",
+              evidence: "web",
+            },
+          ],
+        ]),
+      );
+
+    const result = await enrichListings({ webLimit: 10 });
+
+    expect(result).toMatchObject({
+      pageAccepted: 1,
+      webAccepted: 1,
+      acceptedIds: ["1"],
+    });
     expect(applyListingEnrichment).toHaveBeenNthCalledWith(
       2,
       "1",
       expect.objectContaining({
-        area: "HSR Layout",
-        address: "",
-        locationChanged: true,
-        priceChanged: false,
+        pricingHint: "₹22,000/month",
+        locationChanged: false,
+        priceChanged: true,
       }),
     );
   });
@@ -293,6 +342,7 @@ describe("enrichListings", () => {
 
     expect(result.pageAccepted).toBe(1);
     expect(result.webAccepted).toBe(1);
+    expect(result.acceptedIds).toEqual(["1"]);
     expect(applyListingEnrichment).toHaveBeenNthCalledWith(
       1,
       "1",

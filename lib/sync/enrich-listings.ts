@@ -4,6 +4,7 @@ import {
   listEnrichmentCandidates,
   listRecentlyAcceptedEnrichmentIds,
 } from "../db/listings";
+import { hasCityMarker } from "../listings/address";
 import { firecrawlExtract } from "../firecrawl/client";
 import { gateLocation, gatePrice, type ExtractResult } from "./enrich-gate";
 import { isWeakListing, type EnrichCandidate } from "./enrich-weak";
@@ -14,6 +15,7 @@ export type EnrichListingsResult = {
   pageAccepted: number;
   webAccepted: number;
   skippedCooldown: number;
+  acceptedIds: string[];
 };
 
 type EnrichListingsOptions = {
@@ -59,10 +61,16 @@ function buildPatch(
   };
 
   const location = gateLocation(result, options);
-  if (location.accept && locationChanged(candidate, location)) {
-    patch.area = location.area;
-    patch.address = location.address;
-    patch.locationChanged = true;
+  if (location.accept) {
+    const nextLocation =
+      location.address === "" && candidate.address.trim() !== "" && hasCityMarker(candidate.address)
+        ? { ...location, address: candidate.address }
+        : location;
+    if (locationChanged(candidate, nextLocation)) {
+      patch.area = nextLocation.area;
+      patch.address = nextLocation.address;
+      patch.locationChanged = true;
+    }
   }
 
   const price = gatePrice(result, candidate.pricingHint);
@@ -86,6 +94,14 @@ function applyPatchToCandidate(candidate: EnrichCandidate, patch: ListingPatch):
   }
 
   return next;
+}
+
+function finalizeResult(
+  result: EnrichListingsResult,
+  acceptedIds: Set<string>,
+): EnrichListingsResult {
+  result.acceptedIds = [...acceptedIds];
+  return result;
 }
 
 async function persistPatch(
@@ -124,6 +140,7 @@ export async function enrichListings(
       pageAccepted: 0,
       webAccepted: 0,
       skippedCooldown: 0,
+      acceptedIds: [],
     };
   }
 
@@ -136,12 +153,14 @@ export async function enrichListings(
   const recentAccepts = await listRecentlyAcceptedEnrichmentIds(cooldownDays);
 
   const queued: EnrichCandidate[] = [];
+  const acceptedIds = new Set<string>();
   let skippedCooldown = 0;
 
   for (const candidate of candidates) {
     if (!isWeakListing(candidate)) continue;
-    const acceptedAt = recentAccepts.get(candidate.id);
-    if (acceptedAt && acceptedAt >= candidate.syncedAt) {
+    // ponytail: we do not log a content hash on accepted enrichments yet, so a hard
+    // cooldown is the smallest correct behavior until content-change bypass exists.
+    if (recentAccepts.has(candidate.id)) {
       skippedCooldown += 1;
       continue;
     }
@@ -154,9 +173,10 @@ export async function enrichListings(
     pageAccepted: 0,
     webAccepted: 0,
     skippedCooldown,
+    acceptedIds: [],
   };
 
-  if (queued.length === 0) return result;
+  if (queued.length === 0) return finalizeResult(result, acceptedIds);
 
   const urls = queued.map((candidate) => candidate.sourceUrl);
   const pass1Results = await firecrawlExtract(urls, { enableWebSearch: false });
@@ -175,12 +195,13 @@ export async function enrichListings(
     await persistPatch(candidate, patch, { dryRun });
     queued[index] = applyPatchToCandidate(candidate, patch);
     result.pageAccepted += 1;
+    if (!dryRun) acceptedIds.add(candidate.id);
   }
 
-  if (webLimit === 0) return result;
+  if (webLimit === 0) return finalizeResult(result, acceptedIds);
 
   const pass2Queue = queued.filter((candidate) => isWeakListing(candidate)).slice(0, webLimit);
-  if (pass2Queue.length === 0) return result;
+  if (pass2Queue.length === 0) return finalizeResult(result, acceptedIds);
 
   const pass2Results = await firecrawlExtract(
     pass2Queue.map((candidate) => candidate.sourceUrl),
@@ -198,7 +219,8 @@ export async function enrichListings(
 
     await persistPatch(candidate, patch, { dryRun });
     result.webAccepted += 1;
+    if (!dryRun) acceptedIds.add(candidate.id);
   }
 
-  return result;
+  return finalizeResult(result, acceptedIds);
 }

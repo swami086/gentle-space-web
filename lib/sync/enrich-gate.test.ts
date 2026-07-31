@@ -23,6 +23,17 @@ describe("gateLocation", () => {
     expect(gateLocation({ ...medium, locality: "2nd Floor" }).accept).toBe(false);
   });
 
+  it("rejects known non-Bangalore city signals", () => {
+    expect(gateLocation({ ...medium, locality: "Gurugram" }).accept).toBe(false);
+    expect(
+      gateLocation({
+        ...medium,
+        locality: "Cyber City",
+        address: "DLF Cyber City, Gurugram, Haryana 122002, India",
+      }).accept,
+    ).toBe(false);
+  });
+
   it("rejects low confidence unless Pass1≈Pass2 locality", () => {
     expect(gateLocation({ ...medium, confidence: "low" }).accept).toBe(false);
     expect(

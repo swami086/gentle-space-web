@@ -113,6 +113,20 @@ export async function getListingById(id: string): Promise<Listing | null> {
   return rows[0] ? rowToListing(rows[0]) : null;
 }
 
+export async function getListingsByIds(ids: string[]): Promise<Listing[]> {
+  if (!process.env.DATABASE_URL || ids.length === 0) return [];
+  const visibleLimit = getListingMissingRunsLimit();
+
+  const { rows } = await getPool().query<ListingRow>(
+    `SELECT * FROM listings
+     WHERE id::text = ANY($1::text[])
+       AND missing_runs < $2`,
+    [ids, visibleLimit],
+  );
+
+  return rows.map(rowToListing);
+}
+
 export async function fullReplaceListings(rows: Listing[]): Promise<void> {
   const client = await getPool().connect();
 
@@ -442,9 +456,9 @@ export async function listRecentlyAcceptedEnrichmentIds(
     `SELECT DISTINCT ON (listing_id) listing_id, created_at
      FROM public.listing_enrichment_log
      WHERE accepted = true
-       AND created_at >= now() - ($1::text || ' days')::interval
+       AND created_at >= now() - ($1 * interval '1 day')
      ORDER BY listing_id, created_at DESC`,
-    [String(cooldownDays)],
+    [cooldownDays],
   );
 
   return new Map(rows.map((row) => [row.listing_id, row.created_at.toISOString()]));

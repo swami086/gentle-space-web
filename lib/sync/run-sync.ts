@@ -1,6 +1,7 @@
 import {
   applySourceSync,
   countVisibleListings,
+  getListingsByIds,
   listExistingForSource,
 } from "../db/listings";
 import { finishSyncRun, startSyncRun } from "../db/sync-runs";
@@ -210,8 +211,11 @@ export async function runListingsSync(
     );
 
     if (anySuccess && !skipDownstream) {
+      let enrichedListingIds: string[] = [];
+
       try {
-        await enrichListings();
+        const enrichResult = await enrichListings();
+        enrichedListingIds = enrichResult.acceptedIds;
       } catch (downstreamError) {
         console.error("enrichment sync failed:", downstreamError);
       }
@@ -229,8 +233,11 @@ export async function runListingsSync(
       }
 
       try {
-        // ponytail: Task 5 keeps the downstream hook thin; Task 6 makes it truly incremental.
-        await syncListingGraph(graphListings);
+        if (enrichedListingIds.length > 0) {
+          graphListings.push(...(await getListingsByIds(enrichedListingIds)));
+        }
+        const listingsForGraph = [...new Map(graphListings.map((listing) => [listing.id, listing])).values()];
+        await syncListingGraph(listingsForGraph);
       } catch (downstreamError) {
         console.error("graph sync failed:", downstreamError);
       }

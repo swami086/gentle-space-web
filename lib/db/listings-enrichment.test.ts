@@ -58,7 +58,8 @@ describe("listRecentlyAcceptedEnrichmentIds", () => {
     const sql = String(query.mock.calls[0][0]);
     expect(sql).toContain("listing_enrichment_log");
     expect(sql).toContain("accepted = true");
-    expect(query.mock.calls[0][1]).toEqual(["7"]);
+    expect(sql).toContain("interval '1 day'");
+    expect(query.mock.calls[0][1]).toEqual([7]);
   });
 });
 

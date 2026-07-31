@@ -27,6 +27,7 @@ const adapters = vi.hoisted(() => ({
 vi.mock("../db/listings", () => ({
   applySourceSync: vi.fn(),
   countVisibleListings: vi.fn(),
+  getListingsByIds: vi.fn(),
   listExistingForSource: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ vi.mock("./sources", () => ({
 import {
   applySourceSync,
   countVisibleListings,
+  getListingsByIds,
   listExistingForSource,
 } from "../db/listings";
 import { finishSyncRun, startSyncRun } from "../db/sync-runs";
@@ -95,6 +97,7 @@ beforeEach(() => {
   vi.mocked(finishSyncRun).mockReset();
   vi.mocked(applySourceSync).mockReset();
   vi.mocked(countVisibleListings).mockReset();
+  vi.mocked(getListingsByIds).mockReset();
   vi.mocked(listExistingForSource).mockReset();
   vi.mocked(embedListingsMissingEmbedding).mockReset();
   vi.mocked(geocodeListingsMissingCoords).mockReset();
@@ -113,6 +116,7 @@ beforeEach(() => {
   vi.mocked(startSyncRun).mockResolvedValue(undefined);
   vi.mocked(finishSyncRun).mockResolvedValue(undefined);
   vi.mocked(countVisibleListings).mockResolvedValue(0);
+  vi.mocked(getListingsByIds).mockResolvedValue([]);
   vi.mocked(embedListingsMissingEmbedding).mockResolvedValue(0);
   vi.mocked(enrichListings).mockResolvedValue({
     scanned: 0,
@@ -120,6 +124,7 @@ beforeEach(() => {
     pageAccepted: 0,
     webAccepted: 0,
     skippedCooldown: 0,
+    acceptedIds: [],
   });
   vi.mocked(geocodeListingsMissingCoords).mockResolvedValue({
     updated: 0,
@@ -375,7 +380,14 @@ describe("runListingsSync", () => {
     const order: string[] = [];
     vi.mocked(enrichListings).mockImplementation(async () => {
       order.push("enrich");
-      return { scanned: 0, queued: 0, pageAccepted: 0, webAccepted: 0, skippedCooldown: 0 };
+      return {
+        scanned: 0,
+        queued: 0,
+        pageAccepted: 0,
+        webAccepted: 0,
+        skippedCooldown: 0,
+        acceptedIds: [],
+      };
     });
     vi.mocked(embedListingsMissingEmbedding).mockImplementation(async () => {
       order.push("embed");
@@ -388,5 +400,45 @@ describe("runListingsSync", () => {
 
     await runListingsSync({ adapters: [cofynd], now: new Date("2026-07-30T00:00:00Z") });
     expect(order.slice(0, 3)).toEqual(["enrich", "embed", "geocode"]);
+  });
+
+  it("graphs enrichment-only accepted listings alongside source-sync listings", async () => {
+    vi.mocked(cofynd.discover).mockResolvedValue([{ sourceId: "c1", url: "https://cofynd/c1" }]);
+    const changedListing = {
+      ...rawListing({ source: "cofynd", sourceId: "c1" }),
+      id: "listing-1",
+      slug: "wework-prestige",
+      syncedAt: "2026-07-30T00:00:00.000Z",
+    };
+    const enrichedListing = {
+      ...rawListing({ source: "cofynd", sourceId: "c2", title: "Enriched Listing" }),
+      id: "listing-2",
+      slug: "enriched-listing",
+      syncedAt: "2026-07-30T00:00:00.000Z",
+    };
+    vi.mocked(cofynd.fetchDetail).mockResolvedValue(rawListing({ source: "cofynd", sourceId: "c1" }));
+    vi.mocked(listExistingForSource).mockResolvedValue([]);
+    vi.mocked(applySourceSync).mockResolvedValue({
+      inserted: 1,
+      updated: 0,
+      unchanged: 0,
+      graphListings: [changedListing],
+      newlyHiddenIds: [],
+    });
+    vi.mocked(enrichListings).mockResolvedValue({
+      scanned: 1,
+      queued: 1,
+      pageAccepted: 1,
+      webAccepted: 0,
+      skippedCooldown: 0,
+      acceptedIds: ["listing-2"],
+    });
+    vi.mocked(getListingsByIds).mockResolvedValue([enrichedListing]);
+    vi.mocked(countVisibleListings).mockResolvedValue(2);
+
+    await runListingsSync({ adapters: [cofynd], now: new Date("2026-07-30T00:00:00Z") });
+
+    expect(getListingsByIds).toHaveBeenCalledWith(["listing-2"]);
+    expect(syncListingGraph).toHaveBeenCalledWith([changedListing, enrichedListing]);
   });
 });
