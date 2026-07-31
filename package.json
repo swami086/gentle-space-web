@@ -19,7 +19,8 @@
     "graph:rebuild": "tsx --env-file=.env.local scripts/rebuild-listing-graph.ts",
     "search:eval": "tsx --env-file=.env.local scripts/eval-search.ts",
     "graph:check": "tsx --env-file=.env.local scripts/check-graph-boost.ts",
-    "insight:check": "tsx --env-file=.env.local scripts/check-insight.ts"
+    "insight:check": "tsx --env-file=.env.local scripts/check-insight.ts",
+    "enrich:listings": "tsx --env-file=.env.local scripts/enrich-listings.ts"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
