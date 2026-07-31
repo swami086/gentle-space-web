@@ -1,4 +1,6 @@
 import type { Listing, ListingSource } from "@/lib/listings/types";
+import { parseExtractedEntities } from "../graph/extract";
+import type { QueryEntities } from "../graph/types";
 import { dedupeListings } from "../listings/dedupe";
 import type { ExistingListingSyncState } from "../sync/plan";
 import { getListingMissingRunsLimit } from "../sync/config";
@@ -393,4 +395,48 @@ export async function countVisibleListings(): Promise<number> {
   );
 
   return Number(rows[0]?.count ?? 0);
+}
+
+export async function listListingEntityHashes(): Promise<Map<string, string | null>> {
+  if (!process.env.DATABASE_URL) return new Map();
+
+  const { rows } = await getPool().query<{ id: string; entities_hash: string | null }>(
+    `SELECT id, entities_hash
+     FROM listings
+     WHERE missing_runs < $1`,
+    [getListingMissingRunsLimit()],
+  );
+
+  return new Map(rows.map((row) => [row.id, row.entities_hash]));
+}
+
+export async function updateListingExtractedEntities(
+  id: string,
+  entities: QueryEntities,
+  entitiesHash: string,
+): Promise<void> {
+  await getPool().query(
+    `UPDATE listings
+     SET extracted_entities = $1::jsonb, entities_hash = $2
+     WHERE id = $3`,
+    [JSON.stringify(entities), entitiesHash, id],
+  );
+}
+
+export async function listListingExtractedEntities(): Promise<Map<string, QueryEntities>> {
+  if (!process.env.DATABASE_URL) return new Map();
+
+  const { rows } = await getPool().query<{ id: string; extracted_entities: unknown }>(
+    `SELECT id, extracted_entities
+     FROM listings
+     WHERE missing_runs < $1
+       AND extracted_entities IS NOT NULL`,
+    [getListingMissingRunsLimit()],
+  );
+
+  return new Map(
+    rows
+      .filter((row) => row.extracted_entities !== null)
+      .map((row) => [row.id, parseExtractedEntities(row.extracted_entities)]),
+  );
 }

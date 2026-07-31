@@ -27,17 +27,22 @@ const EDGE_TO_BUCKET = {
 
 type Bucket = keyof QueryEntities;
 
-const UNSAFE_CYPHER_LITERAL_RE = /(?:\$\$|[\\\u0000-\u001f\u007f])/;
-
 export function sanitizeCypherLiteral(value: string): string {
-  if (UNSAFE_CYPHER_LITERAL_RE.test(value)) {
+  // $$ would break out of the PostgreSQL dollar-quoted cypher body.
+  if (value.includes("$$")) {
     throw new Error("unsafe cypher literal");
   }
-  return value;
+  // Strip backslashes/controls rather than failing the whole graph write —
+  // scraped titles/amenities occasionally contain them, and one bad row used
+  // to abort a 700-listing rebuild after the wipe.
+  return value.replace(/[\\\u0000-\u001f\u007f]/g, "");
 }
 
+// AGE cypher is passed inside PostgreSQL $$...$$, so SQL-style '' doubling does
+// not escape apostrophes for the cypher lexer — it splits 'Owner's' into
+// 'Owner' + 's'. OpenCypher string escapes use backslash instead.
 function escapeCypherString(value: string): string {
-  return sanitizeCypherLiteral(value).replace(/'/g, "''");
+  return sanitizeCypherLiteral(value).replace(/'/g, "\\'");
 }
 
 function cypherString(value: string): string {

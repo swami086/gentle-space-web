@@ -37,7 +37,8 @@ Return only JSON with this shape:
 }
 Use only the values that appear in the text or are directly implied.
 Do not invent locations or amenities.
-Keep responses short and machine-readable.`;
+Keep responses short and machine-readable.
+If the text begins with a LISTING_ID: line, ignore that line entirely — it is metadata, not content.`;
 
 export function parseExtractedEntitiesJson(raw: string): QueryEntities {
   try {

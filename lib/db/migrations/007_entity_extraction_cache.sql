@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE listings
+  ADD COLUMN IF NOT EXISTS extracted_entities JSONB,
+  ADD COLUMN IF NOT EXISTS entities_hash TEXT;
+
+COMMIT;
