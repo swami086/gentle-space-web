@@ -12,9 +12,12 @@
     "sync:preview": "tsx --env-file=.env.local scripts/preview-listings-sync.ts",
     "sync:check": "tsx --env-file=.env.local scripts/check-incremental-sync.ts",
     "embed:backfill": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
+    "geocode:backfill": "tsx --env-file=.env.local scripts/backfill-geocodes.ts",
+    "geocode:repair": "tsx --env-file=.env.local scripts/repair-geocodes.ts",
     "entities:submit": "tsx --env-file=.env.local scripts/submit-entity-extraction.ts",
     "entities:apply": "tsx --env-file=.env.local scripts/apply-entity-extraction.ts",
     "graph:rebuild": "tsx --env-file=.env.local scripts/rebuild-listing-graph.ts",
+    "search:eval": "tsx --env-file=.env.local scripts/eval-search.ts",
     "graph:check": "tsx --env-file=.env.local scripts/check-graph-boost.ts",
     "insight:check": "tsx --env-file=.env.local scripts/check-insight.ts"
   },

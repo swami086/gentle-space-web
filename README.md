@@ -47,7 +47,9 @@ Listings sync behavior:
 
 - `npm run sync:listings` runs the 4-source incremental sync. A source failure is recorded per-source and does not delete or hide rows from successful sources.
 - `npm run sync:preview` is Coworker-only, respects `PREVIEW_MAX_DETAILS`, writes listings through the same non-destructive incremental path, disables missing-run tracking, and skips downstream embedding/graph work so it does not spend Vertex/Gemini tokens.
-- Use `npm run sync:listings` for the full incremental pipeline, or `npm run embed:backfill` / `npm run graph:rebuild` after a preview run if you want local embeddings or graph state refreshed.
+- Use `npm run sync:listings` for the full incremental pipeline, or `npm run embed:backfill` / `npm run geocode:backfill` / `npm run graph:rebuild` after a preview run if you want local embeddings, map coords, or graph state refreshed.
+- `npm run geocode:repair` re-derives `area` from the address locality and re-geocodes from the full address. It is a dry run by default; add `--sample=15` to check drift against the live API, or `--apply` to write. Applying clears `structured_embedding` for repaired rows, so follow it with `npm run embed:backfill`.
+- `npm run search:eval` scores search against `docs/eval/golden-queries.json` and prints the location-violation rate. Pass `--label=<name> --out=docs/eval/runs/<name>.json` to archive a run for before/after comparison.
 - `npm run entities:submit` uploads batch entity extraction requests to `VERTEX_BATCH_BUCKET`; `npm run entities:apply -- <job>` loads the job output, writes `extracted_entities` + `entities_hash`, and already rebuilds the graph. After that, `npm run graph:rebuild` is SQL-only recovery if you need to reseed AGE from Postgres.
 - `npm run sync:check` is a live CoFynd operational check. It does one real discovery pass plus one real detail scrape on the first run, writes or refreshes a single listing, skips downstream embeddings/graph work, and proves an immediate second run does zero detail scrapes.
 - `npm run graph:check` is a live Apache AGE operational check: scores one known listing against its own area and asserts non-zero graph overlap.

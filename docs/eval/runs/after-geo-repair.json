@@ -1,0 +1,211 @@
+{
+  "label": "after-geo-repair",
+  "ranAt": "2026-07-31T04:55:06.607Z",
+  "limit": 10,
+  "queries": [
+    {
+      "id": "wf-basic",
+      "query": "coworking space in Whitefield",
+      "returned": 10,
+      "location": {
+        "inside": 8,
+        "outside": 2,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Evolve Work Studio [Whitefield]",
+        "Antspaces [Krishnarajapura]"
+      ]
+    },
+    {
+      "id": "wf-budget-parking",
+      "query": "coworking in Whitefield under 15k with parking",
+      "returned": 10,
+      "location": {
+        "inside": 9,
+        "outside": 1,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Evolve Work Studio [Whitefield]"
+      ],
+      "budget": {
+        "within": 9,
+        "over": 1,
+        "unknown": 0
+      }
+    },
+    {
+      "id": "hsr-basic",
+      "query": "office space in HSR Layout",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": []
+    },
+    {
+      "id": "hsr-budget",
+      "query": "affordable desk in HSR Layout below 8000 per month",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": [],
+      "budget": {
+        "within": 5,
+        "over": 3,
+        "unknown": 2
+      }
+    },
+    {
+      "id": "kora-basic",
+      "query": "coworking in Koramangala",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": []
+    },
+    {
+      "id": "kora-abbrev",
+      "query": "shared office near koramangala 5th block",
+      "returned": 10,
+      "location": {
+        "inside": 5,
+        "outside": 5,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Common Desk [no area]",
+        "Share Desk Co Works [no area]",
+        "kokarya [no area]",
+        "SEYON SPACES [no area]",
+        "Coworkingspace247 [no area]"
+      ]
+    },
+    {
+      "id": "indira-basic",
+      "query": "private cabin in Indiranagar",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": []
+    },
+    {
+      "id": "jayanagar-basic",
+      "query": "coworking space Jayanagar",
+      "returned": 10,
+      "location": {
+        "inside": 4,
+        "outside": 6,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Kelsaa Spaces [no area]",
+        "Infimind Co Working [no area]",
+        "Jaaga [no area]",
+        "Infimind Space [no area]",
+        "THECO SPACE [no area]",
+        "Co Start Hub [Sanjaynagar]"
+      ]
+    },
+    {
+      "id": "bellandur-budget",
+      "query": "hot desk in Bellandur under 10000",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": [],
+      "budget": {
+        "within": 3,
+        "over": 7,
+        "unknown": 0
+      }
+    },
+    {
+      "id": "hebbal-basic",
+      "query": "office space in Hebbal",
+      "returned": 10,
+      "location": {
+        "inside": 0,
+        "outside": 10,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "SKYS ADOBE COWORKING [Hebbal]",
+        "OfficeBing [Hebbal]",
+        "ASZ Technologies [RT Nagar]",
+        "RiseWorx Labs Pvt Ltd [Hebbal]",
+        "ipCrew [Sanjaynagar]",
+        "Toyama Biz Hub [no area]",
+        "Indiqube [no area]",
+        "Hyrespace [Whitefield]",
+        "Hashtag Coworks [no area]",
+        "WeWork [Uttarahalli Hobli]"
+      ]
+    },
+    {
+      "id": "domlur-basic",
+      "query": "coworking near Domlur",
+      "returned": 10,
+      "location": {
+        "inside": 6,
+        "outside": 4,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "triktraffic [no area]",
+        "Indiqube [no area]",
+        "Inspire Workplace - Dedicated Desks [Doddanekkundi]",
+        "Common Desk [no area]"
+      ]
+    },
+    {
+      "id": "hsr-abbrev",
+      "query": "hsr coworking",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": []
+    },
+    {
+      "id": "budget-only",
+      "query": "cheapest coworking space in Bangalore under 5000 a month",
+      "returned": 10,
+      "budget": {
+        "within": 3,
+        "over": 7,
+        "unknown": 0
+      }
+    }
+  ],
+  "summary": {
+    "locationConstrained": 12,
+    "locationChecked": 120,
+    "locationViolations": 28,
+    "locationViolationRate": 0.23333333333333334,
+    "locationUnknown": 0,
+    "budgetConstrained": 4,
+    "budgetChecked": 38,
+    "budgetOver": 18,
+    "budgetOverRate": 0.47368421052631576,
+    "budgetUnknown": 2,
+    "ndcgAt10": null
+  }
+}

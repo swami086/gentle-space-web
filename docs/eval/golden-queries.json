@@ -1,0 +1,115 @@
+{
+  "note": "Bounds are Google Geocoding 'bounds' rectangles for '<area>, Bengaluru, Karnataka, India', captured 2026-07-31. All eight resolved with location_type APPROXIMATE and a real bounds rectangle, which is what makes bounds-based assertions possible. Baked in deliberately: the harness must not depend on a live API call to decide pass/fail.",
+  "areas": {
+    "Whitefield": { "sw": [12.944, 77.7109], "ne": [12.9878, 77.7732] },
+    "HSR Layout": { "sw": [12.8938, 77.6229], "ne": [12.9247, 77.6688] },
+    "Koramangala": { "sw": [12.921, 77.6103], "ne": [12.9517, 77.6541] },
+    "Indiranagar": { "sw": [12.9604, 77.6285], "ne": [12.9857, 77.6479] },
+    "Jayanagar": { "sw": [12.9122, 77.5736], "ne": [12.9488, 77.6007] },
+    "Bellandur": { "sw": [12.9154, 77.6506], "ne": [12.9493, 77.6991] },
+    "Hebbal": { "sw": [13.0265, 77.5861], "ne": [13.0428, 77.6102] },
+    "Domlur": { "sw": [12.9543, 77.6252], "ne": [12.9717, 77.6449] }
+  },
+  "constraintQueries": [
+    {
+      "id": "wf-basic",
+      "query": "coworking space in Whitefield",
+      "area": "Whitefield"
+    },
+    {
+      "id": "wf-budget-parking",
+      "query": "coworking in Whitefield under 15k with parking",
+      "area": "Whitefield",
+      "maxMonthlyInr": 15000
+    },
+    {
+      "id": "hsr-basic",
+      "query": "office space in HSR Layout",
+      "area": "HSR Layout"
+    },
+    {
+      "id": "hsr-budget",
+      "query": "affordable desk in HSR Layout below 8000 per month",
+      "area": "HSR Layout",
+      "maxMonthlyInr": 8000
+    },
+    {
+      "id": "kora-basic",
+      "query": "coworking in Koramangala",
+      "area": "Koramangala"
+    },
+    {
+      "id": "kora-abbrev",
+      "query": "shared office near koramangala 5th block",
+      "area": "Koramangala"
+    },
+    {
+      "id": "indira-basic",
+      "query": "private cabin in Indiranagar",
+      "area": "Indiranagar"
+    },
+    {
+      "id": "jayanagar-basic",
+      "query": "coworking space Jayanagar",
+      "area": "Jayanagar"
+    },
+    {
+      "id": "bellandur-budget",
+      "query": "hot desk in Bellandur under 10000",
+      "area": "Bellandur",
+      "maxMonthlyInr": 10000
+    },
+    {
+      "id": "hebbal-basic",
+      "query": "office space in Hebbal",
+      "area": "Hebbal"
+    },
+    {
+      "id": "domlur-basic",
+      "query": "coworking near Domlur",
+      "area": "Domlur"
+    },
+    {
+      "id": "hsr-abbrev",
+      "query": "hsr coworking",
+      "area": "HSR Layout"
+    },
+    {
+      "id": "budget-only",
+      "query": "cheapest coworking space in Bangalore under 5000 a month",
+      "maxMonthlyInr": 5000
+    }
+  ],
+  "softQueries": [
+    {
+      "id": "soft-quiet-calls",
+      "query": "quiet space for client calls",
+      "relevantIds": [],
+      "note": "UNLABELLED - needs human review. Expect meeting rooms, phone booths, private cabins."
+    },
+    {
+      "id": "soft-team-of-eight",
+      "query": "somewhere my team of 8 can sit together",
+      "relevantIds": [],
+      "note": "UNLABELLED - expect managed/private offices sized for a small team."
+    },
+    {
+      "id": "soft-metro",
+      "query": "coworking walkable from a metro station",
+      "relevantIds": [],
+      "note": "UNLABELLED - see spec risk: coordinates are locality centroids, so this is 'near', not a distance claim."
+    },
+    {
+      "id": "soft-247",
+      "query": "24/7 access workspace for a night owl",
+      "relevantIds": [],
+      "note": "UNLABELLED - expect listings with 24/7 access amenity."
+    },
+    {
+      "id": "soft-startup-vibe",
+      "query": "startup friendly space with events and community",
+      "relevantIds": [],
+      "note": "UNLABELLED - subjective; good canary for dense-retrieval regressions."
+    }
+  ]
+}

@@ -1,0 +1,271 @@
+{
+  "label": "baseline",
+  "ranAt": "2026-07-31T04:17:34.843Z",
+  "limit": 10,
+  "queries": [
+    {
+      "id": "wf-basic",
+      "query": "coworking space in Whitefield",
+      "returned": 10,
+      "location": {
+        "inside": 0,
+        "outside": 10,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "603 The Coworking Space [no area]",
+        "Dhilligence Co-working [no area]",
+        "91springboard [no area]",
+        "WeWork [no area]",
+        "KOLAB [no area]",
+        "IndiQube [no area]",
+        "Beginest [no area]",
+        "CoWrks [Workspaces]",
+        "Uniwork Spaces [no area]",
+        "Indiqube [2nd & 3rd Floor]"
+      ]
+    },
+    {
+      "id": "wf-budget-parking",
+      "query": "coworking in Whitefield under 15k with parking",
+      "returned": 10,
+      "location": {
+        "inside": 0,
+        "outside": 10,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "WeWork [no area]",
+        "Indiqube [no area]",
+        "CoWorkIndia - HSR Layout [no area]",
+        "myworkarea [no area]",
+        "Prozi [Workspaces]",
+        "Bubblespace Coworking [no area]",
+        "RENT A DESK [no area]",
+        "Uniwork Spaces [no area]",
+        "Work Hub [no area]",
+        "603 The Coworking Space [no area]"
+      ],
+      "budget": {
+        "within": 6,
+        "over": 4,
+        "unknown": 0
+      }
+    },
+    {
+      "id": "hsr-basic",
+      "query": "office space in HSR Layout",
+      "returned": 10,
+      "location": {
+        "inside": 5,
+        "outside": 5,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Regus - Bangalore World Trade Centre [no area]",
+        "WeWork [img/img_location_map_marker.svg)   Ground Floor]",
+        "Hashtag Coworks [no area]",
+        "Pristine Design Studio [img/img_location_map_marker.svg)   \\#1&14]",
+        "Uniwork Spaces [no area]"
+      ]
+    },
+    {
+      "id": "hsr-budget",
+      "query": "affordable desk in HSR Layout below 8000 per month",
+      "returned": 10,
+      "location": {
+        "inside": 4,
+        "outside": 6,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "RENT A DESK [no area]",
+        "WeWork [no area]",
+        "KOLAB [no area]",
+        "questoffices [no area]",
+        "91springboard [no area]",
+        "91080 WORKSPACE [no area]"
+      ],
+      "budget": {
+        "within": 6,
+        "over": 4,
+        "unknown": 0
+      }
+    },
+    {
+      "id": "kora-basic",
+      "query": "coworking in Koramangala",
+      "returned": 10,
+      "location": {
+        "inside": 4,
+        "outside": 6,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "kokarya [no area]",
+        "KOLAB [no area]",
+        "603 The Coworking Space [no area]",
+        "CoWrks [Workspaces]",
+        "CoWrks [no area]",
+        "Dhilligence Co-working [no area]"
+      ]
+    },
+    {
+      "id": "kora-abbrev",
+      "query": "shared office near koramangala 5th block",
+      "returned": 10,
+      "location": {
+        "inside": 1,
+        "outside": 9,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Share Studio [g/img_location_map_marker.svg)   No : 5-B]",
+        "Share Space [2w68ocb6l47bj.cloudfront.net/v20251122/_redesign/img/img_location_map_marker.svg)   Share Space]",
+        "KOLAB [no area]",
+        "603 The Coworking Space [no area]",
+        "kokarya [no area]",
+        "Indiqube [2nd & 3rd Floor]",
+        "Share Desk Co Works [no area]",
+        "Common Desk [no area]",
+        "WeWork [nt.net/v20251122/_redesign/img/img_location_map_marker.svg)   Ground Floor]"
+      ]
+    },
+    {
+      "id": "indira-basic",
+      "query": "private cabin in Indiranagar",
+      "returned": 10,
+      "location": {
+        "inside": 10,
+        "outside": 0,
+        "unknown": 0
+      },
+      "locationViolators": []
+    },
+    {
+      "id": "jayanagar-basic",
+      "query": "coworking space Jayanagar",
+      "returned": 10,
+      "location": {
+        "inside": 1,
+        "outside": 9,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "603 The Coworking Space [no area]",
+        "Jaaga [no area]",
+        "CoWrks [Workspaces]",
+        "WeWork [nt.net/v20251122/_redesign/img/img_location_map_marker.svg)   Ground Floor]",
+        "Share Space [2w68ocb6l47bj.cloudfront.net/v20251122/_redesign/img/img_location_map_marker.svg)   Share Space]",
+        "Beginest [no area]",
+        "Uniwork Spaces [no area]",
+        "Dhilligence Co-working [no area]",
+        "HustleHub [no area]"
+      ]
+    },
+    {
+      "id": "bellandur-budget",
+      "query": "hot desk in Bellandur under 10000",
+      "returned": 10,
+      "location": {
+        "inside": 5,
+        "outside": 5,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "RENT A DESK [no area]",
+        "91080 WORKSPACE [no area]",
+        "questoffices [no area]",
+        "Beginest [no area]",
+        "Share Desk Co Works [no area]"
+      ],
+      "budget": {
+        "within": 6,
+        "over": 4,
+        "unknown": 0
+      }
+    },
+    {
+      "id": "hebbal-basic",
+      "query": "office space in Hebbal",
+      "returned": 10,
+      "location": {
+        "inside": 0,
+        "outside": 10,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Regus - Bangalore World Trade Centre [no area]",
+        "WeWork [img/img_location_map_marker.svg)   Ground Floor]",
+        "KOLAB [no area]",
+        "HustleHub [no area]",
+        "Indiqube [2nd & 3rd Floor]",
+        "IndiQube [no area]",
+        "603 The Coworking Space [no area]",
+        "Convate [img/img_location_map_marker.svg)   No. 41]",
+        "Pristine Design Studio [img/img_location_map_marker.svg)   \\#1&14]",
+        "Uniwork Spaces [no area]"
+      ]
+    },
+    {
+      "id": "domlur-basic",
+      "query": "coworking near Domlur",
+      "returned": 10,
+      "location": {
+        "inside": 1,
+        "outside": 9,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Dolpin Connects [ign/img/img_location_map_marker.svg)   Prema Narayana Enclave]",
+        "KOLAB [no area]",
+        "603 The Coworking Space [no area]",
+        "91springboard [no area]",
+        "WeWork [no area]",
+        "Capsule works [no area]",
+        "HustleHub [no area]",
+        "IndiQube [no area]",
+        "CoWrks [Workspaces]"
+      ]
+    },
+    {
+      "id": "hsr-abbrev",
+      "query": "hsr coworking",
+      "returned": 10,
+      "location": {
+        "inside": 6,
+        "outside": 4,
+        "unknown": 0
+      },
+      "locationViolators": [
+        "Share Space [2w68ocb6l47bj.cloudfront.net/v20251122/_redesign/img/img_location_map_marker.svg)   Share Space]",
+        "WeWork [nt.net/v20251122/_redesign/img/img_location_map_marker.svg)   Ground Floor]",
+        "603 The Coworking Space [no area]",
+        "CoWrks [Workspaces]"
+      ]
+    },
+    {
+      "id": "budget-only",
+      "query": "cheapest coworking space in Bangalore under 5000 a month",
+      "returned": 10,
+      "budget": {
+        "within": 9,
+        "over": 1,
+        "unknown": 0
+      }
+    }
+  ],
+  "summary": {
+    "locationConstrained": 12,
+    "locationChecked": 120,
+    "locationViolations": 83,
+    "locationViolationRate": 0.6916666666666667,
+    "locationUnknown": 0,
+    "budgetConstrained": 4,
+    "budgetChecked": 40,
+    "budgetOver": 13,
+    "budgetOverRate": 0.325,
+    "budgetUnknown": 0,
+    "ndcgAt10": null
+  }
+}
