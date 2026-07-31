@@ -50,9 +50,19 @@ fragment** of the scraped address rather than the locality buried later in it, s
 yields the area `2nd & 3rd Floor`. `geocodeQuery` (`lib/sync/geocode-listings.ts:19-26`)
 then feeds that junk to the Geocoding API, which resolves it confidently and wrongly.
 
+A second data-integrity bug sits beside it, in price extraction. `coworker`'s
+`parsePricingHint` scanned the whole page, so it picked figures out of the "Spaces Near"
+sidebar — a different venue's rate attached to a listing whose own page says "Price on
+request" — and read daily rates as monthly. `cofynd` discarded the unit that follows the
+`/*` footnote marker, and `myhq` captured trailing prose into the amount. Roughly 63% of
+stored hints were therefore untrustworthy. All three extractors are now fixed and share
+`lib/sync/sources/price.ts`, but the stored column only becomes correct as listings are
+re-scraped, which is why budget is a soft signal in this design.
+
 ## Goals
 
-- Enforce location and budget constraints in SQL, not by ranking hint.
+- Enforce location constraints in SQL, not by ranking hint, and make budget a real ranking
+  signal rather than incidental text similarity.
 - Recover locality information for the 36% of listings with a blank `area`.
 - Make rare proper nouns retrievable.
 - Repair coordinates that are currently wrong, and never store a guess again.
@@ -188,13 +198,124 @@ reports two metrics:
 
 - **Constraint-violation rate (primary).** Objective and requires no human labels. For
   "coworking in Whitefield under 15k with parking", assert every returned listing falls
-  inside Whitefield's bounds and has `price_monthly_inr <= 15000`. Any violation is a
-  hard failure.
+  inside Whitefield's bounds. Any violation is a hard failure.
+  Because budget is a soft signal, price is scored rather than asserted: the harness
+  reports the share of returned listings that are known to exceed the stated limit, so a
+  regression is visible without a wrong price failing the run outright.
 - **nDCG@10 (secondary).** Roughly 10 soft queries ("quiet space for calls") with
   hand-checked labels, drafted by the implementer for the user to correct.
 
 Both run against the local database and print a before/after table so each later phase
 reports its own delta.
+
+#### Measured result (2026-07-31)
+
+Phase 1 is done. `npm run search:eval` over 13 constraint queries, 12 of them
+location-constrained, 120 returned listings checked:
+
+| Run | Location violations | Over budget |
+|---|---|---|
+| Baseline | 83/120 (69.2%) | 13/40 (32.5%) |
+| `RETRIEVAL_QUERY` on the query side | 50/120 (41.7%) | 14/37 (37.8%) |
+
+Ten of twelve queries improved, none regressed, and three went to zero violations. A
+one-line task-type change removed 40% of the location errors, which is the clearest
+possible argument for having built the harness before the retrieval work.
+
+**The residual 41.7% is not a ranking problem.** Attributing all 50 remaining violators by
+their `area` value: 25 have no area at all, 24 hold scraper junk (`ap_marker.svg) Metropolis
+Office Park Plot No: 128-P2`, `28/1`, `floor`, `Workspaces`), and exactly **1** is a real
+locality in the wrong place. So 98% of what remains is the Phase 0 data-integrity bug —
+listings geocoded from a junk or absent `area` land at wrong coordinates and therefore fall
+outside correct bounds.
+
+This reorders the remaining work. Phase 0 (geocode repair) addresses 98% of the observed
+failures; the hybrid-retrieval and RRF machinery in Phase 3 addresses the ~2% that is
+genuine ranking leakage. Phase 3 should not be started until Phase 0 has landed and the
+harness has been re-run, because its true payoff is currently unmeasurable — the data bug
+dominates the signal.
+
+#### Phase 0 result (2026-07-31)
+
+Phase 0 is done. Location violations fell **41.7% → 22.5%**.
+
+| Run | Location violations |
+|---|---|
+| Baseline | 83/120 (69.2%) |
+| `RETRIEVAL_QUERY` task type | 50/120 (41.7%) |
+| After geocode repair | 27/120 (22.5%) |
+
+Six of twelve location queries now return zero violations (`hsr-basic`, `hsr-budget`,
+`hsr-abbrev`, `kora-basic`, `indira-basic`, `bellandur-budget`).
+
+What was fixed, root cause first:
+
+- `coworker.ts` set `area = address.split(",")[0]`, i.e. the first comma-component, which
+  is a floor or door number far more often than a locality. It now calls
+  `localityFromAddress()`. This was the origin of every junk `area` in the corpus.
+- New `lib/listings/address.ts` holds the pure location parsers: `stripScraperJunk`,
+  `looksLikeLocality`, `cleanAddress`, `hasCityMarker`, `localityFromAddress`. The locality
+  is the address component immediately before the city, verified against all 105
+  city-bearing addresses in the corpus. `sanitizeArea` now delegates to these, shrinking
+  from 24 lines to 3.
+- `geocodeQuery` became `geocodeCandidates`, returning an ordered list tried until one
+  resolves: full postal address (rooftop) → locality name (centroid, always correct) →
+  landmark phrase → title. Ranking the landmark phrase above the locality parked 32
+  listings at the city centroid, because sources scrape "Post Office" and "Above ICICI
+  Bank" into `address` and Google answers those with the city itself.
+- `geocodeAddress` now rejects a result whose `formatted_address` is nothing but
+  city/state/country. `partial_match` does not flag this case; the formatted address does.
+
+Corpus effect: junk `area` values 78 → 18, distinct coordinate points 251 → 263 with far
+more of them rooftop-derived, listings parked at the city centroid 39 → 16. A pre-flight
+check on 40 rows whose address names a bounded locality showed stored coordinates inside
+their own locality 19/40 versus 37/40 after repair, with **18 fixed and 0 regressed** —
+which is what justified applying the repair to all 704 rows.
+
+Because `area` feeds `buildStructuredEmbeddingText`, the 74 repaired rows had
+`structured_embedding` and `embed_hash` cleared and were re-embedded. Repairing the column
+without invalidating the vector would have left dense retrieval searching the old junk text.
+
+### Keeping it repaired
+
+A one-off repair decays unless the pipeline maintains the same invariant, and the upsert
+did not. `applySourceSync` kept coordinates with `COALESCE(EXCLUDED.lat, listings.lat)`,
+and since every scraper returns `lat: null`, an existing pin was permanent: a venue that
+moved got a corrected `area` and fresh embeddings but kept the old building's coordinates.
+`lat`/`lng` are derived from `address`/`area`, so the upsert now clears them whenever
+either input changes, which is the same invalidation contract the two embedding columns
+already had. No new plumbing was needed — `geocodeListingsMissingCoords()` selects on
+`lat IS NULL` and already runs after the upsert, ordered `synced_at DESC` so a just-moved
+row is re-geocoded first even under `GEOCODE_LIMIT`. New listings are unaffected: they
+arrive with null coordinates and are geocoded on the same pass as before, now with the
+corrected `area` and the candidate ordering above.
+
+**The residual 22.5% splits cleanly and neither part is a geocoding problem:**
+
+- **19 of 27 (70%) are listings with no location data at all.** 255 `coworker` rows have
+  both `area` and `address` empty, so they can only be geocoded from their title, which for
+  a multi-branch brand resolves to whichever branch Google guesses. `coworker`'s address
+  regex only accepts the strict `…, Bengaluru, Karnataka NNNNNN, India` form; these pages
+  evidently present location some other way. Fixing this needs a live page fetch to see the
+  actual markdown — it is the single highest-value remaining item and it is a scraper task,
+  not a search task.
+- **8 of 27 (30%) are genuine ranking leakage** — `Hyrespace [Whitefield]` returned for a
+  Hebbal query, `Antspaces [Krishnarajapura]` for Whitefield, `Co Start Hub [Sanjaynagar]`
+  for Jayanagar. This is the cohort Phase 2's hard location filter exists to remove, and it
+  is now the honest size of that prize.
+
+#### Harness caveats learned from running it
+
+- **The metric was initially too strict.** Google's locality polygons are tight: a rooftop
+  at "28/1, …, Sahakar Nagar, Hebbal, Bengaluru 560092" sits at 13.0590 while the `Hebbal`
+  rectangle stops at 13.0428, so a correct coordinate scored as a violation. The harness now
+  counts a listing as matching when its own address or area names the requested locality,
+  reported separately as `matched by address`. This only loosens the metric in the direction
+  the listing's own data asserts, and it accounted for 5 of the previously-counted failures.
+  It is also the empirical argument for the `geo_components` array in Phase 2.
+- **Runs are not deterministic.** Query rewriting and entity extraction are two LLM calls in
+  the retrieval path, so per-query counts move by 1–3 between runs on identical data. Trust
+  double-digit deltas; do not read a 1-listing change as signal.
 
 ### Phase 2 - Structured constraints as hard filters
 
@@ -204,7 +325,8 @@ An `areas` table caches resolved localities: `name` (normalized), centroid, boun
 rectangle, `types`, `resolved_at`. A query area is looked up here first and geocoded once
 on a miss, so repeated searches cost no API calls.
 
-Price parsing lands in a new `lib/listings/price.ts`, populating `price_monthly_inr INTEGER`
+Price parsing lives in `lib/sync/sources/price.ts` — shared by the scrapers on the write
+side and by `parseStoredPrice` on the read side — populating `price_monthly_inr INTEGER`
 and `price_basis TEXT` (`exact` | `from` | `unknown`) during sync. Day rates multiply by 22
 working days. `from ₹300/month` stores 300 with basis `from`.
 
@@ -216,10 +338,34 @@ Filter semantics:
   coordinates are excluded from location-constrained searches and unaffected otherwise.
 - **Landmarks: strict, fixed radius.** 1.5 km from the resolved point, since points carry
   no bounds.
-- **Budget: strict, conservative.** `price_monthly_inr <= limit`. Rows with basis `from`
-  are included but must be labelled in the UI. Rows with `unknown` are not excluded on
-  price.
+- **Budget: soft ranking signal, not a predicate.** See "Why budget is not a hard filter"
+  below. Listings within the limit are boosted; listings over it are demoted but still
+  reachable. Rows with basis `from` or `unknown` are never excluded on price.
 - **Amenities and desk type: soft.** Ranking signals only.
+
+#### Why budget is not a hard filter
+
+The original design made budget a strict predicate. An audit of the live corpus killed that.
+
+`parseStoredPrice` reads 683 of 704 stored hints (97%) into an amount, a unit, and a
+monthly figure — so *parsing* was never the bottleneck. The problem is upstream: the
+scrapers were writing prices that belong to a different venue. `coworker` pulled figures
+out of the "Spaces Near" sidebar, so a listing whose own page says "Price on request"
+carried a neighbour's rate; it also read daily rates as monthly. `cofynd` dropped the unit
+after the `/*` footnote marker, and `myhq` slurped trailing prose into the amount. About
+63% of hints were untrustworthy for a strict comparison, and 131 of the parseable rows are
+`from` rates, which are floors rather than prices.
+
+A hard predicate over that data silently discards correct results because a neighbouring
+venue's number happened to sit in the row. A soft signal degrades instead of lying: a
+wrong price costs some ranking position rather than deleting the listing from the result
+set. Budget can be promoted to a hard filter later, once a full re-scrape through the
+fixed extractors has repopulated the column and a re-audit shows the error rate is low.
+
+The scraper fixes are already in (`lib/sync/sources/price.ts` is the shared parser, with
+per-source extraction now scoped to the real pricing region), so correctness improves as
+listings are re-scraped. The eval harness measures that improvement rather than assuming
+it.
 
 `PublicListing` gains a coarse `priceBand` (`under-5k`, `5-10k`, `10-15k`, `15-25k`,
 `25k-plus`) with a `from` qualifier. The exact figure stays server-side, preserving the
@@ -282,12 +428,12 @@ source content changes, never authored by hand.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Constraint strictness | Strict location + budget, soft amenities | Users treat locality and budget as non-negotiable; amenities as preferences |
+| Constraint strictness | Strict location, soft budget and amenities | Location data is trustworthy after re-geocoding; price data is not (63% of hints came from the wrong venue) |
 | Mixed price formats | Normalize to monthly, keep `from` but label it | Day rate x 22; excluding `from` rows loses real inventory, hiding the basis misleads |
-| Price display | Coarse band only | Enforces budget without undoing the privacy-masking design |
+| Price display | Coarse band only | Shows why a result matched on budget without undoing the privacy-masking design |
 | Graph fusion | Third RRF list | Removes score incompatibility and deletes the λ tuning knob |
 | Bad coordinates | Re-geocode before shipping search changes | Strict location filtering on wrong coordinates hides good listings |
-| Sequencing | Eval harness before accuracy changes | Otherwise every later phase is unfalsifiable |
+| Sequencing | Eval harness before accuracy changes | Otherwise every later phase is unfalsifiable. Vindicated: the harness showed 98% of residual failures are the data bug, not ranking |
 | Reranker | Deferred | No new vendors; revisit only if the eval shows filters plus hybrid is short |
 
 ## Alternatives rejected
@@ -337,8 +483,10 @@ Measured by `scripts/eval-search.ts` against the local 704-listing database.
 
 **Accuracy**
 
-- Constraint-violation rate on location-and-budget queries: **0%**. Any listing outside
-  the requested bounds or over budget is a hard failure.
+- Location constraint-violation rate: **0%**. Any listing outside the requested bounds is a
+  hard failure.
+- Over-budget share on budget queries: reported, and must not rise against the Phase 1
+  baseline. It is not required to reach zero while source price data stays unreliable.
 - nDCG@10 on the soft-query set: no regression against the Phase 1 baseline at any later
   phase.
 - "Whitefield + parking" returns Whitefield listings only, drawn from the measured 42
@@ -378,5 +526,10 @@ call; a cache miss adds one Geocoding round trip (~150 ms) once per new locality
   locations, so business-name geocoding cannot disambiguate. These rely on the address path
   or end as NULL.
 - **`from` prices remain a trust risk.** Even labelled, a `from ₹300/month` listing ranking
-  inside a "under 15k" search may disappoint. The band display is the mitigation; if the
-  eval shows these dominating budget queries, consider ranking `exact` above `from`.
+  inside a "under 15k" search may disappoint. 131 of 683 parseable rows are `from`. The band
+  display is the mitigation; if the eval shows these dominating budget queries, consider
+  ranking `exact` above `from`.
+- **Price correctness depends on a re-scrape.** The extractors are fixed but the stored
+  column still holds values produced by the buggy ones. Until every listing has been
+  re-scraped, budget ranking operates on partly wrong data. Re-run the audit afterwards to
+  decide whether budget can become a hard filter.
