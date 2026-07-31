@@ -26,6 +26,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 | Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
 | Listings DB | `lib/db/*`, `docker-compose.listings.yml` (port **5433**) |
 | Sync | `lib/sync/run-sync.ts`, `lib/sync/sources/*`, `scripts/run-listings-sync.ts` |
+| Listing enrichment helpers | `lib/sync/enrich-weak.ts`, `lib/sync/enrich-gate.ts` |
 | Sync planning | `lib/sync/plan.ts`, `lib/sync/content-hash.ts`, `lib/sync/config.ts` |
 | Listings migrations | `lib/db/migrations/005_incremental_sync.sql`, `006_split_embeddings.sql`, `007_entity_extraction_cache.sql` |
 | Entity extraction cache | `lib/db/listings.ts`, `lib/db/migrations/007_entity_extraction_cache.sql`, `scripts/submit-entity-extraction.ts`, `scripts/apply-entity-extraction.ts` |
