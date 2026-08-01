@@ -26,7 +26,7 @@ export function SpacesStaleBanner({ lastSyncedAt }: SpacesStaleBannerProps) {
         role="status"
         className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm leading-relaxed text-[var(--ink-secondary)] shadow-[0_1px_0_rgba(255,255,255,0.04)]"
       >
-        Listings may be outdated — last successful sync was{" "}
+        Listings may be outdated. Last successful sync was{" "}
         <time className="font-medium text-[var(--ink)]" dateTime={lastSyncedAt}>
           {describeStaleDate(lastSyncedAt)} IST
         </time>{" "}

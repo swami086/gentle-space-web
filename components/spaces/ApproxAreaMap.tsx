@@ -51,7 +51,7 @@ export function ApproxAreaMap({
   if (!apiKey || loadFailed || !hasCoords) {
     return (
       <p className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-6 text-sm text-[var(--muted)]">
-        Approximate area — {locationLabel}
+        Approximate area: {locationLabel}
       </p>
     );
   }

@@ -38,7 +38,7 @@ export function SpacesAiSearch({
             type="text"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Ask AI — quiet cabin near Metro, under ₹15k…"
+            placeholder="Ask AI: quiet cabin near Metro, under ₹15k…"
             className="relative z-0 min-w-0 w-0 flex-1 bg-transparent text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
             aria-label="Search spaces with AI"
             disabled={loading}

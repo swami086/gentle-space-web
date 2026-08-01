@@ -92,7 +92,7 @@ export function LeadCaptureModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1E163099] px-4 py-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/60 px-4 py-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeModal();
       }}

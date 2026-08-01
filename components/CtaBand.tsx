@@ -20,7 +20,7 @@ export function CtaBand() {
           <button
             type="button"
             onClick={openModal}
-            className="rounded-[var(--radius)] bg-white px-6 py-2.5 text-sm font-semibold text-[var(--accent-dark)] transition hover:bg-white/90"
+            className="rounded-[var(--radius)] bg-[var(--on-accent)] px-6 py-2.5 text-sm font-semibold text-[var(--accent-dark)] transition hover:opacity-90"
           >
             Contact Us
           </button>

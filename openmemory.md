@@ -48,6 +48,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 ## Patterns
 
+- **v3 Calm Structured production UI (2026-08-01):** Source Sans 3 + Source Serif 4, dual theme (`ThemeProvider` + `gs-theme` + `public/theme-init.js`), Motion `Reveal`, accent `#6840B8`. Tokens in `app/globals.css` (`--accent-soft`, `--surface-tint` alias, `--bg`/`--surface`/`--border`/`--ink*`/`--muted`/`--on-accent`/`--radius`). Theme toggle in `SiteHeader` only (`SpacesHeader` is page-title band). Token-first restyle of home + Spaces browse/detail in place; do not change APIs/privacy/`toPublicListing` for UI work. Spec: `docs/superpowers/specs/2026-08-01-v3-calm-structured-production-redesign.md`. Lab: `frontend-redesign/v3-calm-structured/`. Branch: `feat/v3-calm-production-ui`.
 - Listing privacy read boundary: `app/spaces/page.tsx`, `app/api/spaces/search/route.ts`, and `app/spaces/[slug]/page.tsx` all map DB rows through `toPublicListing()` before HTML/JSON; `PublicListing` uses `?: never` on forbidden fields. Cards/detail show `displayLocationLine()` and fixed "Ask for pricing" copy (budget filter removed).
 - Spaces filters stay pure in `lib/listings/filterListings.ts` (typed on `PublicListing`).
 - `SpacesBrowseClient` owns idle hero ↔ browse chrome mode; failed AI search snaps back to `initialListings`. On successful search it stores `activeQuery` + `searchEntities` (`matchedEntities` from API) and passes them to `SpaceCard`; both clear on `handleClear` and `restoreSyncCatalog`.

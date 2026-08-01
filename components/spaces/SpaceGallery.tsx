@@ -126,7 +126,7 @@ export function SpaceGallery({ title, images }: SpaceGalleryProps) {
                   >
                     <img
                       src={src}
-                      alt={`${title} — photo ${index + 1}`}
+                      alt={`${title} photo ${index + 1}`}
                       className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] object-contain"
                       loading={index === openIndex ? "eager" : "lazy"}
                     />
