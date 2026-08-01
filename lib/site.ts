@@ -3,7 +3,6 @@ export const SITE = {
   name: "Gentle Space CRE",
   nameCore: "Gentle Space",
   nameQualifier: "CRE",
-  nameQualifierExpanded: "Commercial Real Estate",
   legalName: "Gentle Space Global Solutions",
   email: "email@gentlespacesolutions.com",
   phoneDisplay: "+91 81052 79639",

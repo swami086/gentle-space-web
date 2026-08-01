@@ -19,10 +19,10 @@ export function SiteFooter() {
           <a
             href="/"
             className="inline-flex items-center gap-2.5"
-            aria-label={`${SITE.name} (${SITE.nameQualifierExpanded})`}
+            aria-label={SITE.name}
           >
             <BrandLogoMark />
-            <BrandWordmark className="text-base font-semibold" expandAlways />
+            <BrandWordmark className="text-base font-semibold" />
           </a>
           <p className="mt-2.5 text-[13px] leading-6 text-[var(--muted)]">
             Commercial real estate consulting in Bangalore, for companies and property owners across every property type.

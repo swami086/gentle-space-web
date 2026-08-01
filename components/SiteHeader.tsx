@@ -68,7 +68,7 @@ export function SiteHeader() {
         <a
           href="/"
           className="flex shrink-0 items-center gap-2.5"
-          aria-label={`${SITE.name} (${SITE.nameQualifierExpanded})`}
+          aria-label={SITE.name}
         >
           <BrandLogoMark />
           <BrandWordmark className="text-[19px] font-bold" />
