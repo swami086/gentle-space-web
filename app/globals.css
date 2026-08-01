@@ -2,19 +2,33 @@
 
 :root {
   --accent: #6840b8;
-  --accent-dark: #4a2d8a;
+  --accent-dark: #4f2f8f;
+  --accent-soft: #f0ebf8;
   --bg: #ffffff;
-  --surface: #f7f3fc;
-  --surface-tint: #ede4f8;
-  --ink: #1e1630;
-  --ink-secondary: #5b4a7a;
-  --muted: #7a6e8c;
-  --border: #e5ddf0;
+  --surface: #f6f5f8;
+  --border: #e2dde9;
+  --ink: #1a1524;
+  --ink-secondary: #4a4358;
+  --muted: #6e667c;
   --on-accent: #ffffff;
+  --radius: 8px;
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --page-pad-x: 160px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --page-pad-x: 40px;
+}
+
+html.dark {
+  --accent: #8b6fd1;
+  --accent-dark: #a78bfa;
+  --accent-soft: #2a2438;
+  --bg: #141218;
+  --surface: #1c1824;
+  --border: #342e42;
+  --ink: #f2eff7;
+  --ink-secondary: #c4bdd4;
+  --muted: #9b93ad;
+  --on-accent: #141218;
 }
 
 @layer base {
@@ -23,6 +37,16 @@
     height: 100%;
   }
   .font-primary {
-    font-family: var(--font-inter), "Inter", sans-serif;
+    font-family: var(--font-sans), "Source Sans 3", ui-sans-serif, system-ui,
+      sans-serif;
+  }
+  .font-display {
+    font-family: var(--font-serif), "Source Serif 4", Georgia, serif;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
