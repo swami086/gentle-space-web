@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ApproxAreaMap } from "@/components/spaces/ApproxAreaMap";
+import { JsonLd } from "@/components/JsonLd";
 import { LikeSpaceButton } from "@/components/spaces/LikeSpaceButton";
 import { SpaceGallery } from "@/components/spaces/SpaceGallery";
 import { getListingBySlug } from "@/lib/db/listings";
 import { toPublicListing } from "@/lib/listings/public";
 import { displayLocationLine, redactSensitiveText } from "@/lib/listings/redact";
-import { spaceListingUrl } from "@/lib/site";
+import { SITE_URL, spaceListingUrl } from "@/lib/site";
+import { breadcrumbSchema, realEstateListingSchema } from "@/lib/structured-data";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -34,8 +36,25 @@ export default async function SpaceDetailPage({ params }: PageProps) {
   const locationLine = displayLocationLine(listing.area, listing.city);
   const propertyUrl = spaceListingUrl(listing.slug);
 
+  const listingSchema = realEstateListingSchema({
+    name: listing.title,
+    description: redactSensitiveText(
+      listing.shortTeaser || listing.description || listing.title,
+    ).slice(0, 300),
+    url: propertyUrl,
+    images: listing.images ?? [],
+    locality: listing.city || listing.area || "Bengaluru",
+  });
+  const breadcrumbs = breadcrumbSchema([
+    { name: "Home", url: `${SITE_URL}/` },
+    { name: "Spaces", url: `${SITE_URL}/spaces` },
+    { name: listing.title, url: propertyUrl },
+  ]);
+
   return (
     <div className="border-b border-[var(--border)] bg-[var(--bg)]">
+      <JsonLd data={listingSchema} />
+      <JsonLd data={breadcrumbs} />
       <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-5 py-7 lg:px-[var(--page-pad-x)] lg:pb-14 lg:pt-7">
         <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
           <SpaceGallery title={listing.title} images={listing.images} />
