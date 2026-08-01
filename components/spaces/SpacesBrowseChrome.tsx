@@ -28,9 +28,9 @@ export function SpacesBrowseChrome({
   onRemoveChip,
 }: SpacesBrowseChromeProps) {
   return (
-    <section className="sticky top-[92px] z-30 border-b border-[var(--border)] bg-[var(--bg)]/95 backdrop-blur">
+    <section className="sticky top-[92px] z-30 border-b border-[var(--border)] bg-[var(--surface)]/92 backdrop-blur">
       <div className="px-6 py-4 lg:px-12">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
               <SpacesAiSearch
@@ -47,7 +47,7 @@ export function SpacesBrowseChrome({
             <button
               type="button"
               onClick={onOpenFilters}
-              className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-[13px] font-medium text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface)]"
+              className="shrink-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[13px] font-medium text-[var(--ink-secondary)] transition hover:border-[var(--accent-soft)] hover:bg-[var(--surface-tint)] hover:text-[var(--ink)]"
             >
               Filters
             </button>
@@ -61,7 +61,7 @@ export function SpacesBrowseChrome({
                     key={chip}
                     type="button"
                     onClick={() => onRemoveChip(chip)}
-                    className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-[13px] font-medium text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface)]"
+                    className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[13px] font-medium text-[var(--ink-secondary)] transition hover:border-[var(--accent-soft)] hover:bg-[var(--surface-tint)] hover:text-[var(--ink)]"
                     aria-label={`Remove ${chip} filter`}
                   >
                     <span>{chip}</span>
@@ -72,7 +72,7 @@ export function SpacesBrowseChrome({
                 ) : (
                   <span
                     key={chip}
-                    className="inline-flex rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-[13px] font-medium text-[var(--ink)]"
+                    className="inline-flex rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[13px] font-medium text-[var(--ink-secondary)]"
                   >
                     {chip}
                   </span>

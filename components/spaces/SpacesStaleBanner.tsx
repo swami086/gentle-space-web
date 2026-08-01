@@ -24,11 +24,13 @@ export function SpacesStaleBanner({ lastSyncedAt }: SpacesStaleBannerProps) {
     <section className="px-6 lg:px-[var(--page-pad-x)]">
       <div
         role="status"
-        className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-tint)] px-4 py-3 text-sm text-[var(--ink-secondary)]"
+        className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm leading-relaxed text-[var(--ink-secondary)] shadow-[0_1px_0_rgba(255,255,255,0.04)]"
       >
         Listings may be outdated — last successful sync was{" "}
-        <time dateTime={lastSyncedAt}>{describeStaleDate(lastSyncedAt)} IST</time> (over 36 hours
-        ago).
+        <time className="font-medium text-[var(--ink)]" dateTime={lastSyncedAt}>
+          {describeStaleDate(lastSyncedAt)} IST
+        </time>{" "}
+        (over 36 hours ago).
       </div>
     </section>
   );

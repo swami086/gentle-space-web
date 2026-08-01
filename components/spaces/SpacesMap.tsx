@@ -90,7 +90,7 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
 
   if (!apiKey || loadFailed) {
     return (
-      <div className="flex h-full min-h-[280px] items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-tint)] px-4 text-center">
+      <div className="flex h-full min-h-[280px] items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 text-center">
         <p className="text-sm text-[var(--muted)]">Map unavailable</p>
       </div>
     );
@@ -99,7 +99,7 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
   return (
     <div
       ref={containerRef}
-      className="h-full min-h-[280px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)]"
+      className="h-full min-h-[280px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]"
       aria-label="Map of spaces"
     />
   );

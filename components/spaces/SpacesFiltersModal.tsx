@@ -59,33 +59,38 @@ export function SpacesFiltersModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="spaces-filters-title"
-        className="flex max-h-[90vh] w-full max-w-[800px] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)]"
+        className="flex w-full max-w-[600px] flex-col gap-6 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-8 shadow-[0_24px_80px_rgba(30,22,48,0.18)]"
       >
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-5">
-          <h2 id="spaces-filters-title" className="text-lg font-bold text-[var(--ink)]">
-            Filters
-          </h2>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <h2 id="spaces-filters-title" className="text-[24px] font-bold tracking-tight text-[var(--ink)]">
+              Filters
+            </h2>
+            <p className="text-[15px] leading-[1.45] text-[var(--ink-secondary)]">
+              Narrow the spaces list without changing the underlying results.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close filters"
-            className="text-[var(--muted)]"
+            className="shrink-0 rounded-[var(--radius)] border border-transparent p-1.5 text-[var(--muted)] transition hover:border-[var(--border)] hover:bg-[var(--surface)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
-            ✕
+            <span className="block text-[22px] leading-none">✕</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-7 overflow-y-auto px-6 py-6">
-          <section className="flex flex-col gap-3">
-            <h3 className="text-[15px] font-semibold text-[var(--ink)]">Desk type</h3>
+        <div className="flex flex-col gap-5">
+          <section className="flex flex-col gap-2">
+            <h3 className="text-[13px] font-semibold text-[var(--ink-secondary)]">Desk type</h3>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => onChange({ ...value, deskTypes: [] })}
-                className={`rounded-full px-3.5 py-2.5 text-[13px] font-medium ${
+                className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                   value.deskTypes.length === 0
-                    ? "bg-[var(--ink)] text-white"
-                    : "border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)]"
+                    ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                    : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 }`}
               >
                 Any
@@ -97,10 +102,10 @@ export function SpacesFiltersModal({
                     key={deskType}
                     type="button"
                     onClick={() => onChange({ ...value, deskTypes: toggleIn(value.deskTypes, deskType) })}
-                    className={`rounded-full px-3.5 py-2.5 text-[13px] font-medium ${
+                    className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                       selected
-                        ? "bg-[var(--ink)] text-white"
-                        : "border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)]"
+                        ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     }`}
                   >
                     {deskType}
@@ -110,8 +115,8 @@ export function SpacesFiltersModal({
             </div>
           </section>
 
-          <section className="flex flex-col gap-3">
-            <h3 className="text-[15px] font-semibold text-[var(--ink)]">Area</h3>
+          <section className="flex flex-col gap-2">
+            <h3 className="text-[13px] font-semibold text-[var(--ink-secondary)]">Area</h3>
             <div className="flex flex-wrap gap-2">
               {areas.map((area) => {
                 const selected = value.areas.includes(area);
@@ -120,10 +125,10 @@ export function SpacesFiltersModal({
                     key={area}
                     type="button"
                     onClick={() => onChange({ ...value, areas: toggleIn(value.areas, area) })}
-                    className={`rounded-full px-3.5 py-2.5 text-[13px] font-medium ${
+                    className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                       selected
-                        ? "border border-[var(--accent)] bg-[var(--surface-tint)] text-[var(--ink)]"
-                        : "border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)]"
+                        ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     }`}
                   >
                     {area}
@@ -133,8 +138,8 @@ export function SpacesFiltersModal({
             </div>
           </section>
 
-          <section className="flex flex-col gap-3">
-            <h3 className="text-[15px] font-semibold text-[var(--ink)]">Amenities</h3>
+          <section className="flex flex-col gap-2">
+            <h3 className="text-[13px] font-semibold text-[var(--ink-secondary)]">Amenities</h3>
             <div className="flex flex-wrap gap-2">
               {AMENITY_PRESETS.map((amenity) => {
                 const selected = value.amenities.includes(amenity);
@@ -143,10 +148,10 @@ export function SpacesFiltersModal({
                     key={amenity}
                     type="button"
                     onClick={() => onChange({ ...value, amenities: toggleIn(value.amenities, amenity) })}
-                    className={`rounded-full px-3.5 py-2.5 text-[13px] font-medium ${
+                    className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                       selected
-                        ? "bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)]"
-                        : "border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)]"
+                        ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     }`}
                   >
                     {amenity}
@@ -157,18 +162,18 @@ export function SpacesFiltersModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--border)] px-6 py-4">
+        <div className="flex items-center justify-between gap-4 pt-1">
           <button
             type="button"
             onClick={onClear}
-            className="text-sm font-medium text-[var(--ink)]"
+            className="rounded-[var(--radius)] border border-transparent px-4 py-2.5 text-[14px] font-semibold text-[var(--ink-secondary)] transition hover:border-[var(--border)] hover:bg-[var(--surface)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
             Clear all
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--on-accent)]"
+            className="inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
             Show {resultCount} space{resultCount === 1 ? "" : "s"}
           </button>

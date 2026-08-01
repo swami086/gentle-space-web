@@ -50,7 +50,7 @@ export function ApproxAreaMap({
 
   if (!apiKey || loadFailed || !hasCoords) {
     return (
-      <p className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-tint)] px-4 py-6 text-sm text-[var(--muted)]">
+      <p className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-6 text-sm text-[var(--muted)]">
         Approximate area — {locationLabel}
       </p>
     );
@@ -59,7 +59,7 @@ export function ApproxAreaMap({
   return (
     <div
       ref={containerRef}
-      className="aspect-[16/10] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)]"
+      className="aspect-[16/10] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]"
       aria-label={`Approximate area map for ${locationLabel}`}
     />
   );

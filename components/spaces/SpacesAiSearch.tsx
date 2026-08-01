@@ -31,7 +31,7 @@ export function SpacesAiSearch({
   return (
     <div className={compact ? undefined : "pb-6"}>
       <form onSubmit={handleSubmit}>
-        <div className="flex h-14 min-w-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-5 pr-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 transition focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)]">
           {/* type=text: WebKit type=search draws a native clear (x) that steals clicks from Search.
               w-0 flex-1: long placeholder must not force the submit button off-screen. */}
           <input
@@ -39,7 +39,7 @@ export function SpacesAiSearch({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Ask AI — quiet cabin near Metro, under ₹15k…"
-            className="relative z-0 min-w-0 w-0 flex-1 bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+            className="relative z-0 min-w-0 w-0 flex-1 bg-transparent text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
             aria-label="Search spaces with AI"
             disabled={loading}
             autoComplete="off"
@@ -48,7 +48,7 @@ export function SpacesAiSearch({
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="relative z-10 h-10 shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
+            className="relative z-10 inline-flex h-11 shrink-0 items-center justify-center rounded-[calc(var(--radius)-2px)] bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "…" : "Search"}
           </button>
@@ -64,7 +64,7 @@ export function SpacesAiSearch({
       </form>
 
       {interpretedQuery ? (
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--surface)] px-4 py-3">
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
               AI understood
@@ -74,7 +74,7 @@ export function SpacesAiSearch({
           <button
             type="button"
             onClick={onClear}
-            className="shrink-0 text-sm font-semibold text-[var(--accent)] hover:text-[var(--accent-dark)]"
+            className="shrink-0 rounded-[var(--radius)] border border-transparent px-3 py-2 text-sm font-semibold text-[var(--accent)] transition hover:border-[var(--border)] hover:bg-[var(--bg)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
             Clear
           </button>

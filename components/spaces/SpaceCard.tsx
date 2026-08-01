@@ -44,20 +44,20 @@ export function SpaceCard({
       data-active={active ? "true" : "false"}
       onMouseEnter={() => onActivate?.(listing.id)}
       onFocusCapture={() => onActivate?.(listing.id)}
-      className={`flex flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--bg)] transition ${
+      className={`group flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] transition duration-200 ${
         active
-          ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30"
-          : "border-[var(--border)]"
+          ? "border-[var(--accent)] bg-[var(--bg)] shadow-[0_10px_30px_rgba(32,24,48,0.08)]"
+          : "hover:-translate-y-0.5 hover:border-[var(--accent)]/45 hover:shadow-[0_10px_24px_rgba(32,24,48,0.05)]"
       }`}
     >
-      <Link href={detailUrl} className="group block">
-        <div className="relative flex h-[180px] items-center justify-center bg-[var(--surface-tint)]">
+      <Link href={detailUrl} className="block">
+        <div className="relative flex h-[164px] items-center justify-center overflow-hidden bg-[var(--bg)]">
           {heroImage ? (
             // ponytail: plain img for hotlinked source URLs; Next/Image remotePatterns not configured for all hosts yet
             <img
               src={heroImage}
               alt=""
-              className="h-full w-full object-cover transition group-hover:opacity-95"
+              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.01] group-hover:opacity-95"
               loading="lazy"
             />
           ) : (
@@ -66,18 +66,11 @@ export function SpaceCard({
         </div>
       </Link>
 
-      <div className="flex flex-col gap-2 px-[18px] pb-[18px] pt-4">
-        <div className="flex items-start justify-between gap-2">
-          <Link href={detailUrl} className="min-w-0 flex-1 group">
-            <h2 className="text-[17px] font-semibold leading-snug text-[var(--ink)] transition group-hover:text-[var(--accent-dark)]">
-              {listing.title}
-            </h2>
-            {listing.area || listing.city ? (
-              <p className="mt-1 text-[13px] text-[var(--ink-secondary)]">
-                {displayLocationLine(listing.area, listing.city)}
-              </p>
-            ) : null}
-          </Link>
+      <div className="flex flex-col gap-3 px-4 pb-4 pt-3.5">
+        <div className="flex items-start justify-between gap-3">
+          <span className="inline-flex w-fit rounded-full border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            {SOURCE_LABELS[listing.source]}
+          </span>
           <LikeSpaceButton
             propertyName={listing.title}
             propertyUrl={propertyUrl}
@@ -85,21 +78,32 @@ export function SpaceCard({
           />
         </div>
 
+        <Link href={detailUrl} className="min-w-0">
+          <div className="space-y-1.5">
+            <h2 className="font-display text-[18px] font-semibold leading-[1.2] text-[var(--ink)] transition group-hover:text-[var(--accent-dark)]">
+              {listing.title}
+            </h2>
+            {listing.area || listing.city ? (
+              <p className="text-[13px] text-[var(--ink-secondary)]">
+                {displayLocationLine(listing.area, listing.city)}
+              </p>
+            ) : null}
+          </div>
+        </Link>
+
         {listing.shortTeaser ? (
-          <p className="text-sm leading-[1.45] text-[var(--muted)]">{listing.shortTeaser}</p>
+          <p className="text-[13px] leading-[1.5] text-[var(--muted)]">{listing.shortTeaser}</p>
         ) : null}
 
-        <span className="inline-flex w-fit rounded-full bg-[var(--surface-tint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-secondary)]">
-          {SOURCE_LABELS[listing.source]}
-        </span>
-
         {searchQuery ? (
-          <SpaceInsightPanel
-            key={insightPanelKey(listing.id, searchQuery, searchEntities)}
-            listingId={listing.id}
-            query={searchQuery}
-            entities={searchEntities}
-          />
+          <div className="border-t border-[var(--border)] pt-3">
+            <SpaceInsightPanel
+              key={insightPanelKey(listing.id, searchQuery, searchEntities)}
+              listingId={listing.id}
+              query={searchQuery}
+              entities={searchEntities}
+            />
+          </div>
         ) : null}
       </div>
     </article>
