@@ -13,22 +13,22 @@ const COMPANY_LINKS = [
 export function SiteFooter() {
   return (
     <footer id="contact" className="border-t border-[var(--border)] bg-[var(--bg)] px-5 py-12 lg:px-10">
-      <div className="mx-auto grid max-w-[1120px] gap-8 lg:grid-cols-[1.3fr_0.7fr_1fr]">
-        <div className="max-w-[36ch]">
-          <a href="/" className="inline-flex items-center gap-2">
+      <div className="mx-auto grid max-w-[1120px] gap-6 lg:grid-cols-[1.25fr_0.75fr_1fr] lg:gap-8">
+        <div className="max-w-[34ch]">
+          <a href="/" className="inline-flex items-center gap-2.5">
             <BrandLogoMark />
-            <span className="text-base font-bold tracking-tight text-[var(--ink)]">{SITE.name}</span>
+            <span className="text-base font-semibold tracking-tight text-[var(--ink)]">{SITE.name}</span>
           </a>
-          <p className="mt-3 text-[13px] leading-[1.55] text-[var(--muted)]">
+          <p className="mt-2.5 text-[13px] leading-6 text-[var(--muted)]">
             Commercial real estate consulting in Bangalore, for companies and property owners across every property type.
           </p>
         </div>
 
         <div>
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
             Company
           </h2>
-          <ul className="mt-2.5 space-y-2 text-[13px] text-[var(--ink-secondary)]">
+          <ul className="mt-2.5 space-y-1.5 text-[13px] leading-6 text-[var(--ink-secondary)]">
             {COMPANY_LINKS.map(([label, href]) => (
               <li key={label}>
                 <a href={href} className="transition hover:text-[var(--accent)]">
@@ -40,10 +40,10 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
             Contact
           </h2>
-          <ul className="mt-2.5 space-y-2 text-[13px] leading-6 text-[var(--ink-secondary)]">
+          <ul className="mt-2.5 space-y-1.5 text-[13px] leading-6 text-[var(--ink-secondary)]">
             <li>
               <a href={`mailto:${SITE.email}`} className="transition hover:text-[var(--accent)]">
                 {SITE.email}
