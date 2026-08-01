@@ -1,16 +1,32 @@
+"use client";
+
+import { Reveal } from "@/components/motion/Reveal";
+
+const MARKETS = [
+  "Whitefield",
+  "Outer Ring Road",
+  "Koramangala",
+  "Indiranagar",
+  "HSR Layout",
+  "Electronic City",
+  "MG Road",
+  "Sarjapur Road",
+] as const;
+
 export function MicroMarkets() {
   return (
-    <section id="locations" className="px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[960px]">
-        <p className="text-sm font-semibold">
-          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-            BANGALORE LOCATIONS
-          </span>
-        </p>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+    <section
+      id="locations"
+      className="border-y border-[var(--border)] bg-[var(--surface)]"
+    >
+      <Reveal className="mx-auto max-w-[1120px] px-5 py-14 lg:px-10">
+        <h2 className="font-display text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] text-[var(--ink)]">
           We cover all locations in and around Bengaluru.
         </h2>
-      </div>
+        <p className="mt-3.5 text-[15px] font-medium leading-[1.7] text-[var(--ink-secondary)]">
+          {MARKETS.join(" · ")}
+        </p>
+      </Reveal>
     </section>
   );
 }

@@ -1,3 +1,7 @@
+"use client";
+
+import { Reveal } from "@/components/motion/Reveal";
+
 const TESTIMONIALS = [
   {
     quote:
@@ -27,33 +31,33 @@ const TESTIMONIALS = [
 
 export function Testimonials() {
   return (
-    <section className="px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[1120px]">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-          CLIENT NOTES
-        </p>
-        <h2 className="mt-4 max-w-[640px] text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
-          What Bangalore clients say about Gentle Space
-        </h2>
+    <section className="py-14">
+      <Reveal className="mx-auto max-w-[1120px] px-5 lg:px-10">
+        <div className="mb-7 max-w-[640px]">
+          <h2 className="font-display text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] text-[var(--ink)]">
+            What Bangalore clients say about Gentle Space
+          </h2>
+        </div>
 
-        <div className="mt-10 grid gap-5 lg:grid-cols-2">
-          {TESTIMONIALS.map((testimonial) => (
-            <figure
-              key={testimonial.name}
-              className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_rgba(30,22,48,0.04)]"
-            >
-              <blockquote className="text-base leading-7 text-[var(--ink)]">
-                “{testimonial.quote}”
-              </blockquote>
-              <figcaption className="mt-6 text-sm leading-6 text-[var(--ink-secondary)]">
-                <span className="font-semibold text-[var(--ink)]">{testimonial.name}</span>
-                <span className="mx-2 text-[var(--muted)]">•</span>
-                <span>{testimonial.role}</span>
-              </figcaption>
-            </figure>
+        <div className="grid gap-4 md:grid-cols-2">
+          {TESTIMONIALS.map((testimonial, index) => (
+            <Reveal key={testimonial.name} delay={index * 0.04}>
+              <figure className="h-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-[18px]">
+                <blockquote className="font-display text-[15px] leading-[1.55] text-[var(--ink)]">
+                  {testimonial.quote}
+                </blockquote>
+                <figcaption className="mt-3 text-xs text-[var(--muted)]">
+                  <strong className="font-semibold text-[var(--ink)]">
+                    {testimonial.name}
+                  </strong>
+                  {" · "}
+                  {testimonial.role}
+                </figcaption>
+              </figure>
+            </Reveal>
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

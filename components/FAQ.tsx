@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Reveal } from "@/components/motion/Reveal";
 
 const FAQ_ITEMS = [
   {
@@ -39,56 +40,45 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <section className="px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[920px]">
-        <p className="text-sm font-semibold">
-          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-            FAQ
-          </span>
-        </p>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
-          FAQs: commercial real estate consultants in Bangalore
-        </h2>
+    <section className="py-14">
+      <div className="mx-auto max-w-[720px] px-5 lg:px-10">
+        <Reveal className="mb-5">
+          <h2 className="text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] tracking-tight text-[var(--ink)]">
+            FAQs: commercial real estate consultants in Bangalore
+          </h2>
+        </Reveal>
 
-        <div className="mt-10 space-y-3">
+        <div className="border-t border-[var(--border)]">
           {FAQ_ITEMS.map((item, index) => {
             const isOpen = openIndex === index;
             const panelId = `faq-panel-${index}`;
             const buttonId = `faq-button-${index}`;
 
             return (
-              <div
-                key={item.question}
-                className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)]"
-              >
-                <button
-                  id={buttonId}
-                  type="button"
-                  aria-expanded={isOpen}
-                  aria-controls={panelId}
-                  onClick={() => setOpenIndex(isOpen ? null : index)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-[var(--surface-tint)]"
-                >
-                  <span className="text-base font-medium text-[var(--ink)]">{item.question}</span>
-                  <span
-                    aria-hidden="true"
-                    className="text-2xl leading-none text-[var(--accent-dark)]"
+              <div key={item.question} className="border-b border-[var(--border)]">
+                <Reveal delay={index * 0.03}>
+                  <button
+                    id={buttonId}
+                    type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    onClick={() => setOpenIndex(isOpen ? null : index)}
+                    className="w-full py-3.5 text-left text-[15px] font-semibold text-[var(--ink)] transition-colors hover:text-[var(--accent)]"
                   >
-                    {isOpen ? "−" : "+"}
-                  </span>
-                </button>
+                    {item.question}
+                  </button>
 
-                <div
-                  id={panelId}
-                  role="region"
-                  aria-labelledby={buttonId}
-                  hidden={!isOpen}
-                  className="px-5 pb-5"
-                >
-                  <p className="max-w-[780px] text-sm leading-7 text-[var(--ink-secondary)]">
-                    {item.answer}
-                  </p>
-                </div>
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={buttonId}
+                    hidden={!isOpen}
+                  >
+                    <p className="pb-3.5 text-sm leading-[1.6] text-[var(--ink-secondary)]">
+                      {item.answer}
+                    </p>
+                  </div>
+                </Reveal>
               </div>
             );
           })}

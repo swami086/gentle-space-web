@@ -4,6 +4,7 @@
   --accent: #6840b8;
   --accent-dark: #4f2f8f;
   --accent-soft: #f0ebf8;
+  --surface-tint: #f0ebf8;
   --bg: #ffffff;
   --surface: #f6f5f8;
   --border: #e2dde9;
@@ -22,6 +23,7 @@ html.dark {
   --accent: #8b6fd1;
   --accent-dark: #a78bfa;
   --accent-soft: #2a2438;
+  --surface-tint: #2a2438;
   --bg: #141218;
   --surface: #1c1824;
   --border: #342e42;

@@ -1,36 +1,37 @@
 "use client";
 
 import { useLeadCapture } from "@/components/LeadCaptureContext";
+import { Reveal } from "@/components/motion/Reveal";
 
 export function CtaBand() {
   const { openModal } = useLeadCapture();
 
   return (
-    <section className="bg-[var(--accent-dark)] px-6 py-[72px] lg:px-[160px]">
-      <div className="mx-auto flex max-w-[720px] flex-col items-center gap-5 text-center">
-        <h2 className="text-[28px] font-bold tracking-tight text-white lg:text-[32px]">
+    <section className="bg-[var(--accent)]">
+      <Reveal className="mx-auto flex max-w-[1120px] flex-col items-center gap-3 px-5 py-12 text-center lg:px-10">
+        <h2 className="max-w-[28ch] font-display text-[clamp(20px,2.4vw,26px)] font-semibold leading-snug text-[var(--on-accent)]">
           Ready to find the right commercial space in Bangalore?
         </h2>
-        <p className="max-w-[520px] text-base leading-[1.5] text-white/80">
+        <p className="max-w-[46ch] text-sm leading-relaxed text-[var(--on-accent)]/85">
           Share your brief on WhatsApp and we&apos;ll reply within the hour, with your private
           shortlist typically ready in about five working days.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mt-2 flex flex-wrap justify-center gap-2.5">
           <button
             type="button"
             onClick={openModal}
-            className="rounded-[var(--radius-sm)] bg-white px-8 py-3.5 text-[15px] font-semibold text-[var(--accent-dark)] transition hover:bg-[var(--surface-tint)]"
+            className="rounded-[var(--radius)] bg-white px-6 py-2.5 text-sm font-semibold text-[var(--accent-dark)] transition hover:bg-white/90"
           >
             Contact Us
           </button>
           <a
             href="/spaces"
-            className="rounded-[var(--radius-sm)] border border-white/80 px-8 py-3.5 text-[15px] font-semibold text-white transition hover:bg-white/10"
+            className="rounded-[var(--radius)] border border-[var(--on-accent)]/55 px-6 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--on-accent)]/10"
           >
             See Available Properties
           </a>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

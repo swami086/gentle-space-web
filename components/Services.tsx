@@ -1,45 +1,44 @@
+import { Reveal } from "@/components/motion/Reveal";
 import { SERVICES_CONTENT } from "@/lib/content-services";
 
 export function Services() {
   return (
-    <section id="services" className="px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[1120px]">
-        <p className="text-sm font-semibold">
-          <span className="inline-flex rounded-full bg-[var(--surface-tint)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-            {SERVICES_CONTENT.kicker}
-          </span>
-        </p>
-
-        <div className="mt-4 max-w-[760px]">
-          <h2 className="text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+    <section id="services" className="px-5 py-14 lg:px-10">
+      <div className="mx-auto max-w-[1120px]">
+        <Reveal className="mb-7 max-w-[640px]">
+          <h2 className="text-[clamp(22px,2.6vw,28px)] font-semibold leading-tight tracking-tight text-[var(--ink)]">
             {SERVICES_CONTENT.heading}
           </h2>
-          <p className="mt-5 text-base leading-8 text-[var(--muted)] lg:text-lg">
+          <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--muted)]">
             {SERVICES_CONTENT.subtext}
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-2">
-          {SERVICES_CONTENT.groups.map((group) => (
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
+          {SERVICES_CONTENT.groups.map((group, groupIndex) => (
             <div key={group.label}>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
+              <h3 className="mb-3 border-b-2 border-[var(--accent)] pb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
                 {group.label}
               </h3>
-              <div className="mt-5 grid gap-5">
-                {group.items.map((item) => (
-                  <article
+              <ul className="flex flex-col">
+                {group.items.map((item, itemIndex) => (
+                  <li
                     key={item.title}
-                    className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius-md)] p-7"
+                    className="border-b border-[var(--border)] py-3.5"
                   >
-                    <h4 className="text-lg font-semibold tracking-tight text-[var(--ink)]">
-                      {item.title}
-                    </h4>
-                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                      {item.body}
-                    </p>
-                  </article>
+                    <Reveal delay={(groupIndex * 3 + itemIndex) * 0.04}>
+                      <div className="grid gap-1">
+                        <strong className="text-[15px] font-semibold text-[var(--ink)]">
+                          {item.title}
+                        </strong>
+                        <span className="text-sm leading-relaxed text-[var(--muted)]">
+                          {item.body}
+                        </span>
+                      </div>
+                    </Reveal>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           ))}
         </div>

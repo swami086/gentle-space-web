@@ -1,39 +1,41 @@
+import { Reveal } from "@/components/motion/Reveal";
 import { HOW_IT_WORKS_CONTENT } from "@/lib/content-services";
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-[var(--surface)] px-6 py-20 lg:px-[160px]">
-      <div className="max-w-[1120px]">
-        <p className="text-sm font-semibold">
-          <span className="inline-flex rounded-full bg-[var(--bg)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-            {HOW_IT_WORKS_CONTENT.kicker}
-          </span>
-        </p>
-
-        <div className="mt-4 max-w-[760px]">
-          <h2 className="text-3xl font-semibold tracking-tight text-[var(--ink)] lg:text-5xl">
+    <section
+      id="how-it-works"
+      className="border-y border-[var(--border)] bg-[var(--surface)] py-14"
+    >
+      <div className="mx-auto max-w-[1120px] px-5 lg:px-10">
+        <Reveal className="mb-7 max-w-[640px]">
+          <h2 className="text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] tracking-tight text-[var(--ink)]">
             {HOW_IT_WORKS_CONTENT.heading}
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {HOW_IT_WORKS_CONTENT.steps.map((step) => (
-            <article
-              key={step.label}
-              className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-md)] p-7"
-            >
-              <div className="inline-flex rounded-full bg-[var(--surface-tint)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-dark)]">
-                {step.label}
-              </div>
-              <h3 className="mt-5 text-lg font-semibold tracking-tight text-[var(--ink)]">
-                {step.title}
-              </h3>
-              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                {step.body}
-              </p>
-            </article>
+        <ol className="grid list-none gap-0 p-0 md:grid-cols-2 md:gap-x-8">
+          {HOW_IT_WORKS_CONTENT.steps.map((step, i) => (
+            <li key={step.label} className="border-b border-[var(--border)] py-3.5">
+              <Reveal
+                delay={i * 0.03}
+                className="grid grid-cols-[32px_1fr] gap-3"
+              >
+                <span className="pt-0.5 text-xs font-bold text-[var(--accent)]">
+                  {step.label}
+                </span>
+                <div>
+                  <strong className="mb-1 block text-[15px] font-semibold text-[var(--ink)]">
+                    {step.title}
+                  </strong>
+                  <span className="text-[13px] leading-[1.5] text-[var(--muted)]">
+                    {step.body}
+                  </span>
+                </div>
+              </Reveal>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );
