@@ -101,20 +101,20 @@ export function LeadCaptureModal() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-capture-title"
-        className="flex w-full max-w-[600px] flex-col gap-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg)] p-9"
+        className="flex w-full max-w-[600px] flex-col gap-6 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-8 shadow-[0_24px_80px_rgba(30,22,48,0.18)]"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <h2 id="lead-capture-title" className="text-2xl font-bold tracking-tight text-[var(--ink)]">
+            <h2 id="lead-capture-title" className="text-[24px] font-bold tracking-tight text-[var(--ink)]">
               {title}
             </h2>
-            <p className="text-[15px] leading-[1.45] text-[var(--muted)]">{headerHelper}</p>
+            <p className="text-[15px] leading-[1.45] text-[var(--ink-secondary)]">{headerHelper}</p>
           </div>
           <button
             type="button"
             onClick={closeModal}
             aria-label="Close lead capture modal"
-            className="shrink-0 text-[var(--muted)] transition hover:text-[var(--ink)]"
+            className="shrink-0 rounded-[var(--radius)] border border-transparent p-1.5 text-[var(--muted)] transition hover:border-[var(--border)] hover:bg-[var(--surface)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
             <IconClose className="h-[22px] w-[22px]" />
           </button>
@@ -126,7 +126,7 @@ export function LeadCaptureModal() {
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+              className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
               placeholder="Your name"
             />
           </label>
@@ -136,7 +136,7 @@ export function LeadCaptureModal() {
             <input
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+              className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
               placeholder="+91 …"
             />
           </label>
@@ -151,10 +151,10 @@ export function LeadCaptureModal() {
                     key={option}
                     type="button"
                     onClick={() => setNeed(option)}
-                    className={`rounded-[var(--radius-sm)] px-3.5 py-2.5 text-[13px] font-semibold transition ${
+                    className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                       selected
-                        ? "bg-[var(--accent)] text-[var(--on-accent)]"
-                        : "border border-[var(--border)] bg-[var(--surface-tint)] text-[var(--accent)]"
+                        ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                     }`}
                   >
                     {NEED_LABELS[option]}
@@ -170,7 +170,7 @@ export function LeadCaptureModal() {
               value={brief}
               onChange={(event) => setBrief(event.target.value)}
               rows={4}
-              className="h-[100px] w-full resize-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] p-3.5 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)]"
+              className="h-[100px] w-full resize-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
               placeholder="Corridors, size, budget, timing…"
             />
           </label>
@@ -179,7 +179,7 @@ export function LeadCaptureModal() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <IconWhatsApp className="h-[18px] w-[18px]" />
               {submitLabel}
