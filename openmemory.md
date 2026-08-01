@@ -2,7 +2,7 @@
 
 ## Overview
 
-Standalone Next.js marketing + coworking listings site for **Gentle Space** (Bangalore CRE). Public repo: https://github.com/swami086/gentle-space-web. Extracted from Resume worktree `.worktrees/gentle-space-nextjs/gentle-space-web`. Primary public site: Netlify (`gentle-space-live`); sync/listings infra on Render (`gentle-space-web` + cron).
+Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** (Bangalore CRE). Wordmark: ink `Gentle Space` + accent `CRE` via `components/BrandWordmark.tsx` (`SITE.name` / `nameCore` / `nameQualifier` in `lib/site.ts`). Legal name remains Gentle Space Global Solutions. Public repo: https://github.com/swami086/gentle-space-web. Extracted from Resume worktree `.worktrees/gentle-space-nextjs/gentle-space-web`. Primary public site: Netlify (`gentle-space-live`); sync/listings infra on Render (`gentle-space-web` + cron).
 
 ## User Defined Namespaces
 
@@ -22,6 +22,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 | Area | Key paths |
 |------|-----------|
+| Brand lockup | `components/BrandWordmark.tsx`, `components/BrandLogoMark.tsx`, `lib/site.ts` (`name` / `nameCore` / `nameQualifier`) |
 | Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `ApproxAreaMap`, `useGoogleMap`, `SpaceGallery`, `SpaceInsightPanel` |
 | Search API | `app/api/spaces/search/route.ts` |
 | Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
@@ -48,7 +49,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space** (Ban
 
 ## Patterns
 
-- **v3 Calm Structured production UI (2026-08-01):** Source Sans 3 + Source Serif 4, dual theme (`ThemeProvider` + `gs-theme` + `public/theme-init.js`), Motion `Reveal`, accent `#6840B8`. Tokens in `app/globals.css` (`--accent-soft`, `--surface-tint` alias, `--bg`/`--surface`/`--border`/`--ink*`/`--muted`/`--on-accent`/`--radius`). Theme toggle in `SiteHeader` only (`SpacesHeader` is page-title band). Token-first restyle of home + Spaces browse/detail in place; do not change APIs/privacy/`toPublicListing` for UI work. Spec: `docs/superpowers/specs/2026-08-01-v3-calm-structured-production-redesign.md`. Lab: `frontend-redesign/v3-calm-structured/`. Branch: `feat/v3-calm-production-ui`.
+- **v3 Calm Structured production UI (2026-08-01):** Source Sans 3 + Source Serif 4, dual theme (`ThemeProvider` + `gs-theme` + `public/theme-init.js`), Motion `Reveal`, accent `#6840B8`. Tokens in `app/globals.css` (`--accent-soft`, `--surface-tint` alias, `--bg`/`--surface`/`--border`/`--ink*`/`--muted`/`--on-accent`/`--radius`). Theme toggle in `SiteHeader` only (`SpacesHeader` is page-title band). Token-first restyle of home + Spaces browse/detail in place; do not change APIs/privacy/`toPublicListing` for UI work. Brand lockup: `BrandWordmark` = ink `Gentle Space` + hairline + accent tracked `CRE` submark (not tinted same-size text, not pill chip); circular mark PNG preserved. Spec: `docs/superpowers/specs/2026-08-01-v3-calm-structured-production-redesign.md`. Lab: `frontend-redesign/v3-calm-structured/`. Branch: `feat/v3-calm-production-ui`.
 - Listing privacy read boundary: `app/spaces/page.tsx`, `app/api/spaces/search/route.ts`, and `app/spaces/[slug]/page.tsx` all map DB rows through `toPublicListing()` before HTML/JSON; `PublicListing` uses `?: never` on forbidden fields. Cards/detail show `displayLocationLine()` and fixed "Ask for pricing" copy (budget filter removed).
 - Spaces filters stay pure in `lib/listings/filterListings.ts` (typed on `PublicListing`).
 - `SpacesBrowseClient` owns idle hero ↔ browse chrome mode; failed AI search snaps back to `initialListings`. On successful search it stores `activeQuery` + `searchEntities` (`matchedEntities` from API) and passes them to `SpaceCard`; both clear on `handleClear` and `restoreSyncCatalog`. `app/spaces/page.tsx` is `force-dynamic` so the catalog is loaded from Postgres at request time (static prerender during docker build can otherwise bake an empty page when BuildKit cannot reach `db`).

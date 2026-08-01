@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BrandLogoMark } from "@/components/BrandLogoMark";
+import { BrandWordmark } from "@/components/BrandWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SITE } from "@/lib/site";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
@@ -64,11 +65,13 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-10">
-        <a href="/" className="flex min-w-0 items-center gap-2.5">
+        <a
+          href="/"
+          className="flex shrink-0 items-center gap-2.5"
+          aria-label={`${SITE.name} (${SITE.nameQualifierExpanded})`}
+        >
           <BrandLogoMark />
-          <span className="truncate text-[19px] font-bold tracking-tight text-[var(--ink)]">
-            {SITE.name}
-          </span>
+          <BrandWordmark className="text-[19px] font-bold" />
         </a>
 
         <nav

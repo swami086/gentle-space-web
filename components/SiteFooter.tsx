@@ -1,4 +1,5 @@
 import { BrandLogoMark } from "@/components/BrandLogoMark";
+import { BrandWordmark } from "@/components/BrandWordmark";
 import { SITE } from "@/lib/site";
 
 const COMPANY_LINKS = [
@@ -15,9 +16,13 @@ export function SiteFooter() {
     <footer id="contact" className="border-t border-[var(--border)] bg-[var(--bg)] px-5 py-12 lg:px-10">
       <div className="mx-auto grid max-w-[1120px] gap-6 lg:grid-cols-[1.25fr_0.75fr_1fr] lg:gap-8">
         <div className="max-w-[34ch]">
-          <a href="/" className="inline-flex items-center gap-2.5">
+          <a
+            href="/"
+            className="inline-flex items-center gap-2.5"
+            aria-label={`${SITE.name} (${SITE.nameQualifierExpanded})`}
+          >
             <BrandLogoMark />
-            <span className="text-base font-semibold tracking-tight text-[var(--ink)]">{SITE.name}</span>
+            <BrandWordmark className="text-base font-semibold" expandAlways />
           </a>
           <p className="mt-2.5 text-[13px] leading-6 text-[var(--muted)]">
             Commercial real estate consulting in Bangalore, for companies and property owners across every property type.

@@ -6,7 +6,7 @@ import { toPublicListing } from "@/lib/listings/public";
 import type { SyncRun } from "@/lib/listings/types";
 
 export const metadata: Metadata = {
-  title: "Spaces in Bangalore | Gentle Space",
+  title: "Spaces in Bangalore | Gentle Space CRE",
   description:
     "Browse available coworking spaces and flexible offices in Bangalore.",
 };

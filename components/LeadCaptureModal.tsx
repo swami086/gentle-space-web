@@ -88,7 +88,7 @@ export function LeadCaptureModal() {
   const submitLabel = propertyContext ? "Open WhatsApp draft" : "Send on WhatsApp";
   const disclaimer = propertyContext
     ? "We'll open WhatsApp with your message ready. Nothing is sent automatically."
-    : "Opens WhatsApp with your brief ready to send to Gentle Space.";
+    : "Opens WhatsApp with your brief ready to send to Gentle Space CRE.";
 
   return (
     <div

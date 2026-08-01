@@ -30,7 +30,7 @@ const FAQ_ITEMS = [
       "Yes, through handover, and we stay involved for renewals and expansions after you've moved in.",
   },
   {
-    question: "Why choose Gentle Space as commercial real estate consultants in Bangalore?",
+    question: "Why choose Gentle Space CRE as commercial real estate consultants in Bangalore?",
     answer:
       "We work across every commercial property type in Bangalore, for both companies and property owners, and we stay on the deal through verification, legal, and paperwork instead of handing you off after the intro call.",
   },

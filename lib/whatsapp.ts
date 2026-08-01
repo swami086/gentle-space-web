@@ -21,7 +21,7 @@ export function buildWhatsAppUrl(payload: LeadPayload): string {
   const isProperty = Boolean(payload.propertyName && payload.propertyUrl);
   const body = isProperty
     ? [
-        "Gentle Space — property enquiry",
+        "Gentle Space CRE - property enquiry",
         "",
         `Property: ${payload.propertyName!.trim()}`,
         `Listing: ${payload.propertyUrl!.trim()}`,
@@ -31,7 +31,7 @@ export function buildWhatsAppUrl(payload: LeadPayload): string {
         `Brief: ${payload.brief.trim()}`,
       ].join("\n")
     : [
-        "Gentle Space — property e-brochure request",
+        "Gentle Space CRE - property e-brochure request",
         "",
         `Name: ${payload.name.trim()}`,
         `WhatsApp: ${payload.phone.trim()}`,

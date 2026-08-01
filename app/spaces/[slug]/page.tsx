@@ -15,11 +15,11 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const listing = await getListingBySlug(slug);
-  if (!listing) return { title: "Space not found | Gentle Space" };
+  if (!listing) return { title: "Space not found | Gentle Space CRE" };
 
   const teaser = redactSensitiveText(listing.shortTeaser || listing.description);
   return {
-    title: `${listing.title} | Gentle Space`,
+    title: `${listing.title} | Gentle Space CRE`,
     description: teaser.slice(0, 160),
   };
 }

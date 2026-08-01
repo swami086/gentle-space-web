@@ -16,7 +16,7 @@ export function About() {
               </span>
             </p>
             <h2 className="mt-4 font-display text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] text-[var(--ink)]">
-              Why companies and owners work with Gentle Space
+              Why companies and owners work with Gentle Space CRE
             </h2>
             <p className="mt-3 max-w-[56ch] text-[15px] leading-[1.6] text-[var(--muted)]">
               Most leases run into trouble in the fine print. We check it before you tour a

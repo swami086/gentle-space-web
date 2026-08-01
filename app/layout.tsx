@@ -17,7 +17,7 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Gentle Space | Commercial Real Estate Consultants in Bangalore",
+  title: "Gentle Space CRE | Commercial Real Estate Consultants in Bangalore",
 };
 
 export default function RootLayout({

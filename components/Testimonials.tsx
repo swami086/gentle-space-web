@@ -35,7 +35,7 @@ export function Testimonials() {
       <Reveal className="mx-auto max-w-[1120px] px-5 lg:px-10">
         <div className="mb-7 max-w-[640px]">
           <h2 className="font-display text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] text-[var(--ink)]">
-            What Bangalore clients say about Gentle Space
+            What Bangalore clients say about Gentle Space CRE
           </h2>
         </div>
 
