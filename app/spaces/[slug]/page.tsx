@@ -20,10 +20,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!listing) return { title: "Space not found" };
 
   const teaser = redactSensitiveText(listing.shortTeaser || listing.description);
+  const ogImage = toPublicListing(listing).images?.[0];
   return {
     title: listing.title,
     description: teaser.slice(0, 160),
     alternates: { canonical: `/spaces/${slug}` },
+    openGraph: {
+      title: listing.title,
+      description: teaser.slice(0, 160),
+      url: `/spaces/${slug}`,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
   };
 }
 

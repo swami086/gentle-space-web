@@ -8,6 +8,7 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { LeadCaptureModal } from "@/components/LeadCaptureModal";
 import { LeadCaptureProvider } from "@/components/LeadCaptureContext";
 import { MicroMarkets } from "@/components/MicroMarkets";
+import { RecentPlacements } from "@/components/RecentPlacements";
 import { Services } from "@/components/Services";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -27,6 +28,7 @@ export default function Home() {
           <HowItWorks />
           <About />
           <MicroMarkets />
+          <RecentPlacements />
           <Testimonials />
           <FounderTeaser />
           <FAQ />
