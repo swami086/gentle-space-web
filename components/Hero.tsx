@@ -33,7 +33,7 @@ export function Hero() {
                 href="/spaces"
                 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
               >
-                See Available Properties
+                {CONTENT.hero.secondaryCta}
                 <span aria-hidden="true">→</span>
               </a>
             </div>

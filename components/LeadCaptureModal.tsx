@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { buildWhatsAppUrl, NEED_LABELS, type NeedType } from "@/lib/whatsapp";
 import { useLeadCapture } from "./LeadCaptureContext";
 
@@ -30,6 +30,10 @@ export function LeadCaptureModal() {
   const [need, setNeed] = useState<NeedType>("office");
   const [brief, setBrief] = useState("");
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) {
       setName("");
@@ -47,10 +51,44 @@ export function LeadCaptureModal() {
     }
   }, [open, propertyContext]);
 
+  // Open lifecycle: remember the trigger, lock background scroll, move focus in,
+  // and restore both on close.
+  useEffect(() => {
+    if (!open) return;
+    triggerRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    firstFieldRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      triggerRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // Escape to close + Tab focus trap while the dialog is open.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeModal();
+      if (event.key === "Escape") {
+        closeModal();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const nodes = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!nodes || nodes.length === 0) return;
+      const focusable = Array.from(nodes).filter((el) => el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -59,6 +97,14 @@ export function LeadCaptureModal() {
   if (!open) return null;
 
   const canSubmit = Boolean(name.trim() && phone.trim() && brief.trim());
+  const started = Boolean(name || phone || brief);
+  const missing = [
+    !name.trim() && "your name",
+    !phone.trim() && "WhatsApp number",
+    !brief.trim() && "a short brief",
+  ].filter(Boolean) as string[];
+  const showHint = started && missing.length > 0;
+  const hint = `Add ${missing.join(", ")} to continue.`;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,6 +144,7 @@ export function LeadCaptureModal() {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-capture-title"
@@ -124,8 +171,10 @@ export function LeadCaptureModal() {
           <label className="flex flex-col gap-1.5">
             <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">Full name</span>
             <input
+              ref={firstFieldRef}
               value={name}
               onChange={(event) => setName(event.target.value)}
+              autoComplete="name"
               className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
               placeholder="Your name"
             />
@@ -136,6 +185,9 @@ export function LeadCaptureModal() {
             <input
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
               placeholder="+91 …"
             />
@@ -179,13 +231,18 @@ export function LeadCaptureModal() {
             <button
               type="submit"
               disabled={!canSubmit}
+              aria-describedby="lead-capture-hint"
               className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <IconWhatsApp className="h-[18px] w-[18px]" />
               {submitLabel}
             </button>
-            <p className="text-center text-[13px] text-[var(--muted)]">
-              {disclaimer}
+            <p
+              id="lead-capture-hint"
+              role={showHint ? "status" : undefined}
+              className="text-center text-[13px] text-[var(--muted)]"
+            >
+              {showHint ? hint : disclaimer}
             </p>
           </div>
         </form>
