@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BrandLogoMark } from "@/components/BrandLogoMark";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { SITE } from "@/lib/site";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
 
@@ -61,8 +62,8 @@ export function SiteHeader() {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-40 bg-[var(--bg)]">
-      <div className="flex items-center justify-between gap-4 px-6 py-6 lg:px-[var(--page-pad-x)]">
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
+      <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-10">
         <a href="/" className="flex min-w-0 items-center gap-2.5">
           <BrandLogoMark />
           <span className="truncate text-[19px] font-bold tracking-tight text-[var(--ink)]">
@@ -86,10 +87,11 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <button
             type="button"
             onClick={openModal}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
+            className="rounded-[var(--radius)] bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
           >
             Contact Us
           </button>
