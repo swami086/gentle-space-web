@@ -6,9 +6,10 @@ import { toPublicListing } from "@/lib/listings/public";
 import type { SyncRun } from "@/lib/listings/types";
 
 export const metadata: Metadata = {
-  title: "Spaces in Bangalore | Gentle Space CRE",
+  title: "Spaces in Bangalore",
   description:
-    "Browse available coworking spaces and flexible offices in Bangalore.",
+    "Browse available office, retail and warehouse space across Bangalore — ranked by how well they fit your brief.",
+  alternates: { canonical: "/spaces" },
 };
 
 // Catalog must read Postgres at request time. A static prerender during `next build`
