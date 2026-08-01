@@ -11,6 +11,11 @@ export const metadata: Metadata = {
     "Browse available coworking spaces and flexible offices in Bangalore.",
 };
 
+// Catalog must read Postgres at request time. A static prerender during `next build`
+// can bake an empty page when the compose DB hostname is unreachable in BuildKit,
+// and loadSpacesData() previously swallowed that into initialListings=[].
+export const dynamic = "force-dynamic";
+
 async function loadSpacesData(): Promise<{ listings: PublicListing[]; lastSync: SyncRun | null }> {
   try {
     const [{ listListings }, { getLatestSuccessfulSync }] = await Promise.all([
@@ -19,7 +24,8 @@ async function loadSpacesData(): Promise<{ listings: PublicListing[]; lastSync: 
     ]);
     const [rows, lastSync] = await Promise.all([listListings(), getLatestSuccessfulSync()]);
     return { listings: rows.map(toPublicListing), lastSync };
-  } catch {
+  } catch (err) {
+    console.error("[spaces] loadSpacesData failed", err);
     return { listings: [], lastSync: null };
   }
 }
