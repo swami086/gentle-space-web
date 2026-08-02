@@ -1,3 +1,4 @@
+import { areaMatchesFilter } from "./areaAliases";
 import type { PublicListing } from "./public";
 
 export type SpacesFilterState = {
@@ -29,8 +30,7 @@ export function applySpacesFilters(
     }
 
     if (filters.areas.length > 0) {
-      const area = listing.area.toLowerCase();
-      if (!filters.areas.some((filterArea) => area === filterArea.toLowerCase())) {
+      if (!filters.areas.some((filterArea) => areaMatchesFilter(listing.area, filterArea))) {
         return false;
       }
     }
