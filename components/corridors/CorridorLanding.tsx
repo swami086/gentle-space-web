@@ -31,7 +31,7 @@ export function CorridorLanding({ corridor }: { corridor: Corridor }) {
               Share your brief
             </button>
             <a
-              href="/spaces"
+              href={`/spaces?area=${encodeURIComponent(corridor.name)}`}
               className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
             >
               See available spaces

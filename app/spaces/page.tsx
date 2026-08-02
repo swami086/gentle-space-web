@@ -31,11 +31,22 @@ async function loadSpacesData(): Promise<{ listings: PublicListing[]; lastSync: 
   }
 }
 
-export default async function SpacesPage() {
+export default async function SpacesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ area?: string }>;
+}) {
+  const { area } = await searchParams;
   const { listings, lastSync } = await loadSpacesData();
   const stale = isStaleSync(lastSync?.finishedAt);
+  const initialArea = typeof area === "string" && area.trim() ? area.trim() : null;
 
   return (
-    <SpacesBrowseClient initialListings={listings} lastSync={lastSync} stale={stale} />
+    <SpacesBrowseClient
+      initialListings={listings}
+      lastSync={lastSync}
+      stale={stale}
+      initialArea={initialArea}
+    />
   );
 }
