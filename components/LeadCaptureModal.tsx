@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { buildWhatsAppUrl, NEED_LABELS, type NeedType } from "@/lib/whatsapp";
 import { useLeadCapture } from "./LeadCaptureContext";
 
-const NEED_OPTIONS: NeedType[] = ["office", "retail", "lease"];
+const NEED_OPTIONS: NeedType[] = ["office", "retail", "warehouse", "lease"];
 
 function IconClose({ className }: { className?: string }) {
   return (
@@ -24,7 +24,7 @@ function IconWhatsApp({ className }: { className?: string }) {
 }
 
 export function LeadCaptureModal() {
-  const { open, propertyContext, closeModal } = useLeadCapture();
+  const { open, propertyContext, prefill, closeModal } = useLeadCapture();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [need, setNeed] = useState<NeedType>("office");
@@ -45,11 +45,14 @@ export function LeadCaptureModal() {
     if (propertyContext) {
       setNeed("office");
       setBrief(`Interested in: ${propertyContext.propertyName}\nListing: ${propertyContext.propertyUrl}`);
+    } else if (prefill) {
+      setNeed(prefill.need ?? "office");
+      setBrief(prefill.brief ?? "");
     } else {
       setNeed("office");
       setBrief("");
     }
-  }, [open, propertyContext]);
+  }, [open, prefill, propertyContext]);
 
   // Open lifecycle: remember the trigger, lock background scroll, move focus in,
   // and restore both on close.

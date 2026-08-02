@@ -1,10 +1,11 @@
 import { SITE } from "./site";
 
-export type NeedType = "office" | "retail" | "lease";
+export type NeedType = "office" | "retail" | "warehouse" | "lease";
 
 export const NEED_LABELS: Record<NeedType, string> = {
   office: "Office space",
   retail: "Retail space",
+  warehouse: "Warehouse space",
   lease: "Lease out my property",
 };
 
