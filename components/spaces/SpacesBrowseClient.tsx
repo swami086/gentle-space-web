@@ -25,6 +25,8 @@ type SpacesBrowseClientProps = {
   initialListings: PublicListing[];
   lastSync: SyncRun | null;
   stale: boolean;
+  /** Area to pre-select (e.g. from a corridor page), shown as a removable chip. */
+  initialArea?: string | null;
 };
 
 type SearchResponse = {
@@ -37,6 +39,7 @@ export function SpacesBrowseClient({
   initialListings,
   lastSync,
   stale,
+  initialArea = null,
 }: SpacesBrowseClientProps) {
   const [listings, setListings] = useState(initialListings);
   const [query, setQuery] = useState("");
@@ -47,9 +50,11 @@ export function SpacesBrowseClient({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<SpacesFilterState>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<SpacesFilterState>(
+    initialArea ? { ...EMPTY_FILTERS, areas: [initialArea] } : EMPTY_FILTERS,
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [showHome, setShowHome] = useState(true);
+  const [showHome, setShowHome] = useState(!initialArea);
 
   const filtered = applySpacesFilters(listings, filters);
   const chips = activeFilterChips(filters);

@@ -1,14 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useLeadCapture } from "@/components/LeadCaptureContext";
+import { HeroQuickBrief } from "@/components/HeroQuickBrief";
 import { Reveal } from "@/components/motion/Reveal";
 import { CONTENT } from "@/lib/content";
 import { SITE } from "@/lib/site";
 
 export function Hero() {
-  const { openModal } = useLeadCapture();
-
   return (
     <section className="bg-[var(--bg)]">
       <Reveal className="mx-auto max-w-[1120px] px-5 py-12 lg:px-10 lg:py-14">
@@ -21,26 +19,7 @@ export function Hero() {
               {CONTENT.hero.subtext}
             </p>
 
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={openModal}
-                className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-7 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)]"
-              >
-                {CONTENT.hero.primaryCta}
-              </button>
-              <a
-                href="/spaces"
-                className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
-              >
-                See Available Properties
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-
-            <p className="max-w-[480px] text-sm leading-[1.4] text-[var(--muted)]">
-              {CONTENT.hero.incentive}
-            </p>
+            <HeroQuickBrief />
           </div>
 
           <div className="w-full shrink-0">

@@ -4,8 +4,8 @@ import { SITE } from "@/lib/site";
 
 export function FounderTeaser() {
   return (
-    <section id="founder" className="bg-[var(--surface)] px-5 py-14 lg:px-10">
-      <Reveal className="mx-auto max-w-[1120px]">
+    <section id="founder" className="bg-[var(--surface)] py-14">
+      <Reveal className="mx-auto max-w-[1120px] px-5 lg:px-10">
         <div className="grid items-start gap-7 lg:grid-cols-[240px_1fr] lg:gap-10">
           <div className="max-w-[280px] overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
             <Image

@@ -13,7 +13,7 @@ export function CtaBand() {
           Ready to find the right commercial space in Bangalore?
         </h2>
         <p className="max-w-[46ch] text-sm leading-relaxed text-[var(--on-accent)]/85">
-          Share your brief on WhatsApp and we&apos;ll reply within the hour, with your private
+          Share your brief on WhatsApp and we&apos;ll usually reply within the hour, with your private
           shortlist typically ready in about five working days.
         </p>
         <div className="mt-2 flex flex-wrap justify-center gap-2.5">
@@ -22,13 +22,13 @@ export function CtaBand() {
             onClick={openModal}
             className="rounded-[var(--radius)] bg-[var(--on-accent)] px-6 py-2.5 text-sm font-semibold text-[var(--accent-dark)] transition hover:opacity-90"
           >
-            Contact Us
+            Share your brief
           </button>
           <a
             href="/spaces"
             className="rounded-[var(--radius)] border border-[var(--on-accent)]/55 px-6 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--on-accent)]/10"
           >
-            See Available Properties
+            See available spaces
           </a>
         </div>
       </Reveal>

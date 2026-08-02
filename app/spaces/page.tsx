@@ -6,9 +6,10 @@ import { toPublicListing } from "@/lib/listings/public";
 import type { SyncRun } from "@/lib/listings/types";
 
 export const metadata: Metadata = {
-  title: "Spaces in Bangalore | Gentle Space CRE",
+  title: "Spaces in Bangalore",
   description:
-    "Browse available coworking spaces and flexible offices in Bangalore.",
+    "Browse available office, retail and warehouse space across Bangalore — ranked by how well they fit your brief.",
+  alternates: { canonical: "/spaces" },
 };
 
 // Catalog must read Postgres at request time. A static prerender during `next build`
@@ -30,11 +31,22 @@ async function loadSpacesData(): Promise<{ listings: PublicListing[]; lastSync: 
   }
 }
 
-export default async function SpacesPage() {
+export default async function SpacesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ area?: string }>;
+}) {
+  const { area } = await searchParams;
   const { listings, lastSync } = await loadSpacesData();
   const stale = isStaleSync(lastSync?.finishedAt);
+  const initialArea = typeof area === "string" && area.trim() ? area.trim() : null;
 
   return (
-    <SpacesBrowseClient initialListings={listings} lastSync={lastSync} stale={stale} />
+    <SpacesBrowseClient
+      initialListings={listings}
+      lastSync={lastSync}
+      stale={stale}
+      initialArea={initialArea}
+    />
   );
 }

@@ -9,14 +9,20 @@ import {
   type ReactNode,
 } from "react";
 
+import type { NeedType } from "@/lib/whatsapp";
+
 export type PropertyLeadContext = { propertyName: string; propertyUrl: string };
 
-/** Accepts property context or a click event (Home CTAs pass `onClick={openModal}`). */
-export type OpenModalArg = PropertyLeadContext | MouseEvent;
+/** Seeds the modal's need + brief when opened from the hero quick-brief. */
+export type BriefPrefill = { need?: NeedType; brief?: string };
+
+/** Accepts property context, a brief prefill, or a click event (CTAs pass `onClick={openModal}`). */
+export type OpenModalArg = PropertyLeadContext | BriefPrefill | MouseEvent;
 
 type LeadCaptureContextValue = {
   open: boolean;
   propertyContext: PropertyLeadContext | null;
+  prefill: BriefPrefill | null;
   openModal: (ctx?: OpenModalArg) => void;
   closeModal: () => void;
 };
@@ -34,24 +40,44 @@ function isPropertyLeadContext(value: unknown): value is PropertyLeadContext {
   );
 }
 
+function isBriefPrefill(value: unknown): value is BriefPrefill {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    ("need" in value || "brief" in value)
+  );
+}
+
 export function LeadCaptureProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [propertyContext, setPropertyContext] = useState<PropertyLeadContext | null>(null);
+  const [prefill, setPrefill] = useState<BriefPrefill | null>(null);
 
   const value = useMemo(
     () => ({
       open,
       propertyContext,
+      prefill,
       openModal: (ctx?: OpenModalArg) => {
-        setPropertyContext(isPropertyLeadContext(ctx) ? ctx : null);
+        if (isPropertyLeadContext(ctx)) {
+          setPropertyContext(ctx);
+          setPrefill(null);
+        } else if (isBriefPrefill(ctx)) {
+          setPrefill(ctx);
+          setPropertyContext(null);
+        } else {
+          setPropertyContext(null);
+          setPrefill(null);
+        }
         setOpen(true);
       },
       closeModal: () => {
         setOpen(false);
         setPropertyContext(null);
+        setPrefill(null);
       },
     }),
-    [open, propertyContext],
+    [open, propertyContext, prefill],
   );
 
   return <LeadCaptureContext.Provider value={value}>{children}</LeadCaptureContext.Provider>;

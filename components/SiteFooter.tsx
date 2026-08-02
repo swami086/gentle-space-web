@@ -1,5 +1,6 @@
 import { BrandLogoMark } from "@/components/BrandLogoMark";
 import { BrandWordmark } from "@/components/BrandWordmark";
+import { CORRIDORS } from "@/lib/corridors";
 import { SITE } from "@/lib/site";
 
 const COMPANY_LINKS = [
@@ -14,7 +15,7 @@ const COMPANY_LINKS = [
 export function SiteFooter() {
   return (
     <footer id="contact" className="border-t border-[var(--border)] bg-[var(--bg)] px-5 py-12 lg:px-10">
-      <div className="mx-auto grid max-w-[1120px] gap-6 lg:grid-cols-[1.25fr_0.75fr_1fr] lg:gap-8">
+      <div className="mx-auto grid max-w-[1120px] gap-6 lg:grid-cols-[1.2fr_0.7fr_0.85fr_1fr] lg:gap-8">
         <div className="max-w-[34ch]">
           <a
             href="/"
@@ -38,6 +39,24 @@ export function SiteFooter() {
               <li key={label}>
                 <a href={href} className="transition hover:text-[var(--accent)]">
                   {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+            Locations
+          </h2>
+          <ul className="mt-2.5 space-y-1.5 text-[13px] leading-6 text-[var(--ink-secondary)]">
+            {CORRIDORS.map((corridor) => (
+              <li key={corridor.slug}>
+                <a
+                  href={`/bangalore/${corridor.slug}`}
+                  className="transition hover:text-[var(--accent)]"
+                >
+                  {corridor.name}
                 </a>
               </li>
             ))}
