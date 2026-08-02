@@ -14,13 +14,6 @@ import { HOW_IT_WORKS_CONTENT } from "@/lib/content-services";
 
 const ICONS = [IconClipboard, IconSearch, IconChecklist, IconPin, IconNote, IconShield];
 
-// One-shot glow bloom on the node as it lands, then settles flat.
-const GLOW = [
-  "0 0 0 0 rgba(123,90,200,0)",
-  "0 0 20px 5px rgba(123,90,200,0.55)",
-  "0 0 0 0 rgba(123,90,200,0)",
-];
-
 // Seconds between rows. Each element carries its own whileInView + an explicit
 // delay of `i * STEP`, so the wave cascades top-to-bottom regardless of how many
 // rows share the viewport (framer's staggerChildren didn't propagate through the
@@ -89,14 +82,9 @@ export function HowItWorks() {
                 <div className="flex flex-col items-center">
                   <motion.span
                     initial={{ opacity: 0, scale: 0.55 }}
-                    whileInView={{ opacity: 1, scale: 1, boxShadow: GLOW }}
+                    whileInView={{ opacity: 1, scale: 1 }}
                     viewport={VIEWPORT}
-                    transition={{
-                      delay,
-                      duration: 0.5,
-                      ease: [0.2, 0.7, 0.2, 1],
-                      boxShadow: { delay, duration: 0.9, times: [0, 0.25, 1] },
-                    }}
+                    transition={{ delay, duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${nodeClass}`}
                   >
                     <Icon className="h-[22px] w-[22px]" />
