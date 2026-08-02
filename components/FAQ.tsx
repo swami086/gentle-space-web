@@ -9,7 +9,8 @@ export function FAQ() {
 
   return (
     <section className="py-14">
-      <div className="mx-auto max-w-[720px] px-5 lg:px-10">
+      <div className="mx-auto max-w-[1120px] px-5 lg:px-10">
+        <div className="max-w-[720px]">
         <Reveal className="mb-5">
           <h2 className="text-[clamp(22px,2.6vw,28px)] font-semibold leading-[1.25] tracking-tight text-[var(--ink)]">
             FAQs: commercial real estate consultants in Bangalore
@@ -50,6 +51,7 @@ export function FAQ() {
               </div>
             );
           })}
+        </div>
         </div>
       </div>
     </section>

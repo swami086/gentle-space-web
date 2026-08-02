@@ -3,8 +3,8 @@ import { SERVICES_CONTENT } from "@/lib/content-services";
 
 export function Services() {
   return (
-    <section id="services" className="px-5 py-14 lg:px-10">
-      <div className="mx-auto max-w-[1120px]">
+    <section id="services" className="py-14">
+      <div className="mx-auto max-w-[1120px] px-5 lg:px-10">
         <Reveal className="mb-7 max-w-[640px]">
           <h2 className="text-[clamp(22px,2.6vw,28px)] font-semibold leading-tight tracking-tight text-[var(--ink)]">
             {SERVICES_CONTENT.heading}
