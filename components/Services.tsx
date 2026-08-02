@@ -1,5 +1,18 @@
+import {
+  IconBuilding,
+  IconBuildings,
+  IconChartLine,
+  IconRefresh,
+  IconSofa,
+  IconUserSearch,
+} from "@/components/icons";
 import { Reveal } from "@/components/motion/Reveal";
 import { SERVICES_CONTENT } from "@/lib/content-services";
+
+const GROUP_ICONS = [
+  [IconBuilding, IconSofa, IconBuildings],
+  [IconUserSearch, IconChartLine, IconRefresh],
+];
 
 export function Services() {
   return (
@@ -21,23 +34,31 @@ export function Services() {
                 {group.label}
               </h3>
               <ul className="flex flex-col">
-                {group.items.map((item, itemIndex) => (
-                  <li
-                    key={item.title}
-                    className="border-b border-[var(--border)] py-3.5"
-                  >
-                    <Reveal delay={(groupIndex * 3 + itemIndex) * 0.04}>
-                      <div className="grid gap-1">
-                        <strong className="text-[15px] font-semibold text-[var(--ink)]">
-                          {item.title}
-                        </strong>
-                        <span className="text-sm leading-relaxed text-[var(--muted)]">
-                          {item.body}
-                        </span>
-                      </div>
-                    </Reveal>
-                  </li>
-                ))}
+                {group.items.map((item, itemIndex) => {
+                  const Icon = GROUP_ICONS[groupIndex]?.[itemIndex] ?? IconBuilding;
+                  return (
+                    <li
+                      key={item.title}
+                      className="border-b border-[var(--border)] py-3.5"
+                    >
+                      <Reveal delay={(groupIndex * 3 + itemIndex) * 0.04}>
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--accent-soft)] text-[var(--accent)]">
+                            <Icon className="h-[19px] w-[19px]" />
+                          </span>
+                          <div className="grid gap-1">
+                            <strong className="text-[15px] font-semibold text-[var(--ink)]">
+                              {item.title}
+                            </strong>
+                            <span className="text-sm leading-relaxed text-[var(--muted)]">
+                              {item.body}
+                            </span>
+                          </div>
+                        </div>
+                      </Reveal>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

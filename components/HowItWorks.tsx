@@ -1,69 +1,16 @@
 "use client";
 
 import { motion, useReducedMotion, type Variants } from "motion/react";
+import {
+  IconChecklist,
+  IconClipboard,
+  IconNote,
+  IconPin,
+  IconSearch,
+  IconShield,
+} from "@/components/icons";
 import { Reveal } from "@/components/motion/Reveal";
 import { HOW_IT_WORKS_CONTENT } from "@/lib/content-services";
-
-const strokeProps = {
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-function IconClipboard() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <rect x="8" y="3" width="8" height="4" rx="1" />
-      <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-      <path d="M9 12h6M9 16h4" />
-    </svg>
-  );
-}
-function IconSearch() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-function IconChecklist() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <path d="M11 6h9M11 12h9M11 18h9" />
-      <path d="m3 5 1.4 1.4L6 4" />
-      <path d="m3 11 1.4 1.4L6 10" />
-      <path d="m3 17 1.4 1.4L6 16" />
-    </svg>
-  );
-}
-function IconPin() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11Z" />
-      <circle cx="12" cy="10" r="2.5" />
-    </svg>
-  );
-}
-function IconNote() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <rect x="2" y="6" width="20" height="12" rx="2" />
-      <circle cx="12" cy="12" r="2.5" />
-      <path d="M6 12h.01M18 12h.01" />
-    </svg>
-  );
-}
-function IconShield() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...strokeProps}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
-  );
-}
 
 const ICONS = [IconClipboard, IconSearch, IconChecklist, IconPin, IconNote, IconShield];
 
@@ -141,7 +88,7 @@ export function HowItWorks() {
                     <span
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${nodeClass}`}
                     >
-                      <Icon />
+                      <Icon className="h-[22px] w-[22px]" />
                     </span>
                     {!isLast && (
                       <span className="my-1.5 w-[2px] flex-1 bg-[var(--border)]" />
@@ -166,7 +113,7 @@ export function HowItWorks() {
                     variants={nodeV}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${nodeClass}`}
                   >
-                    <Icon />
+                    <Icon className="h-[22px] w-[22px]" />
                   </motion.span>
                   {!isLast && (
                     <motion.span
