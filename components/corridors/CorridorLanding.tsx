@@ -1,10 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
 import { Reveal } from "@/components/motion/Reveal";
 import { CORRIDORS, type Corridor } from "@/lib/corridors";
 
-export function CorridorLanding({ corridor }: { corridor: Corridor }) {
+export function CorridorLanding({
+  corridor,
+  children,
+}: {
+  corridor: Corridor;
+  children?: ReactNode;
+}) {
   const { openModal } = useLeadCapture();
   const siblings = CORRIDORS.filter((c) => c.slug !== corridor.slug);
 
@@ -40,6 +47,8 @@ export function CorridorLanding({ corridor }: { corridor: Corridor }) {
           </div>
         </Reveal>
       </section>
+
+      {children}
 
       <section className="border-y border-[var(--border)] bg-[var(--surface)]">
         <Reveal className="mx-auto grid max-w-[1120px] gap-8 px-5 py-12 lg:grid-cols-3 lg:px-10">

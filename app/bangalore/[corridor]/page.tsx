@@ -8,7 +8,10 @@ import { LeadCaptureModal } from "@/components/LeadCaptureModal";
 import { LeadCaptureProvider } from "@/components/LeadCaptureContext";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
-import { CORRIDORS, getCorridor } from "@/lib/corridors";
+import { CorridorListingsPreview } from "@/components/corridors/CorridorListingsPreview";
+import { getCorridor } from "@/lib/corridors";
+import { applySpacesFilters } from "@/lib/listings/filterListings";
+import { toPublicListing, type PublicListing } from "@/lib/listings/public";
 import { SITE_URL } from "@/lib/site";
 import { breadcrumbSchema, organizationSchema } from "@/lib/structured-data";
 
@@ -16,8 +19,26 @@ type PageProps = {
   params: Promise<{ corridor: string }>;
 };
 
-export function generateStaticParams() {
-  return CORRIDORS.map((corridor) => ({ corridor: corridor.slug }));
+// Rendered per request so the corridor preview reflects live inventory (the DB
+// is unreachable during `next build`, same reason /spaces is force-dynamic).
+export const dynamic = "force-dynamic";
+
+const PREVIEW_COUNT = 5;
+
+async function loadCorridorListings(areaName: string): Promise<PublicListing[]> {
+  try {
+    const { listListings } = await import("@/lib/db/listings");
+    const rows = await listListings();
+    const listings = rows.map(toPublicListing);
+    return applySpacesFilters(listings, {
+      deskTypes: [],
+      areas: [areaName],
+      amenities: [],
+    }).slice(0, PREVIEW_COUNT);
+  } catch (err) {
+    console.error("[corridor] loadCorridorListings failed", err);
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -48,6 +69,8 @@ export default async function CorridorPage({ params }: PageProps) {
     { name: corridor.name, url: `${SITE_URL}/bangalore/${slug}` },
   ]);
 
+  const previewListings = await loadCorridorListings(corridor.name);
+
   return (
     <LeadCaptureProvider>
       <JsonLd data={organizationSchema()} />
@@ -55,7 +78,12 @@ export default async function CorridorPage({ params }: PageProps) {
       <div className="flex min-h-full flex-col">
         <SiteHeader />
         <main className="flex-1">
-          <CorridorLanding corridor={corridor} />
+          <CorridorLanding corridor={corridor}>
+            <CorridorListingsPreview
+              listings={previewListings}
+              corridorName={corridor.name}
+            />
+          </CorridorLanding>
           <HowItWorks />
           <CtaBand />
         </main>
