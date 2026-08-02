@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion, type Variants } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   IconChecklist,
   IconClipboard,
@@ -21,28 +21,12 @@ const GLOW = [
   "0 0 0 0 rgba(123,90,200,0)",
 ];
 
-const rowV: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
-const nodeV: Variants = {
-  hidden: { opacity: 0, scale: 0.55 },
-  show: {
-    opacity: 1,
-    scale: 1,
-    boxShadow: GLOW,
-    transition: {
-      duration: 0.5,
-      ease: [0.2, 0.7, 0.2, 1],
-      boxShadow: { duration: 1.1, times: [0, 0.22, 1] },
-    },
-  },
-};
-const lineV: Variants = {
-  hidden: { scaleY: 0 },
-  show: { scaleY: 1, transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] } },
-};
-const contentV: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] } },
-};
+// Seconds between rows. Each element carries its own whileInView + an explicit
+// delay of `i * STEP`, so the wave cascades top-to-bottom regardless of how many
+// rows share the viewport (framer's staggerChildren didn't propagate through the
+// nested rail/content structure).
+const STEP = 0.26;
+const VIEWPORT = { once: true, amount: 0.3 } as const;
 
 export function HowItWorks() {
   const reduce = useReducedMotion();
@@ -99,34 +83,45 @@ export function HowItWorks() {
               );
             }
 
+            const delay = i * STEP;
             return (
-              <motion.li
-                key={step.label}
-                className="flex gap-4"
-                initial="hidden"
-                whileInView="show"
-                viewport={{ once: true, amount: 0.5 }}
-                variants={rowV}
-              >
+              <li key={step.label} className="flex gap-4">
                 <div className="flex flex-col items-center">
                   <motion.span
-                    variants={nodeV}
+                    initial={{ opacity: 0, scale: 0.55 }}
+                    whileInView={{ opacity: 1, scale: 1, boxShadow: GLOW }}
+                    viewport={VIEWPORT}
+                    transition={{
+                      delay,
+                      duration: 0.5,
+                      ease: [0.2, 0.7, 0.2, 1],
+                      boxShadow: { delay, duration: 0.9, times: [0, 0.25, 1] },
+                    }}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${nodeClass}`}
                   >
                     <Icon className="h-[22px] w-[22px]" />
                   </motion.span>
                   {!isLast && (
                     <motion.span
-                      variants={lineV}
+                      initial={{ scaleY: 0 }}
+                      whileInView={{ scaleY: 1 }}
+                      viewport={VIEWPORT}
+                      transition={{ delay: delay + 0.12, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
                       style={{ transformOrigin: "top" }}
                       className="my-1.5 w-[2px] flex-1 bg-[var(--border)]"
                     />
                   )}
                 </div>
-                <motion.div variants={contentV} className={isLast ? "" : "pb-6"}>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={VIEWPORT}
+                  transition={{ delay: delay + 0.08, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                  className={isLast ? "" : "pb-6"}
+                >
                   {content}
                 </motion.div>
-              </motion.li>
+              </li>
             );
           })}
         </ol>
