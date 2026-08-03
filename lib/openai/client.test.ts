@@ -126,3 +126,22 @@ describe("openai explainListingFit", () => {
     expect(JSON.parse(init.body)).toMatchObject({ max_tokens: 320 });
   });
 });
+
+describe("openai qualifyLead", () => {
+  it("sends an abort signal and parses tier/cheatSheet", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify({ tier: "warm", cheatSheet: "Ask about budget." }) } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { qualifyLead } = await import("./client");
+    const result = await qualifyLead({ need: "retail", step2Answers: {}, notes: "Looking around" });
+    expect(result).toEqual({ tier: "warm", cheatSheet: "Ask about budget." });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeDefined();
+  });
+});
