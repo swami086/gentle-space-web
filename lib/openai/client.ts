@@ -11,9 +11,16 @@ import {
   parseInsightJson,
 } from "../spaces/insight-prompt";
 import type { InsightContent, InsightFacts } from "../spaces/insight-types";
+import {
+  QUALIFY_SYSTEM,
+  buildQualifyUserText,
+  parseQualificationJson,
+} from "../leads/qualify-prompt";
+import type { LeadQualification, LeadQualificationInput } from "../leads/qualify-types";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
 const OPENAI_INSIGHT_TIMEOUT_MS = 15_000;
+const OPENAI_QUALIFY_TIMEOUT_MS = 4_000;
 
 function apiKey(): string {
   const key = process.env.OPENAI_API_KEY;
@@ -169,4 +176,33 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
   };
   const content = body.choices[0]?.message?.content?.trim() || "{}";
   return parseInsightJson(content, facts);
+}
+
+export async function qualifyLead(input: LeadQualificationInput): Promise<LeadQualification> {
+  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      max_tokens: 200,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: QUALIFY_SYSTEM },
+        { role: "user", content: buildQualifyUserText(input) },
+      ],
+    }),
+    signal: AbortSignal.timeout(OPENAI_QUALIFY_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`openai qualify failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    choices: { message?: { content?: string | null } }[];
+  };
+  const content = body.choices[0]?.message?.content?.trim() || "{}";
+  return parseQualificationJson(content);
 }
