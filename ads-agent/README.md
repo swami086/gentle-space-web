@@ -10,6 +10,11 @@ in rule-specific performance-marketing principles (`lib/decision-engine/playbook
 distilled from [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills)'
 `ads` skill.
 
+The admin UI (`/`, `/campaigns`, `/proposals`, `/settings`) is a Tailwind v4 +
+shadcn-style dashboard behind a persistent sidebar; see
+[`docs/superpowers/specs/2026-08-03-ads-agent-admin-dashboard-design.md`](../docs/superpowers/specs/2026-08-03-ads-agent-admin-dashboard-design.md)
+for the design.
+
 ## Local setup
 
 1. `npm install`
