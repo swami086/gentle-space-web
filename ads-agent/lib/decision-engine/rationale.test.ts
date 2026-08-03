@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewProposal } from "../types";
 
+vi.mock("../vertex/auth", () => ({
+  getVertexAccessToken: vi.fn().mockResolvedValue("test-token"),
+}));
+
 const proposal: NewProposal = {
   kind: "pause",
   campaignId: "camp-1",
@@ -8,12 +12,23 @@ const proposal: NewProposal = {
   payload: { campaignId: "camp-1", reason: "CPL exceeded 3500 for 3 consecutive snapshots" },
 };
 
+function textResponse(text: string) {
+  return new Response(
+    JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text }] } }] }),
+    { status: 200 },
+  );
+}
+
 describe("draftRationale", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     vi.resetModules();
-    process.env = { ...originalEnv, OPENAI_API_KEY: "test-key" };
+    process.env = {
+      ...originalEnv,
+      GOOGLE_CLOUD_PROJECT: "test-project",
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/fake-vertex-key.json",
+    };
     vi.unstubAllGlobals();
   });
 
@@ -23,12 +38,7 @@ describe("draftRationale", () => {
 
   it("returns the model's drafted rationale text", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: "This campaign has been over budget for 3 straight days." } }],
-        }),
-        { status: 200 },
-      ),
+      textResponse("This campaign has been over budget for 3 straight days."),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -38,24 +48,19 @@ describe("draftRationale", () => {
     );
   });
 
-  it("grounds the system prompt with rule-specific performance-marketing context", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }),
-    );
+  it("grounds the system instruction with rule-specific performance-marketing context", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(textResponse("ok"));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftRationale } = await import("./rationale");
     await draftRationale(proposal);
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    const systemMessage = body.messages.find((m: { role: string }) => m.role === "system");
-    expect(systemMessage.content).toMatch(/consecutive/i);
+    expect(body.systemInstruction.parts[0].text).toMatch(/consecutive/i);
   });
 
   it("omits playbook grounding for an unrecognized rule without erroring", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }),
-    );
+    const fetchMock = vi.fn().mockResolvedValue(textResponse("ok"));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftRationale } = await import("./rationale");
@@ -64,8 +69,8 @@ describe("draftRationale", () => {
     ).resolves.toBe("ok");
   });
 
-  it("falls back to a generic string when OPENAI_API_KEY is unset", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("falls back to a generic string when Vertex AI is not configured", async () => {
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     const { draftRationale } = await import("./rationale");
     await expect(draftRationale(proposal)).resolves.toContain("kill_rule");
   });

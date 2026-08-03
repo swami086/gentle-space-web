@@ -10,7 +10,8 @@ const ENV_KEYS = [
   "GOOGLE_ADS_REFRESH_TOKEN",
   "GOOGLE_ADS_CUSTOMER_ID",
   "TWENTY_API_KEY",
-  "OPENAI_API_KEY",
+  "GOOGLE_CLOUD_PROJECT",
+  "GOOGLE_APPLICATION_CREDENTIALS",
 ] as const;
 
 beforeEach(() => {
@@ -27,7 +28,7 @@ describe("getConnectorStatus", () => {
       meta: false,
       googleAds: false,
       twenty: false,
-      openai: false,
+      vertexAi: false,
     });
   });
 
@@ -53,9 +54,11 @@ describe("getConnectorStatus", () => {
     expect(getConnectorStatus().twenty).toBe(true);
   });
 
-  it("reports openai configured when OPENAI_API_KEY is set", () => {
-    process.env.OPENAI_API_KEY = "key";
-    expect(getConnectorStatus().openai).toBe(true);
+  it("reports vertexAi configured only when both GCP vars are set", () => {
+    process.env.GOOGLE_CLOUD_PROJECT = "propane-galaxy-498403-n8";
+    expect(getConnectorStatus().vertexAi).toBe(false);
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = "/path/to/key.json";
+    expect(getConnectorStatus().vertexAi).toBe(true);
   });
 
   it("treats a blank/whitespace-only value as unconfigured", () => {

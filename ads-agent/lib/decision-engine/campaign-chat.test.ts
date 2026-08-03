@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "../types";
 
+vi.mock("../vertex/auth", () => ({
+  getVertexAccessToken: vi.fn().mockResolvedValue("test-token"),
+}));
+
 function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
     id: "draft-1",
@@ -19,33 +23,31 @@ function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   };
 }
 
-function toolCallResponse(args: Record<string, unknown>, content = "") {
+function toolCallResponse(args: Record<string, unknown>) {
   return new Response(
     JSON.stringify({
-      choices: [
-        {
-          message: {
-            content,
-            tool_calls: [
-              { id: "call_1", type: "function", function: { name: "update_campaign_draft", arguments: JSON.stringify(args) } },
-            ],
-          },
-        },
-      ],
+      candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "update_campaign_draft", args } }] } }],
     }),
     { status: 200 },
   );
 }
 
-function plainReplyResponse(content: string) {
-  return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+function plainReplyResponse(text: string) {
+  return new Response(
+    JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text }] } }] }),
+    { status: 200 },
+  );
 }
 
 describe("draftCampaignChatReply", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    process.env = { ...originalEnv, OPENAI_API_KEY: "test-key" };
+    process.env = {
+      ...originalEnv,
+      GOOGLE_CLOUD_PROJECT: "test-project",
+      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/fake-vertex-key.json",
+    };
     vi.unstubAllGlobals();
   });
 
@@ -66,7 +68,11 @@ describe("draftCampaignChatReply", () => {
 
   it("returns field updates when the model calls update_campaign_draft with valid fields", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      toolCallResponse({ corridor: "whitefield", dailyBudgetInr: 500 }, "Got it — set the corridor and budget."),
+      toolCallResponse({
+        assistantReply: "Got it — set the corridor and budget.",
+        corridor: "whitefield",
+        dailyBudgetInr: 500,
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -80,12 +86,12 @@ describe("draftCampaignChatReply", () => {
     });
   });
 
-  it("rejects RSA-limit violations with a synthetic tool result and returns the corrected fields on retry", async () => {
+  it("rejects RSA-limit violations with a synthetic function response and returns the corrected fields on retry", async () => {
     const tooLong = "This headline is deliberately far too long for Google RSA limits";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(toolCallResponse({ headlines: [tooLong] }))
-      .mockResolvedValueOnce(toolCallResponse({ headlines: ["Short Headline"] }, "Fixed it."));
+      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }))
+      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "Fixed it.", headlines: ["Short Headline"] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
@@ -93,7 +99,10 @@ describe("draftCampaignChatReply", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondCallBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(secondCallBody.messages.at(-1)).toMatchObject({ role: "tool", tool_call_id: "call_1" });
+    expect(secondCallBody.contents.at(-1)).toMatchObject({
+      role: "user",
+      parts: [{ functionResponse: { name: "update_campaign_draft" } }],
+    });
     expect(result).toEqual({ reply: "Fixed it.", fieldUpdates: { headlines: ["Short Headline"] }, validationErrors: [] });
   });
 
@@ -101,8 +110,8 @@ describe("draftCampaignChatReply", () => {
     const tooLong = "This headline is deliberately far too long for Google RSA limits";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(toolCallResponse({ headlines: [tooLong] }))
-      .mockResolvedValueOnce(toolCallResponse({ headlines: [tooLong] }));
+      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }))
+      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
@@ -112,8 +121,8 @@ describe("draftCampaignChatReply", () => {
     expect(result.validationErrors.length).toBeGreaterThan(0);
   });
 
-  it("returns a friendly message without calling fetch when OPENAI_API_KEY is unset", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("returns a friendly message without calling fetch when Vertex AI is not configured", async () => {
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -122,7 +131,7 @@ describe("draftCampaignChatReply", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toContain("OPENAI_API_KEY");
+    expect(result.reply).toContain("Vertex AI");
   });
 
   it("returns a friendly message when the API call is not ok", async () => {

@@ -2,6 +2,16 @@ import type { CampaignDraft, CampaignDraftFields, CampaignDraftMessage } from ".
 import { validateDraftFields } from "./campaign-draft-rules";
 import { playbookContextFor } from "./playbook-context";
 import { STRATEGY } from "./strategy-config";
+import {
+  generateContent,
+  firstFunctionCall,
+  firstTextPart,
+  isVertexConfigured,
+  responseParts,
+  type FunctionDeclaration,
+  type GeminiContent,
+  type GeminiResponse,
+} from "../vertex/client";
 
 const PRODUCT_CONTEXT = `Gentle Space is a Bangalore commercial real estate (CRE) consultancy with an
 AI-assisted space-search product. It matches a brief to office/retail/warehouse inventory and verifies
@@ -30,96 +40,69 @@ campaign; a human always reviews and approves before anything goes live.`,
     .join("\n\n");
 }
 
-const UPDATE_DRAFT_TOOL = {
-  type: "function" as const,
-  function: {
-    name: "update_campaign_draft",
-    description: "Write any subset of the campaign draft's fields as they become known.",
-    parameters: {
-      type: "object",
-      properties: {
-        corridor: { type: "string", description: "Bangalore corridor/neighborhood the ad should target." },
-        dailyBudgetInr: { type: "number", description: "Daily budget in INR." },
-        adGroupName: { type: "string" },
-        keywords: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              text: { type: "string" },
-              matchType: { type: "string", enum: ["broad", "phrase", "exact"] },
-            },
-            required: ["text", "matchType"],
-          },
-        },
-        headlines: { type: "array", items: { type: "string" }, description: "3-15 items, each <=30 chars" },
-        descriptions: { type: "array", items: { type: "string" }, description: "2-4 items, each <=90 chars" },
-        finalUrl: { type: "string" },
+const UPDATE_DRAFT_TOOL_NAME = "update_campaign_draft";
+
+// Gemini's function-calling "auto" mode is unreliable here — the model sometimes
+// replies in plain text claiming it set fields without actually calling the tool.
+// Forcing "any" mode (every turn must call this tool) fixes that, but Gemini's "any"
+// mode returns *only* the function call with no accompanying text — so the
+// conversational reply has to travel as a tool argument, per Google's own guidance.
+const UPDATE_DRAFT_TOOL: FunctionDeclaration = {
+  name: UPDATE_DRAFT_TOOL_NAME,
+  description:
+    "Call this on every turn. Write any subset of the campaign draft's fields as they become known, and always include your conversational reply to the user.",
+  parameters: {
+    type: "object",
+    properties: {
+      assistantReply: {
+        type: "string",
+        description:
+          "Your conversational reply to show the user — a short follow-up question if a required field is still missing/ambiguous, or a short acknowledgment of what you just set.",
       },
+      corridor: { type: "string", description: "Bangalore corridor/neighborhood the ad should target." },
+      dailyBudgetInr: { type: "number", description: "Daily budget in INR." },
+      adGroupName: { type: "string" },
+      keywords: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            matchType: { type: "string", enum: ["broad", "phrase", "exact"] },
+          },
+          required: ["text", "matchType"],
+        },
+      },
+      headlines: { type: "array", items: { type: "string" }, description: "3-15 items, each <=30 chars" },
+      descriptions: { type: "array", items: { type: "string" }, description: "2-4 items, each <=90 chars" },
+      finalUrl: { type: "string" },
     },
+    required: ["assistantReply"],
   },
 };
 
-type OpenAiToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
-type OpenAiMessage = { content?: string | null; tool_calls?: OpenAiToolCall[] };
-type OpenAiChatResponse = { choices: { message?: OpenAiMessage }[] };
-
-async function callOpenAi(
-  apiKey: string,
-  messages: Record<string, unknown>[],
-): Promise<OpenAiChatResponse | null> {
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.3,
-        max_tokens: 600,
-        messages,
-        tools: [UPDATE_DRAFT_TOOL],
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as OpenAiChatResponse;
-  } catch {
-    return null;
-  }
-}
-
 type ParsedToolCall =
   | { kind: "no_tool_call"; reply: string }
-  | { kind: "parse_error"; reply: string }
   | {
       kind: "tool_call";
       reply: string;
       fieldUpdates: CampaignDraftFields;
-      assistantMessage: OpenAiMessage;
-      toolCallId: string;
+      modelContent: GeminiContent;
     };
 
-function parseToolCall(response: OpenAiChatResponse): ParsedToolCall {
-  const message = response.choices[0]?.message;
-  const toolCall = message?.tool_calls?.find((call) => call.function.name === "update_campaign_draft");
-  if (!message || !toolCall) {
-    return {
-      kind: "no_tool_call",
-      reply: message?.content?.trim() || "Could you tell me more about the campaign you'd like?",
-    };
+function parseToolCall(response: GeminiResponse): ParsedToolCall {
+  const call = firstFunctionCall(response, UPDATE_DRAFT_TOOL_NAME);
+  const text = firstTextPart(response);
+  if (!call) {
+    return { kind: "no_tool_call", reply: text || "Could you tell me more about the campaign you'd like?" };
   }
-  try {
-    const fieldUpdates = JSON.parse(toolCall.function.arguments) as CampaignDraftFields;
-    return {
-      kind: "tool_call",
-      reply: message.content?.trim() || "Updated the draft — take a look at the setup card.",
-      fieldUpdates,
-      assistantMessage: message,
-      toolCallId: toolCall.id,
-    };
-  } catch {
-    return { kind: "parse_error", reply: "I had trouble structuring that — could you rephrase?" };
-  }
+  const { assistantReply, ...fieldUpdates } = call.args as CampaignDraftFields & { assistantReply?: string };
+  return {
+    kind: "tool_call",
+    reply: (typeof assistantReply === "string" && assistantReply.trim()) || text || "Updated the draft — take a look at the setup card.",
+    fieldUpdates: fieldUpdates as CampaignDraftFields,
+    modelContent: { role: "model", parts: responseParts(response) },
+  };
 }
 
 export type ChatReply = { reply: string; fieldUpdates: CampaignDraftFields | null; validationErrors: string[] };
@@ -129,23 +112,35 @@ export async function draftCampaignChatReply(input: {
   history: CampaignDraftMessage[];
   userMessage: string;
 }): Promise<ChatReply> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
+  if (!isVertexConfigured()) {
     return {
-      reply: "OPENAI_API_KEY is not configured, so I can't draft campaigns yet. Ask an admin to set it.",
+      reply:
+        "Vertex AI is not configured (GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS), so I can't draft campaigns yet. Ask an admin to set it.",
       fieldUpdates: null,
       validationErrors: [],
     };
   }
 
-  const messages: Record<string, unknown>[] = [
-    { role: "system", content: buildSystemPrompt() },
-    ...input.history.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: input.userMessage },
+  const contents: GeminiContent[] = [
+    ...input.history.map((m) => ({
+      role: (m.role === "assistant" ? "model" : "user") as "user" | "model",
+      parts: [{ text: m.content }],
+    })),
+    { role: "user" as const, parts: [{ text: input.userMessage }] },
   ];
 
-  const first = await callOpenAi(apiKey, messages);
-  if (!first) {
+  let first: GeminiResponse;
+  try {
+    first = await generateContent({
+      systemInstruction: buildSystemPrompt(),
+      contents,
+      tools: [UPDATE_DRAFT_TOOL],
+      toolChoice: "any",
+      temperature: 0.3,
+      maxOutputTokens: 600,
+      timeoutMs: 15_000,
+    });
+  } catch {
     return { reply: "The campaign assistant is unavailable right now — try again shortly.", fieldUpdates: null, validationErrors: [] };
   }
 
@@ -159,16 +154,38 @@ export async function draftCampaignChatReply(input: {
     return { reply: firstParsed.reply, fieldUpdates: firstParsed.fieldUpdates, validationErrors: [] };
   }
 
-  messages.push(firstParsed.assistantMessage);
-  messages.push({
-    role: "tool",
-    tool_call_id: firstParsed.toolCallId,
-    content: `Rejected: ${firstErrors.join("; ")}. Call update_campaign_draft again with fixed values.`,
+  contents.push(firstParsed.modelContent);
+  contents.push({
+    role: "user",
+    parts: [
+      {
+        functionResponse: {
+          name: UPDATE_DRAFT_TOOL_NAME,
+          response: {
+            result: `Rejected: ${firstErrors.join("; ")}. Call update_campaign_draft again with fixed values.`,
+          },
+        },
+      },
+    ],
   });
 
-  const second = await callOpenAi(apiKey, messages);
-  if (!second) {
-    return { reply: "The campaign assistant is unavailable right now — try again shortly.", fieldUpdates: null, validationErrors: firstErrors };
+  let second: GeminiResponse;
+  try {
+    second = await generateContent({
+      systemInstruction: buildSystemPrompt(),
+      contents,
+      tools: [UPDATE_DRAFT_TOOL],
+      toolChoice: "any",
+      temperature: 0.3,
+      maxOutputTokens: 600,
+      timeoutMs: 15_000,
+    });
+  } catch {
+    return {
+      reply: "The campaign assistant is unavailable right now — try again shortly.",
+      fieldUpdates: null,
+      validationErrors: firstErrors,
+    };
   }
 
   const secondParsed = parseToolCall(second);
