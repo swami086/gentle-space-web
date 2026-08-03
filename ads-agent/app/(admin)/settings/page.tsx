@@ -7,7 +7,7 @@ const CONNECTOR_LABELS = {
   meta: "Meta Marketing API",
   googleAds: "Google Ads API",
   twenty: "Twenty CRM",
-  vertexAi: "Vertex AI (chat + rationale drafting)",
+  bifrost: "Bifrost",
 } as const;
 
 export default async function SettingsPage() {

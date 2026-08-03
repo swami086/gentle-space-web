@@ -10,8 +10,7 @@ const ENV_KEYS = [
   "GOOGLE_ADS_REFRESH_TOKEN",
   "GOOGLE_ADS_CUSTOMER_ID",
   "TWENTY_API_KEY",
-  "GOOGLE_CLOUD_PROJECT",
-  "GOOGLE_APPLICATION_CREDENTIALS",
+  "BIFROST_BASE_URL",
 ] as const;
 
 beforeEach(() => {
@@ -28,7 +27,7 @@ describe("getConnectorStatus", () => {
       meta: false,
       googleAds: false,
       twenty: false,
-      vertexAi: false,
+      bifrost: false,
     });
   });
 
@@ -54,11 +53,10 @@ describe("getConnectorStatus", () => {
     expect(getConnectorStatus().twenty).toBe(true);
   });
 
-  it("reports vertexAi configured only when both GCP vars are set", () => {
-    process.env.GOOGLE_CLOUD_PROJECT = "propane-galaxy-498403-n8";
-    expect(getConnectorStatus().vertexAi).toBe(false);
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = "/path/to/key.json";
-    expect(getConnectorStatus().vertexAi).toBe(true);
+  it("reports bifrost configured when BIFROST_BASE_URL is set", () => {
+    expect(getConnectorStatus().bifrost).toBe(false);
+    process.env.BIFROST_BASE_URL = "http://localhost:8080";
+    expect(getConnectorStatus().bifrost).toBe(true);
   });
 
   it("treats a blank/whitespace-only value as unconfigured", () => {

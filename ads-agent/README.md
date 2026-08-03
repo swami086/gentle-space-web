@@ -19,16 +19,16 @@ for the design.
 
 From **Campaigns → New Campaign**, describe the ad in chat; the assistant fills a
 draft setup card. When the draft is ready, click **Create Proposal**, review/edit on
-the proposal page, then approve. Requires `GOOGLE_CLOUD_PROJECT` +
-`GOOGLE_APPLICATION_CREDENTIALS` for the chat assistant and for proposal rationale
-generation (`lib/decision-engine/rationale.ts`) — both call GCP Vertex AI
-(`gemini-2.5-flash-lite`), not OpenAI.
+the proposal page, then approve. Requires Bifrost (`BIFROST_BASE_URL`) for the chat
+assistant and for proposal rationale generation (`lib/decision-engine/rationale.ts`)
+— both route through the Bifrost gateway to Vertex (`gemini-2.5-flash-lite`), not
+OpenAI.
 
 ## Local setup
 
 1. `npm install`
 2. `docker compose up -d` (starts this service's own Postgres on host port 5434)
-3. `cp .env.example .env.local` and fill in `DATABASE_URL` (already correct for the compose default), `GOOGLE_CLOUD_PROJECT` + `GOOGLE_APPLICATION_CREDENTIALS` (chat + rationale — see Vertex AI below), plus credentials below
+3. `cp .env.example .env.local` and fill in `DATABASE_URL` (already correct for the compose default), Bifrost vars (chat + rationale — see Bifrost below), plus credentials below
 4. `npm run migrate` (applies `lib/db/schema.sql`)
 5. `npm run dev` (admin UI at http://localhost:3030)
 6. In a second terminal: `npm run worker` (cron worker; starts with `cron_settings.enabled = false`, flip it on in `/settings`)
@@ -61,19 +61,15 @@ generation (`lib/decision-engine/rationale.ts`) — both call GCP Vertex AI
 Reuse the main app's already-live instance — no new setup. `TWENTY_BASE_URL`
 and `TWENTY_API_KEY` match the root repo's `.env.local`.
 
-### Vertex AI (chat + rationale)
+### Bifrost (chat + rationale)
 
-Reuse the root app's GCP project and service-account key — no new GCP setup:
+Bifrost is the local AI gateway between ads-agent and Vertex. See
+[`bifrost/README.md`](bifrost/README.md) for full setup (service-account export,
+Compose env, smoke test).
 
-1. Set `GOOGLE_CLOUD_PROJECT` to the same project the root app uses
-   (`propane-galaxy-498403-n8`), and optionally `GOOGLE_CLOUD_LOCATION`
-   (defaults to `us-central1`).
-2. Set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute path of a Vertex
-   service-account JSON key — either the root repo's existing
-   `.secrets/gentle-space-vertex-stackgen.json`, or your own copy of it.
-3. Optionally override `VERTEX_CHAT_MODEL` (defaults to `gemini-2.5-flash-lite`,
-   the cheapest current-generation Gemini model with function-calling support).
-
-Auth is a from-scratch JWT-bearer flow (`lib/vertex/auth.ts`, zero extra
-dependencies) — the same pattern the root app uses in `lib/vertex/auth.ts`,
-copied here since `ads-agent` is a standalone service with no shared package.
+1. Start the gateway: `docker compose up -d bifrost`
+2. Set `BIFROST_BASE_URL` (default `http://localhost:8080`), `VERTEX_PROJECT_ID`
+   (`propane-galaxy-498403-n8`), and `VERTEX_AUTH_CREDENTIALS` (base64-encoded
+   service-account JSON in `.env.local`; export decoded for Compose — see
+   `bifrost/README.md`)
+3. Optionally override `BIFROST_CHAT_MODEL` (default `vertex/gemini-2.5-flash-lite`)

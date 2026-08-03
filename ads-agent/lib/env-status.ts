@@ -2,7 +2,7 @@ export type ConnectorStatus = {
   meta: boolean;
   googleAds: boolean;
   twenty: boolean;
-  vertexAi: boolean;
+  bifrost: boolean;
 };
 
 function isSet(name: string): boolean {
@@ -19,6 +19,6 @@ export function getConnectorStatus(): ConnectorStatus {
       isSet("GOOGLE_ADS_REFRESH_TOKEN") &&
       isSet("GOOGLE_ADS_CUSTOMER_ID"),
     twenty: isSet("TWENTY_API_KEY"),
-    vertexAi: isSet("GOOGLE_CLOUD_PROJECT") && isSet("GOOGLE_APPLICATION_CREDENTIALS"),
+    bifrost: isSet("BIFROST_BASE_URL"),
   };
 }
