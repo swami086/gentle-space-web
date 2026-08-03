@@ -10,7 +10,8 @@ Bifrost sits between ads-agent and Vertex AI. It handles model routing (complexi
    base64 -i .secrets/gentle-space-vertex-stackgen.json | tr -d '\n'
    ```
 
-   Set the output as `VERTEX_AUTH_CREDENTIALS` in `ads-agent/.env.local`.
+   Put the output in `ads-agent/.env.local` as `VERTEX_AUTH_CREDENTIALS=...`
+   (Node scripts load `.env.local` via `--env-file`).
 
 2. **Required env vars** (also in `.env.example`):
 
@@ -21,12 +22,19 @@ Bifrost sits between ads-agent and Vertex AI. It handles model routing (complexi
    | `BIFROST_BASE_URL` | `http://localhost:8080` |
    | `BIFROST_CHAT_MODEL` | `vertex/gemini-2.5-flash-lite` |
 
-3. **Start Bifrost** from `ads-agent/`:
+3. **Start Bifrost** from `ads-agent/`.
+
+   Docker Compose does **not** auto-read `.env.local` — it interpolates
+   `${VERTEX_AUTH_CREDENTIALS}` from the shell environment or from a file
+   named `.env` in this folder. Either:
 
    ```bash
+   set -a && source .env.local && set +a
    docker compose up -d bifrost
    ```
 
+   or copy the Vertex/Bifrost lines into `ads-agent/.env` (gitignored) and run
+   `docker compose up -d bifrost`.
 4. **Smoke test** — use the Task 3 script, or manually:
 
    ```bash

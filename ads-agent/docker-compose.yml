@@ -22,6 +22,8 @@ services:
     image: maximhq/bifrost:latest
     ports:
       - "8080:8080"
+    # Compose does not load .env.local by default; export vars first
+    # (`set -a && source .env.local && set +a`) or use ads-agent/.env.
     environment:
       VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
       VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS}
