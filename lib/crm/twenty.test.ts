@@ -152,4 +152,26 @@ describe("createLeadInTwenty", () => {
     expect(result.error).toBeTruthy();
     expect(result.error).toContain("500");
   });
+
+  it("returns failed with personId when opportunity fetch throws after person create", async () => {
+    process.env.TWENTY_API_KEY = "test-key";
+    process.env.TWENTY_BASE_URL = "http://localhost:3020";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { createPerson: { id: "person-77" } } }), {
+          status: 201,
+        }),
+      )
+      .mockRejectedValueOnce(new Error("socket hang up"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createLeadInTwenty } = await import("./twenty");
+    const result = await createLeadInTwenty(payload, qualification);
+    expect(result).toEqual({
+      status: "failed",
+      personId: "person-77",
+      error: "socket hang up",
+    });
+  });
 });

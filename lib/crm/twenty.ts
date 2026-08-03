@@ -94,6 +94,7 @@ export async function createLeadInTwenty(
 
   const { firstName, lastName } = splitName(payload.name);
   const phone = digitsPhone(payload.phone);
+  let personId: string | undefined;
 
   try {
     const person = await twentyPost("/rest/people", {
@@ -105,6 +106,7 @@ export async function createLeadInTwenty(
       },
     });
     if (!person.ok) return { status: "failed", error: person.error };
+    personId = person.id;
 
     const opportunityBody: Record<string, unknown> = {
       name: `${payload.need}: ${firstName} ${lastName}`.slice(0, 120),
@@ -125,6 +127,6 @@ export async function createLeadInTwenty(
     return { status: "created", personId: person.id, opportunityId: opp.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { status: "failed", error: message };
+    return { status: "failed", ...(personId ? { personId } : {}), error: message };
   }
 }
