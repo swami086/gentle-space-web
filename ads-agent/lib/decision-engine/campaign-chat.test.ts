@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "../types";
 
-vi.mock("../vertex/auth", () => ({
-  getVertexAccessToken: vi.fn().mockResolvedValue("test-token"),
-}));
-
 function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
     id: "draft-1",
@@ -23,18 +19,11 @@ function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   };
 }
 
-function toolCallResponse(args: Record<string, unknown>) {
+function jsonResponse(payload: Record<string, unknown>) {
   return new Response(
     JSON.stringify({
-      candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "update_campaign_draft", args } }] } }],
+      choices: [{ message: { role: "assistant", content: JSON.stringify(payload) } }],
     }),
-    { status: 200 },
-  );
-}
-
-function plainReplyResponse(text: string) {
-  return new Response(
-    JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text }] } }] }),
     { status: 200 },
   );
 }
@@ -45,8 +34,8 @@ describe("draftCampaignChatReply", () => {
   beforeEach(() => {
     process.env = {
       ...originalEnv,
-      GOOGLE_CLOUD_PROJECT: "test-project",
-      GOOGLE_APPLICATION_CREDENTIALS: "/tmp/fake-vertex-key.json",
+      BIFROST_BASE_URL: "http://localhost:8080",
+      BIFROST_CHAT_MODEL: "vertex/gemini-2.5-flash-lite",
     };
     vi.unstubAllGlobals();
   });
@@ -55,20 +44,29 @@ describe("draftCampaignChatReply", () => {
     process.env = originalEnv;
   });
 
-  it("returns a clarifying question when the model makes no tool call", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(plainReplyResponse("What's your daily budget?"));
+  it("returns a clarifying question when the model only sends assistantReply", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ assistantReply: "What's your daily budget?" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
     const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "I want a campaign in Whitefield" });
 
-    expect(result).toEqual({ reply: "What's your daily budget?", fieldUpdates: null, validationErrors: [] });
+    expect(result).toEqual({ reply: "What's your daily budget?", fieldUpdates: {}, validationErrors: [] });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.response_format.type).toBe("json_schema");
+    expect(body.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "system" }),
+        expect.objectContaining({ role: "user", content: "I want a campaign in Whitefield" }),
+      ]),
+    );
+    expect(body.fallbacks).toContain("vertex/gemini-2.5-flash");
   });
 
-  it("returns field updates when the model calls update_campaign_draft with valid fields", async () => {
+  it("returns field updates when the model returns valid draft JSON", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      toolCallResponse({
+      jsonResponse({
         assistantReply: "Got it — set the corridor and budget.",
         corridor: "whitefield",
         dailyBudgetInr: 500,
@@ -86,12 +84,12 @@ describe("draftCampaignChatReply", () => {
     });
   });
 
-  it("rejects RSA-limit violations with a synthetic function response and returns the corrected fields on retry", async () => {
+  it("rejects RSA-limit violations and returns corrected fields on retry", async () => {
     const tooLong = "This headline is deliberately far too long for Google RSA limits";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }))
-      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "Fixed it.", headlines: ["Short Headline"] }));
+      .mockResolvedValueOnce(jsonResponse({ assistantReply: "Drafted.", headlines: [tooLong] }))
+      .mockResolvedValueOnce(jsonResponse({ assistantReply: "Fixed it.", headlines: ["Short Headline"] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
@@ -99,9 +97,9 @@ describe("draftCampaignChatReply", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondCallBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(secondCallBody.contents.at(-1)).toMatchObject({
+    expect(secondCallBody.messages.at(-1)).toMatchObject({
       role: "user",
-      parts: [{ functionResponse: { name: "update_campaign_draft" } }],
+      content: expect.stringMatching(/Rejected:/),
     });
     expect(result).toEqual({ reply: "Fixed it.", fieldUpdates: { headlines: ["Short Headline"] }, validationErrors: [] });
   });
@@ -110,8 +108,8 @@ describe("draftCampaignChatReply", () => {
     const tooLong = "This headline is deliberately far too long for Google RSA limits";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }))
-      .mockResolvedValueOnce(toolCallResponse({ assistantReply: "", headlines: [tooLong] }));
+      .mockResolvedValueOnce(jsonResponse({ assistantReply: "", headlines: [tooLong] }))
+      .mockResolvedValueOnce(jsonResponse({ assistantReply: "", headlines: [tooLong] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
@@ -121,8 +119,49 @@ describe("draftCampaignChatReply", () => {
     expect(result.validationErrors.length).toBeGreaterThan(0);
   });
 
-  it("returns a friendly message without calling fetch when Vertex AI is not configured", async () => {
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  it("rewrites claim-without-fields replies so the chat does not pretend copy was written", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        assistantReply: "Okay, here are some headlines and descriptions for the ad copy. Let me know what you think!",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "you assume and propose" });
+
+    expect(result.fieldUpdates).toEqual({});
+    expect(result.reply).not.toMatch(/here are some headlines/i);
+    expect(result.reply).toMatch(/setup card/i);
+  });
+
+  it("silently tops up missing descriptions when the user asked to propose copy", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          assistantReply: "Drafted headlines.",
+          headlines: ["Office in Whitefield", "Lease Office Space", "Bangalore CRE"],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          assistantReply: "Added descriptions too.",
+          descriptions: ["Find verified Whitefield offices with AI search.", "Lease commercial space with Gentle Space."],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "you assume and propose" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.fieldUpdates?.descriptions).toHaveLength(2);
+    expect(result.reply).toBe("Added descriptions too.");
+  });
+
+  it("returns a friendly message without calling fetch when Bifrost is not configured", async () => {
+    delete process.env.BIFROST_BASE_URL;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -131,7 +170,7 @@ describe("draftCampaignChatReply", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toContain("Vertex AI");
+    expect(result.reply).toContain("Bifrost");
   });
 
   it("returns a friendly message when the API call is not ok", async () => {

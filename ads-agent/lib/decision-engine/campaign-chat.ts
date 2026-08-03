@@ -3,15 +3,11 @@ import { validateDraftFields } from "./campaign-draft-rules";
 import { playbookContextFor } from "./playbook-context";
 import { STRATEGY } from "./strategy-config";
 import {
-  generateContent,
-  firstFunctionCall,
-  firstTextPart,
-  isVertexConfigured,
-  responseParts,
-  type FunctionDeclaration,
-  type GeminiContent,
-  type GeminiResponse,
-} from "../vertex/client";
+  chatCompletion,
+  firstChoiceContent,
+  isBifrostConfigured,
+  type ChatMessage,
+} from "../bifrost/client";
 
 const PRODUCT_CONTEXT = `Gentle Space is a Bangalore commercial real estate (CRE) consultancy with an
 AI-assisted space-search product. It matches a brief to office/retail/warehouse inventory and verifies
@@ -27,10 +23,19 @@ function buildSystemPrompt(): string {
   const grounding = playbookContextFor("manual_campaign_creation");
   return [
     `You help a non-technical business owner draft a real Google Search ad campaign, conversationally.
-Ask a short follow-up question if a required field is missing or ambiguous. Once you have enough
-information for a field, call the update_campaign_draft tool with just that field — you may call it
-multiple times across the conversation as you learn more. Never claim you created or launched a
-campaign; a human always reviews and approves before anything goes live.`,
+Reply with a single JSON object matching the schema. Put known campaign fields into the JSON keys
+as you learn them — you may fill a subset per turn. Always include assistantReply: a short
+conversational message (follow-up question if something is missing/ambiguous, or a brief
+acknowledgment of what you just set).
+
+CRITICAL: Never claim you wrote headlines, descriptions, keywords, or other draft fields unless
+those arrays/values are actually present in this JSON response. Copy the user sees lives on the
+setup card, which only updates from the JSON fields — not from assistantReply prose. When the
+user asks you to propose ad copy, include both headlines (3-15) and descriptions (2-4) in the
+same JSON response.
+
+Never claim you created or launched a campaign; a human always reviews and approves before
+anything goes live.`,
     PRODUCT_CONTEXT,
     RSA_RULES,
     grounding ? `Performance-marketing grounding: ${grounding}` : "",
@@ -40,146 +45,247 @@ campaign; a human always reviews and approves before anything goes live.`,
     .join("\n\n");
 }
 
-const UPDATE_DRAFT_TOOL_NAME = "update_campaign_draft";
-
-// Gemini's function-calling "auto" mode is unreliable here — the model sometimes
-// replies in plain text claiming it set fields without actually calling the tool.
-// Forcing "any" mode (every turn must call this tool) fixes that, but Gemini's "any"
-// mode returns *only* the function call with no accompanying text — so the
-// conversational reply has to travel as a tool argument, per Google's own guidance.
-const UPDATE_DRAFT_TOOL: FunctionDeclaration = {
-  name: UPDATE_DRAFT_TOOL_NAME,
-  description:
-    "Call this on every turn. Write any subset of the campaign draft's fields as they become known, and always include your conversational reply to the user.",
-  parameters: {
-    type: "object",
-    properties: {
-      assistantReply: {
-        type: "string",
-        description:
-          "Your conversational reply to show the user — a short follow-up question if a required field is still missing/ambiguous, or a short acknowledgment of what you just set.",
-      },
-      corridor: { type: "string", description: "Bangalore corridor/neighborhood the ad should target." },
-      dailyBudgetInr: { type: "number", description: "Daily budget in INR." },
-      adGroupName: { type: "string" },
-      keywords: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            text: { type: "string" },
-            matchType: { type: "string", enum: ["broad", "phrase", "exact"] },
-          },
-          required: ["text", "matchType"],
-        },
-      },
-      headlines: { type: "array", items: { type: "string" }, description: "3-15 items, each <=30 chars" },
-      descriptions: { type: "array", items: { type: "string" }, description: "2-4 items, each <=90 chars" },
-      finalUrl: { type: "string" },
+/** Schema for controlled JSON generation (avoids malformed structured output). */
+const DRAFT_RESPONSE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    assistantReply: {
+      type: "string",
+      description:
+        "Conversational reply for the user. Do not list full headlines/descriptions here — put those in the arrays.",
     },
-    required: ["assistantReply"],
+    headlines: {
+      type: "array",
+      items: { type: "string" },
+      description: "3-15 items, each <=30 chars. Required when proposing ad copy.",
+    },
+    descriptions: {
+      type: "array",
+      items: { type: "string" },
+      description: "2-4 items, each <=90 chars. Required when proposing ad copy — always pair with headlines.",
+    },
+    corridor: { type: "string", description: "Bangalore corridor/neighborhood the ad should target." },
+    dailyBudgetInr: { type: "number", description: "Daily budget in INR." },
+    adGroupName: { type: "string" },
+    keywords: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          matchType: { type: "string", enum: ["broad", "phrase", "exact"] },
+        },
+        required: ["text", "matchType"],
+      },
+    },
+    finalUrl: { type: "string" },
   },
+  required: ["assistantReply"],
 };
 
-type ParsedToolCall =
-  | { kind: "no_tool_call"; reply: string }
-  | {
-      kind: "tool_call";
-      reply: string;
-      fieldUpdates: CampaignDraftFields;
-      modelContent: GeminiContent;
-    };
+type ParsedDraftJson = CampaignDraftFields & { assistantReply?: string };
 
-function parseToolCall(response: GeminiResponse): ParsedToolCall {
-  const call = firstFunctionCall(response, UPDATE_DRAFT_TOOL_NAME);
-  const text = firstTextPart(response);
-  if (!call) {
-    return { kind: "no_tool_call", reply: text || "Could you tell me more about the campaign you'd like?" };
+type ParsedTurn =
+  | { kind: "parse_error"; reply: string }
+  | { kind: "ok"; reply: string; fieldUpdates: CampaignDraftFields; rawJson: string };
+
+function sanitizeReply(reply: string, fields: CampaignDraftFields): string {
+  const mentionsHeadlines = /\bheadlines?\b/i.test(reply);
+  const mentionsDescriptions = /\bdescriptions?\b/i.test(reply);
+  const mentionsKeywords = /\bkeywords?\b/i.test(reply);
+  const mentionsAdCopy = /\bad copy\b/i.test(reply);
+  const hasHeadlines = (fields.headlines?.length ?? 0) > 0;
+  const hasDescriptions = (fields.descriptions?.length ?? 0) > 0;
+  const hasKeywords = (fields.keywords?.length ?? 0) > 0;
+
+  if (mentionsHeadlines && !hasHeadlines && mentionsDescriptions && !hasDescriptions) {
+    return "I haven't filled the setup card yet. Say \"propose headlines and descriptions\" and I'll put them on the right.";
   }
-  const { assistantReply, ...fieldUpdates } = call.args as CampaignDraftFields & { assistantReply?: string };
-  return {
-    kind: "tool_call",
-    reply: (typeof assistantReply === "string" && assistantReply.trim()) || text || "Updated the draft — take a look at the setup card.",
-    fieldUpdates: fieldUpdates as CampaignDraftFields,
-    modelContent: { role: "model", parts: responseParts(response) },
-  };
+  if (mentionsAdCopy && !hasHeadlines && !hasDescriptions) {
+    return "I haven't filled the setup card yet. Say \"propose headlines and descriptions\" and I'll put them on the right.";
+  }
+  if (mentionsHeadlines && !hasHeadlines) {
+    return "I still need to draft headlines — say \"propose headlines\" and I'll put them on the setup card.";
+  }
+  if (mentionsDescriptions && !hasDescriptions) {
+    return hasHeadlines
+      ? "Headlines are on the setup card. Say \"propose descriptions\" and I'll add those next."
+      : "I still need to draft descriptions — say \"propose descriptions\" and I'll put them on the setup card.";
+  }
+  if (mentionsKeywords && !hasKeywords) {
+    return "I still need keywords — tell me what search terms to target and I'll add them.";
+  }
+  return reply;
+}
+
+function parseDraftJson(responseText: string | undefined): ParsedTurn {
+  if (!responseText?.trim()) {
+    return { kind: "parse_error", reply: "Could you tell me more about the campaign you'd like?" };
+  }
+  try {
+    const parsed = JSON.parse(responseText) as ParsedDraftJson;
+    const { assistantReply, ...fieldUpdates } = parsed;
+    let reply =
+      (typeof assistantReply === "string" && assistantReply.trim()) ||
+      "Updated the draft — take a look at the setup card.";
+    reply = sanitizeReply(reply, fieldUpdates);
+    return { kind: "ok", reply, fieldUpdates, rawJson: responseText };
+  } catch {
+    return { kind: "parse_error", reply: "I had trouble structuring that — could you rephrase?" };
+  }
+}
+
+const DESCRIPTIONS_TOPUP_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    assistantReply: { type: "string" },
+    descriptions: {
+      type: "array",
+      items: { type: "string" },
+      description: "Exactly 2-4 Google RSA descriptions, each <=90 characters.",
+    },
+  },
+  required: ["assistantReply", "descriptions"],
+};
+
+async function callDraftModel(
+  messages: ChatMessage[],
+  schema: Record<string, unknown> = DRAFT_RESPONSE_SCHEMA,
+): Promise<ParsedTurn> {
+  const response = await chatCompletion({
+    messages,
+    temperature: 0.3,
+    maxTokens: 2048,
+    responseFormat: {
+      type: "json_schema",
+      json_schema: { name: "campaign_draft_reply", schema, strict: false },
+    },
+    timeoutMs: 20_000,
+  });
+  return parseDraftJson(firstChoiceContent(response));
 }
 
 export type ChatReply = { reply: string; fieldUpdates: CampaignDraftFields | null; validationErrors: string[] };
+
+function wantsAdCopy(message: string): boolean {
+  return /\b(propose|assume|draft|write|headline|description|ad copy)\b/i.test(message);
+}
+
+function wantsDescriptionsOnly(message: string): boolean {
+  return /\bdescriptions?\b/i.test(message) && !/\bheadlines?\b/i.test(message);
+}
+
+function buildMessages(input: { history: CampaignDraftMessage[]; userMessage: string }): ChatMessage[] {
+  return [
+    { role: "system", content: buildSystemPrompt() },
+    ...input.history.map((m) => ({
+      role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+      content: m.content,
+    })),
+    { role: "user", content: input.userMessage },
+  ];
+}
+
+async function topUpDescriptions(
+  messages: ChatMessage[],
+  headlines: string[],
+  baseFields: CampaignDraftFields,
+): Promise<ChatReply | null> {
+  const topUpMessages: ChatMessage[] = [
+    ...messages,
+    {
+      role: "user",
+      content: `Write 2-4 Google RSA descriptions (each ≤90 chars) for these headlines: ${JSON.stringify(headlines)}. Return JSON with assistantReply and descriptions only. Do not change headlines.`,
+    },
+  ];
+  try {
+    let toppedUp = await callDraftModel(topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
+    if (toppedUp.kind !== "ok") return null;
+
+    let errors = validateDraftFields({ descriptions: toppedUp.fieldUpdates.descriptions });
+    if (errors.length > 0) {
+      topUpMessages.push({ role: "assistant", content: toppedUp.rawJson });
+      topUpMessages.push({
+        role: "user",
+        content: `Rejected: ${errors.join("; ")}. Return corrected JSON with assistantReply and descriptions only.`,
+      });
+      toppedUp = await callDraftModel(topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
+      if (toppedUp.kind !== "ok") return null;
+      errors = validateDraftFields({ descriptions: toppedUp.fieldUpdates.descriptions });
+      if (errors.length > 0) return null;
+    }
+
+    if ((toppedUp.fieldUpdates.descriptions?.length ?? 0) === 0) return null;
+
+    const merged: CampaignDraftFields = {
+      ...baseFields,
+      descriptions: toppedUp.fieldUpdates.descriptions,
+    };
+    return {
+      reply: sanitizeReply(toppedUp.reply, merged),
+      fieldUpdates: merged,
+      validationErrors: [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function draftCampaignChatReply(input: {
   draft: CampaignDraft;
   history: CampaignDraftMessage[];
   userMessage: string;
 }): Promise<ChatReply> {
-  if (!isVertexConfigured()) {
+  if (!isBifrostConfigured()) {
     return {
       reply:
-        "Vertex AI is not configured (GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS), so I can't draft campaigns yet. Ask an admin to set it.",
+        "Bifrost is not configured (BIFROST_BASE_URL), so I can't draft campaigns yet. Ask an admin to set it.",
       fieldUpdates: null,
       validationErrors: [],
     };
   }
 
-  const contents: GeminiContent[] = [
-    ...input.history.map((m) => ({
-      role: (m.role === "assistant" ? "model" : "user") as "user" | "model",
-      parts: [{ text: m.content }],
-    })),
-    { role: "user" as const, parts: [{ text: input.userMessage }] },
-  ];
+  const messages = buildMessages(input);
 
-  let first: GeminiResponse;
+  // If headlines already exist and the user only asked for descriptions, don't let the
+  // model rewrite headlines (that was causing RSA-limit failures on follow-up turns).
+  if (wantsDescriptionsOnly(input.userMessage) && input.draft.headlines.length > 0) {
+    const topped = await topUpDescriptions(messages, input.draft.headlines, {});
+    if (topped) return topped;
+  }
+
+  let first: ParsedTurn;
   try {
-    first = await generateContent({
-      systemInstruction: buildSystemPrompt(),
-      contents,
-      tools: [UPDATE_DRAFT_TOOL],
-      toolChoice: "any",
-      temperature: 0.3,
-      maxOutputTokens: 600,
-      timeoutMs: 15_000,
-    });
+    first = await callDraftModel(messages);
   } catch {
     return { reply: "The campaign assistant is unavailable right now — try again shortly.", fieldUpdates: null, validationErrors: [] };
   }
 
-  const firstParsed = parseToolCall(first);
-  if (firstParsed.kind !== "tool_call") {
-    return { reply: firstParsed.reply, fieldUpdates: null, validationErrors: [] };
+  if (first.kind !== "ok") {
+    return { reply: first.reply, fieldUpdates: null, validationErrors: [] };
   }
 
-  const firstErrors = validateDraftFields(firstParsed.fieldUpdates);
+  const firstErrors = validateDraftFields(first.fieldUpdates);
   if (firstErrors.length === 0) {
-    return { reply: firstParsed.reply, fieldUpdates: firstParsed.fieldUpdates, validationErrors: [] };
+    const headlines = first.fieldUpdates.headlines ?? [];
+    const missingDescriptions = headlines.length > 0 && (first.fieldUpdates.descriptions?.length ?? 0) === 0;
+    if (wantsAdCopy(input.userMessage) && missingDescriptions) {
+      messages.push({ role: "assistant", content: first.rawJson });
+      const topped = await topUpDescriptions(messages, headlines, first.fieldUpdates);
+      if (topped) return topped;
+    }
+    return { reply: first.reply, fieldUpdates: first.fieldUpdates, validationErrors: [] };
   }
 
-  contents.push(firstParsed.modelContent);
-  contents.push({
+  messages.push({ role: "assistant", content: first.rawJson });
+  messages.push({
     role: "user",
-    parts: [
-      {
-        functionResponse: {
-          name: UPDATE_DRAFT_TOOL_NAME,
-          response: {
-            result: `Rejected: ${firstErrors.join("; ")}. Call update_campaign_draft again with fixed values.`,
-          },
-        },
-      },
-    ],
+    content: `Rejected: ${firstErrors.join("; ")}. Return corrected JSON with fixed values (same schema).`,
   });
 
-  let second: GeminiResponse;
+  let second: ParsedTurn;
   try {
-    second = await generateContent({
-      systemInstruction: buildSystemPrompt(),
-      contents,
-      tools: [UPDATE_DRAFT_TOOL],
-      toolChoice: "any",
-      temperature: 0.3,
-      maxOutputTokens: 600,
-      timeoutMs: 15_000,
-    });
+    second = await callDraftModel(messages);
   } catch {
     return {
       reply: "The campaign assistant is unavailable right now — try again shortly.",
@@ -188,12 +294,11 @@ export async function draftCampaignChatReply(input: {
     };
   }
 
-  const secondParsed = parseToolCall(second);
-  if (secondParsed.kind !== "tool_call") {
-    return { reply: secondParsed.reply, fieldUpdates: null, validationErrors: firstErrors };
+  if (second.kind !== "ok") {
+    return { reply: second.reply, fieldUpdates: null, validationErrors: firstErrors };
   }
 
-  const secondErrors = validateDraftFields(secondParsed.fieldUpdates);
+  const secondErrors = validateDraftFields(second.fieldUpdates);
   if (secondErrors.length > 0) {
     return {
       reply: `I couldn't fit that within Google's ad rules (${secondErrors.join("; ")}). Try describing it differently.`,
@@ -202,5 +307,5 @@ export async function draftCampaignChatReply(input: {
     };
   }
 
-  return { reply: secondParsed.reply, fieldUpdates: secondParsed.fieldUpdates, validationErrors: [] };
+  return { reply: second.reply, fieldUpdates: second.fieldUpdates, validationErrors: [] };
 }
