@@ -4,6 +4,12 @@ Human-gated Meta Ads + Google Ads automation agent for Gentle Space. See
 [`docs/superpowers/specs/2026-08-03-ads-automation-agent-design.md`](../docs/superpowers/specs/2026-08-03-ads-automation-agent-design.md)
 for the full design.
 
+Product/audience context for this service lives in [`.agents/product-marketing.md`](.agents/product-marketing.md).
+The rationale LLM call (`lib/decision-engine/rationale.ts`) grounds its explanation of each proposal
+in rule-specific performance-marketing principles (`lib/decision-engine/playbook-context.ts`),
+distilled from [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills)'
+`ads` skill.
+
 ## Local setup
 
 1. `npm install`

@@ -38,6 +38,32 @@ describe("draftRationale", () => {
     );
   });
 
+  it("grounds the system prompt with rule-specific performance-marketing context", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { draftRationale } = await import("./rationale");
+    await draftRationale(proposal);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const systemMessage = body.messages.find((m: { role: string }) => m.role === "system");
+    expect(systemMessage.content).toMatch(/consecutive/i);
+  });
+
+  it("omits playbook grounding for an unrecognized rule without erroring", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { draftRationale } = await import("./rationale");
+    await expect(
+      draftRationale({ ...proposal, triggeredRule: "some_future_rule" }),
+    ).resolves.toBe("ok");
+  });
+
   it("falls back to a generic string when OPENAI_API_KEY is unset", async () => {
     delete process.env.OPENAI_API_KEY;
     const { draftRationale } = await import("./rationale");
