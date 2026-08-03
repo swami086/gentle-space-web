@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function ProposalActions({ proposalId }: { proposalId: string }) {
   const router = useRouter();
@@ -18,13 +20,15 @@ export function ProposalActions({ proposalId }: { proposalId: string }) {
   }
 
   return (
-    <div>
-      <button className="approve" disabled={pending} onClick={() => decide("approve")}>
+    <div className="flex gap-2 pt-2">
+      <Button disabled={pending} onClick={() => decide("approve")}>
+        {pending && <Loader2 className="size-4 animate-spin" />}
         Approve
-      </button>{" "}
-      <button className="reject" disabled={pending} onClick={() => decide("reject")}>
+      </Button>
+      <Button variant="destructive" disabled={pending} onClick={() => decide("reject")}>
+        {pending && <Loader2 className="size-4 animate-spin" />}
         Reject
-      </button>
+      </Button>
     </div>
   );
 }
