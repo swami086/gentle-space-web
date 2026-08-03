@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { listCampaignsWithLatestCpl } from "@/lib/db/dashboard";
 import type { CampaignWithCplRow } from "@/lib/db/dashboard";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -21,8 +24,14 @@ export default async function CampaignsPage() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between">
         <CardTitle className="text-base font-semibold text-foreground">Campaigns</CardTitle>
+        <Button asChild size="sm">
+          <Link href="/campaigns/new">
+            <Plus />
+            New Campaign
+          </Link>
+        </Button>
       </CardHeader>
       <CardContent>
         {campaigns.length === 0 ? (
