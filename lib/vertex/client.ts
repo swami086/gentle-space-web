@@ -12,8 +12,15 @@ import {
   parseInsightJson,
 } from "../spaces/insight-prompt";
 import type { InsightContent, InsightFacts } from "../spaces/insight-types";
+import {
+  QUALIFY_SYSTEM,
+  buildQualifyUserText,
+  parseQualificationJson,
+} from "../leads/qualify-prompt";
+import type { LeadQualification, LeadQualificationInput } from "../leads/qualify-types";
 
 const VERTEX_INSIGHT_TIMEOUT_MS = 15_000;
+const VERTEX_QUALIFY_TIMEOUT_MS = 4_000;
 
 const REWRITE_SYSTEM = `You rewrite coworking/office search queries for Bangalore.
 Return one short line: desk/cabin type, amenities, area, budget if present.
@@ -204,4 +211,33 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
   };
   const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
   return parseInsightJson(content, facts);
+}
+
+export async function qualifyLead(input: LeadQualificationInput): Promise<LeadQualification> {
+  const token = await getVertexAccessToken();
+  const res = await fetch(modelUrl(chatModel(), "generateContent"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: QUALIFY_SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: buildQualifyUserText(input) }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        maxOutputTokens: 200,
+      },
+    }),
+    signal: AbortSignal.timeout(VERTEX_QUALIFY_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`vertex qualify failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const content = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "{}";
+  return parseQualificationJson(content);
 }

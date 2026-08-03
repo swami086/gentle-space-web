@@ -113,3 +113,27 @@ describe("vertex explainListingFit", () => {
     expect(init.signal).toBeDefined();
   });
 });
+
+describe("vertex qualifyLead", () => {
+  it("sends an abort signal and parses tier/cheatSheet", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify({ tier: "hot", cheatSheet: "Ask about move-in date." }) }],
+            },
+          },
+        ],
+      }),
+    });
+
+    const { qualifyLead } = await import("./client");
+    const result = await qualifyLead({ need: "office", step2Answers: { teamSize: "15 desks" }, notes: "" });
+    expect(result).toEqual({ tier: "hot", cheatSheet: "Ask about move-in date." });
+
+    const [, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect(init.signal).toBeDefined();
+  });
+});
