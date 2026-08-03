@@ -1,6 +1,8 @@
 import * as openai from "../openai/client";
 import * as vertex from "../vertex/client";
 import { emptyQueryEntities, type QueryEntities } from "../graph/types";
+import type { LeadQualification, LeadQualificationInput } from "../leads/qualify-types";
+import { emptyLeadQualification } from "../leads/qualify-types";
 import { emptyInsightContent } from "../spaces/insight-prompt";
 import type { InsightContent, InsightFacts } from "../spaces/insight-types";
 
@@ -90,5 +92,16 @@ export async function explainListingFit(facts: InsightFacts): Promise<InsightCon
   } catch (error) {
     console.error("explainListingFit failed", error);
     return emptyInsightContent();
+  }
+}
+
+export async function qualifyLead(input: LeadQualificationInput): Promise<LeadQualification> {
+  try {
+    return aiProvider() === "vertex"
+      ? await vertex.qualifyLead(input)
+      : await openai.qualifyLead(input);
+  } catch (error) {
+    console.error("qualifyLead failed", error);
+    return emptyLeadQualification();
   }
 }
