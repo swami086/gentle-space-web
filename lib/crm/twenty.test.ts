@@ -94,4 +94,35 @@ describe("createLeadInTwenty", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toBeTruthy();
   });
+
+  it("returns failed when fetch throws (network error)", async () => {
+    process.env.TWENTY_API_KEY = "test-key";
+    process.env.TWENTY_BASE_URL = "http://localhost:3020";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    const { createLeadInTwenty } = await import("./twenty");
+    const result = await createLeadInTwenty(payload, qualification);
+    expect(result).toEqual({ status: "failed", error: "network down" });
+  });
+
+  it("returns failed with personId when opportunity create errors", async () => {
+    process.env.TWENTY_API_KEY = "test-key";
+    process.env.TWENTY_BASE_URL = "http://localhost:3020";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { id: "person-42" }, id: "person-42" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response("server error", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createLeadInTwenty } = await import("./twenty");
+    const result = await createLeadInTwenty(payload, qualification);
+    expect(result.status).toBe("failed");
+    expect(result.personId).toBe("person-42");
+    expect(result.error).toBeTruthy();
+    expect(result.error).toContain("500");
+  });
 });
