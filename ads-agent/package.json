@@ -1,0 +1,36 @@
+{
+  "name": "ads-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3030",
+    "build": "next build",
+    "start": "next start -p 3030",
+    "lint": "eslint",
+    "test": "vitest run",
+    "migrate": "tsx lib/db/migrate.ts",
+    "worker": "tsx scripts/run-decision-cycle.ts",
+    "cycle:run": "tsx scripts/run-once.ts"
+  },
+  "dependencies": {
+    "facebook-nodejs-business-sdk": "^22.0.0",
+    "google-ads-api": "^18.0.0",
+    "next": "15.5.21",
+    "node-cron": "^3.0.3",
+    "pg": "^8.22.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.21",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

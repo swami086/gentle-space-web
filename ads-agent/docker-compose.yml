@@ -1,0 +1,22 @@
+name: ads-agent
+
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: ads_agent
+      POSTGRES_USER: ads_agent
+      POSTGRES_PASSWORD: ads_agent_local_dev
+    volumes:
+      - ads-agent-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ads_agent -h localhost -d ads_agent
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  ads-agent-db-data:

@@ -1,0 +1,52 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 2rem;
+  color: #1a1a1a;
+  background: #fafafa;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #ddd;
+}
+
+nav a {
+  margin-right: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background: #fff;
+  cursor: pointer;
+}
+
+button.approve {
+  background: #1a7f37;
+  color: #fff;
+  border-color: #1a7f37;
+}
+
+button.reject {
+  background: #b42318;
+  color: #fff;
+  border-color: #b42318;
+}
