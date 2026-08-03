@@ -55,3 +55,26 @@ CREATE TABLE IF NOT EXISTS cron_settings (
 );
 
 INSERT INTO cron_settings (id, enabled) VALUES (1, false) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS campaign_drafts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  status TEXT NOT NULL DEFAULT 'chatting' CHECK (status IN ('chatting','ready','converted')),
+  corridor TEXT,
+  daily_budget_inr NUMERIC,
+  ad_group_name TEXT,
+  keywords JSONB NOT NULL DEFAULT '[]',
+  headlines JSONB NOT NULL DEFAULT '[]',
+  descriptions JSONB NOT NULL DEFAULT '[]',
+  final_url TEXT NOT NULL DEFAULT 'https://www.gentlespacesolutions.com/spaces',
+  proposal_id UUID REFERENCES proposals(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS campaign_draft_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  draft_id UUID NOT NULL REFERENCES campaign_drafts(id),
+  role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

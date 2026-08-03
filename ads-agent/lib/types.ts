@@ -86,3 +86,39 @@ export type CronSettings = {
   enabled: boolean;
   lastRunAt: string | null;
 };
+
+export type CampaignDraftKeyword = { text: string; matchType: "broad" | "phrase" | "exact" };
+export type CampaignDraftStatus = "chatting" | "ready" | "converted";
+
+export type CampaignDraft = {
+  id: string;
+  status: CampaignDraftStatus;
+  corridor: string | null;
+  dailyBudgetInr: number | null;
+  adGroupName: string | null;
+  keywords: CampaignDraftKeyword[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+  proposalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CampaignDraftFields = {
+  corridor?: string | null;
+  dailyBudgetInr?: number | null;
+  adGroupName?: string | null;
+  keywords?: CampaignDraftKeyword[];
+  headlines?: string[];
+  descriptions?: string[];
+  finalUrl?: string;
+};
+
+export type CampaignDraftMessage = {
+  id: string;
+  draftId: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
