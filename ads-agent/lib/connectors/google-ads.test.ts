@@ -59,23 +59,67 @@ describe("fetchGoogleSearchTerms", () => {
   });
 });
 
-describe("createGoogleCampaign", () => {
-  it("creates a budget and campaign atomically and returns the campaign resource name", async () => {
+describe("createFullGoogleCampaign", () => {
+  it("creates budget, campaign, ad group, keywords, negatives, and an RSA atomically", async () => {
     mutateResourcesMock.mockResolvedValue({
       mutate_operation_responses: [
         { campaign_budget_result: { resource_name: "customers/1234567890/campaignBudgets/-1" } },
         { campaign_result: { resource_name: "customers/1234567890/campaigns/999" } },
+        { ad_group_result: { resource_name: "customers/1234567890/adGroups/-3" } },
+        { ad_group_criterion_result: { resource_name: "customers/1234567890/adGroupCriteria/-3~-4" } },
+        { ad_group_criterion_result: { resource_name: "customers/1234567890/adGroupCriteria/-3~-5" } },
+        { ad_group_ad_result: { resource_name: "customers/1234567890/adGroupAds/-3~-6" } },
       ],
     });
-    const { createGoogleCampaign } = await import("./google-ads");
-    const resourceName = await createGoogleCampaign({ name: "Whitefield Search", dailyBudgetInr: 500 });
+    const { createFullGoogleCampaign } = await import("./google-ads");
+    const resourceName = await createFullGoogleCampaign({
+      name: "Whitefield Search",
+      dailyBudgetInr: 500,
+      adGroupName: "Whitefield Office Space",
+      keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+      negativeKeywords: ["residential"],
+      headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+      descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+      finalUrl: "https://www.gentlespacesolutions.com/spaces",
+    });
+
     expect(resourceName).toBe("customers/1234567890/campaigns/999");
-    expect(mutateResourcesMock).toHaveBeenCalledTimes(1);
     const operations = mutateResourcesMock.mock.calls[0][0];
-    expect(operations).toHaveLength(2);
-    expect(operations[0].entity).toBe("campaign_budget");
-    expect(operations[1].entity).toBe("campaign");
-    expect(operations[1].resource.name).toBe("Whitefield Search");
+    expect(operations.map((op: { entity: string }) => op.entity)).toEqual([
+      "campaign_budget",
+      "campaign",
+      "ad_group",
+      "ad_group_criterion",
+      "ad_group_criterion",
+      "ad_group_ad",
+    ]);
+    expect(operations[1].resource.resource_name).toBe("customers/1234567890/campaigns/-2");
+    expect(operations[2].resource).toMatchObject({
+      name: "Whitefield Office Space",
+      campaign: "customers/1234567890/campaigns/-2",
+    });
+    expect(operations[3].resource).toMatchObject({
+      ad_group: "customers/1234567890/adGroups/-3",
+      keyword: { text: "office space whitefield", match_type: 3 },
+    });
+    expect(operations[4].resource).toMatchObject({
+      ad_group: "customers/1234567890/adGroups/-3",
+      negative: true,
+      keyword: { text: "residential" },
+    });
+    expect(operations[5].resource.ad_group).toBe("customers/1234567890/adGroups/-3");
+    expect(operations[5].resource.ad.final_urls).toEqual(["https://www.gentlespacesolutions.com/spaces"]);
+    expect(operations[5].resource.ad.responsive_search_ad).toEqual({
+      headlines: [
+        { text: "Office Space in Whitefield" },
+        { text: "Verified Listings Only" },
+        { text: "Tour in 5 Days" },
+      ],
+      descriptions: [
+        { text: "Skip the broker games." },
+        { text: "AI-matched, human-verified commercial space." },
+      ],
+    });
   });
 });
 

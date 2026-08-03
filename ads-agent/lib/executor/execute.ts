@@ -8,14 +8,24 @@ import {
 import { getProposalById, markProposalExecuted, markProposalFailed } from "../db/proposals";
 import {
   addGoogleNegativeKeyword,
-  createGoogleCampaign,
+  createFullGoogleCampaign,
   pauseGoogleCampaign,
   updateGoogleCampaignBudget,
 } from "../connectors/google-ads";
 import { createMetaCampaign, pauseMetaCampaign, updateMetaCampaignBudget } from "../connectors/meta";
 import type { Platform } from "../types";
 
-type CreateCampaignPayload = { corridor: string; platform: Platform; dailyBudgetInr: number };
+type CreateCampaignPayload = {
+  corridor: string;
+  platform: Platform;
+  dailyBudgetInr: number;
+  adGroupName: string;
+  keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
+  negativeKeywords: string[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+};
 type CampaignActionPayload = { campaignId: string };
 type BudgetChangePayload = { campaignId: string; newDailyBudgetInr: number };
 type NegativeKeywordPayload = { campaignId: string; keywordText: string };
@@ -37,7 +47,16 @@ async function executeCreateCampaign(payload: CreateCampaignPayload): Promise<vo
   });
   const externalId =
     payload.platform === "google"
-      ? await createGoogleCampaign({ name, dailyBudgetInr: payload.dailyBudgetInr })
+      ? await createFullGoogleCampaign({
+          name,
+          dailyBudgetInr: payload.dailyBudgetInr,
+          adGroupName: payload.adGroupName,
+          keywords: payload.keywords,
+          negativeKeywords: payload.negativeKeywords,
+          headlines: payload.headlines,
+          descriptions: payload.descriptions,
+          finalUrl: payload.finalUrl,
+        })
       : await createMetaCampaign({ name, dailyBudgetInr: payload.dailyBudgetInr });
   await markCampaignActive(record.id, externalId);
 }

@@ -123,15 +123,32 @@ export function evaluateRules(input: RuleInput, strategy: Strategy): NewProposal
   ];
 }
 
-export function proposeCampaignCreation(
-  corridor: string,
-  platform: Platform,
-  dailyBudgetInr: number,
-): NewProposal {
+export type CampaignCreationInput = {
+  corridor: string;
+  platform: Platform;
+  dailyBudgetInr: number;
+  adGroupName: string;
+  keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+};
+
+export function proposeCampaignCreation(input: CampaignCreationInput, strategy: Strategy): NewProposal {
   return {
     kind: "create_campaign",
     campaignId: null,
     triggeredRule: "manual_campaign_creation",
-    payload: { corridor, platform, dailyBudgetInr },
+    payload: {
+      corridor: input.corridor,
+      platform: input.platform,
+      dailyBudgetInr: input.dailyBudgetInr,
+      adGroupName: input.adGroupName,
+      keywords: input.keywords,
+      negativeKeywords: strategy.negativeKeywordSeeds,
+      headlines: input.headlines,
+      descriptions: input.descriptions,
+      finalUrl: input.finalUrl,
+    },
   };
 }

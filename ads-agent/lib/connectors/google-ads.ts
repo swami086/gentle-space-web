@@ -78,14 +78,33 @@ function extractResourceName(result: unknown, index: number): string {
   return nested.resource_name;
 }
 
-export async function createGoogleCampaign(input: {
+export type FullGoogleCampaignInput = {
   name: string;
   dailyBudgetInr: number;
-}): Promise<string> {
-  const cus = customer();
-  const budgetResourceName = ResourceNames.campaignBudget(String(requireEnv("GOOGLE_ADS_CUSTOMER_ID")), "-1");
+  adGroupName: string;
+  keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
+  negativeKeywords: string[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+};
 
-  const operations: MutateOperation<resources.ICampaignBudget | resources.ICampaign>[] = [
+const MATCH_TYPE_MAP: Record<"broad" | "phrase" | "exact", number> = {
+  broad: enums.KeywordMatchType.BROAD,
+  phrase: enums.KeywordMatchType.PHRASE,
+  exact: enums.KeywordMatchType.EXACT,
+};
+
+export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): Promise<string> {
+  const cus = customer();
+  const customerId = String(requireEnv("GOOGLE_ADS_CUSTOMER_ID"));
+  const budgetResourceName = ResourceNames.campaignBudget(customerId, "-1");
+  const campaignResourceName = ResourceNames.campaign(customerId, "-2");
+  const adGroupResourceName = ResourceNames.adGroup(customerId, "-3");
+
+  const operations: MutateOperation<
+    resources.ICampaignBudget | resources.ICampaign | resources.IAdGroup | resources.IAdGroupCriterion | resources.IAdGroupAd
+  >[] = [
     {
       entity: "campaign_budget",
       operation: "create",
@@ -100,12 +119,57 @@ export async function createGoogleCampaign(input: {
       entity: "campaign",
       operation: "create",
       resource: {
+        resource_name: campaignResourceName,
         name: input.name,
         advertising_channel_type: enums.AdvertisingChannelType.SEARCH,
         status: enums.CampaignStatus.ENABLED,
         manual_cpc: { enhanced_cpc_enabled: false },
         campaign_budget: budgetResourceName,
         network_settings: { target_google_search: true, target_search_network: true },
+      },
+    },
+    {
+      entity: "ad_group",
+      operation: "create",
+      resource: {
+        resource_name: adGroupResourceName,
+        name: input.adGroupName,
+        campaign: campaignResourceName,
+        status: enums.AdGroupStatus.ENABLED,
+        type: enums.AdGroupType.SEARCH_STANDARD,
+      },
+    },
+    ...input.keywords.map((keyword) => ({
+      entity: "ad_group_criterion" as const,
+      operation: "create" as const,
+      resource: {
+        ad_group: adGroupResourceName,
+        status: enums.AdGroupCriterionStatus.ENABLED,
+        keyword: { text: keyword.text, match_type: MATCH_TYPE_MAP[keyword.matchType] },
+      },
+    })),
+    ...input.negativeKeywords.map((text) => ({
+      entity: "ad_group_criterion" as const,
+      operation: "create" as const,
+      resource: {
+        ad_group: adGroupResourceName,
+        negative: true,
+        keyword: { text, match_type: enums.KeywordMatchType.BROAD },
+      },
+    })),
+    {
+      entity: "ad_group_ad",
+      operation: "create",
+      resource: {
+        ad_group: adGroupResourceName,
+        status: enums.AdGroupAdStatus.ENABLED,
+        ad: {
+          final_urls: [input.finalUrl],
+          responsive_search_ad: {
+            headlines: input.headlines.map((text) => ({ text })),
+            descriptions: input.descriptions.map((text) => ({ text })),
+          },
+        },
       },
     },
   ];

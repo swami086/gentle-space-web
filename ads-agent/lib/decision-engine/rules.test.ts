@@ -188,13 +188,35 @@ describe("negative keyword rule", () => {
 });
 
 describe("proposeCampaignCreation", () => {
-  it("builds a create_campaign proposal for the given corridor and platform", () => {
-    const proposal = proposeCampaignCreation("whitefield", "google", 500);
+  it("builds a create_campaign proposal and snapshots the strategy's negative-keyword seeds", () => {
+    const proposal = proposeCampaignCreation(
+      {
+        corridor: "whitefield",
+        platform: "google",
+        dailyBudgetInr: 500,
+        adGroupName: "Whitefield Office Space",
+        keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+        headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+        descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+        finalUrl: "https://www.gentlespacesolutions.com/spaces",
+      },
+      strategy,
+    );
     expect(proposal).toEqual({
       kind: "create_campaign",
       campaignId: null,
       triggeredRule: "manual_campaign_creation",
-      payload: { corridor: "whitefield", platform: "google", dailyBudgetInr: 500 },
+      payload: {
+        corridor: "whitefield",
+        platform: "google",
+        dailyBudgetInr: 500,
+        adGroupName: "Whitefield Office Space",
+        keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+        negativeKeywords: ["residential", "1bhk"],
+        headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+        descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+        finalUrl: "https://www.gentlespacesolutions.com/spaces",
+      },
     });
   });
 });

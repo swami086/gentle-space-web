@@ -13,7 +13,7 @@ const {
   createMetaCampaign,
   pauseMetaCampaign,
   updateMetaCampaignBudget,
-  createGoogleCampaign,
+  createFullGoogleCampaign,
   pauseGoogleCampaign,
   updateGoogleCampaignBudget,
   addGoogleNegativeKeyword,
@@ -29,7 +29,7 @@ const {
   createMetaCampaign: vi.fn(),
   pauseMetaCampaign: vi.fn(),
   updateMetaCampaignBudget: vi.fn(),
-  createGoogleCampaign: vi.fn(),
+  createFullGoogleCampaign: vi.fn(),
   pauseGoogleCampaign: vi.fn(),
   updateGoogleCampaignBudget: vi.fn(),
   addGoogleNegativeKeyword: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock("../db/campaigns", () => ({
 }));
 vi.mock("../connectors/meta", () => ({ createMetaCampaign, pauseMetaCampaign, updateMetaCampaignBudget }));
 vi.mock("../connectors/google-ads", () => ({
-  createGoogleCampaign,
+  createFullGoogleCampaign,
   pauseGoogleCampaign,
   updateGoogleCampaignBudget,
   addGoogleNegativeKeyword,
@@ -119,16 +119,26 @@ describe("executeProposal", () => {
     expect(pauseMetaCampaign).toHaveBeenCalledWith("ext-meta-1");
   });
 
-  it("creates a Google campaign, records the local row, and marks it active", async () => {
+  it("creates a full Google campaign, records the local row, and marks it active", async () => {
     getProposalById.mockResolvedValue(
       approvedProposal({
         kind: "create_campaign",
         campaignId: null,
-        payload: { corridor: "whitefield", platform: "google", dailyBudgetInr: 500 },
+        payload: {
+          corridor: "whitefield",
+          platform: "google",
+          dailyBudgetInr: 500,
+          adGroupName: "Whitefield Office Space",
+          keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+          negativeKeywords: ["residential"],
+          headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+          descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+          finalUrl: "https://www.gentlespacesolutions.com/spaces",
+        },
       }),
     );
     createCampaignRecord.mockResolvedValue(googleCampaign({ status: "proposed", externalId: null }));
-    createGoogleCampaign.mockResolvedValue("customers/1/campaigns/999");
+    createFullGoogleCampaign.mockResolvedValue("customers/1/campaigns/999");
 
     const result = await executeProposal("prop-1");
 
@@ -138,9 +148,15 @@ describe("executeProposal", () => {
       dailyBudget: 500,
       corridor: "whitefield",
     });
-    expect(createGoogleCampaign).toHaveBeenCalledWith({
+    expect(createFullGoogleCampaign).toHaveBeenCalledWith({
       name: expect.stringContaining("whitefield"),
       dailyBudgetInr: 500,
+      adGroupName: "Whitefield Office Space",
+      keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+      negativeKeywords: ["residential"],
+      headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+      descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+      finalUrl: "https://www.gentlespacesolutions.com/spaces",
     });
     expect(markCampaignActive).toHaveBeenCalledWith("camp-1", "customers/1/campaigns/999");
     expect(result).toEqual({ status: "executed" });
