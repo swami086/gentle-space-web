@@ -18,5 +18,22 @@ services:
       retries: 10
     restart: unless-stopped
 
+  bifrost:
+    image: maximhq/bifrost:latest
+    ports:
+      - "8080:8080"
+    environment:
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
+      VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS}
+      GOGC: "100"
+      GOMEMLIMIT: "450MiB"
+    volumes:
+      - ./bifrost/config.json:/app/config.json:ro
+      - bifrost-data:/app/data
+    mem_limit: 512m
+    cpus: "1.0"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
+  bifrost-data:

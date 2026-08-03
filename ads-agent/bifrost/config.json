@@ -1,0 +1,97 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "source_of_truth": "config.json",
+  "config_store": {
+    "enabled": true,
+    "type": "sqlite",
+    "config": { "path": "./data/config.db" }
+  },
+  "providers": {
+    "vertex": {
+      "keys": [
+        {
+          "name": "vertex-sa",
+          "value": "",
+          "models": ["*"],
+          "weight": 1.0,
+          "aliases": {
+            "cheap": "gemini-2.5-flash-lite",
+            "complex": "gemini-2.5-flash",
+            "reasoning": "gemini-2.5-pro"
+          },
+          "vertex_key_config": {
+            "project_id": "env.VERTEX_PROJECT_ID",
+            "region": "us-central1",
+            "auth_credentials": "env.VERTEX_AUTH_CREDENTIALS"
+          }
+        }
+      ],
+      "network_config": {
+        "max_retries": 2,
+        "retry_backoff_initial": 500,
+        "retry_backoff_max": 5000,
+        "default_request_timeout_in_seconds": 60
+      }
+    }
+  },
+  "governance": {
+    "complexity_analyzer_config": {
+      "tier_boundaries": {
+        "simple_medium": 0.15,
+        "medium_complex": 0.35,
+        "complex_reasoning": 0.6
+      },
+      "keywords": {
+        "code_keywords": ["function", "class", "api", "debug", "schema", "json"],
+        "reasoning_keywords": [
+          "step by step",
+          "explain why",
+          "tradeoffs",
+          "root cause",
+          "audience segments",
+          "reason about"
+        ],
+        "technical_keywords": [
+          "architecture",
+          "campaign",
+          "headline",
+          "description",
+          "keyword",
+          "rsa",
+          "budget",
+          "cpl"
+        ],
+        "simple_keywords": ["hello", "hi", "thanks", "what is", "ok", "yes", "no"]
+      }
+    }
+  },
+  "routing_rules": [
+    {
+      "id": "complexity-reasoning",
+      "name": "REASONING → gemini-2.5-pro",
+      "enabled": true,
+      "cel_expression": "complexity_tier == \"REASONING\"",
+      "targets": [{ "provider": "vertex", "model": "gemini-2.5-pro", "weight": 1 }],
+      "scope": "global",
+      "priority": 0
+    },
+    {
+      "id": "complexity-complex",
+      "name": "COMPLEX → gemini-2.5-flash",
+      "enabled": true,
+      "cel_expression": "complexity_tier == \"COMPLEX\"",
+      "targets": [{ "provider": "vertex", "model": "gemini-2.5-flash", "weight": 1 }],
+      "scope": "global",
+      "priority": 1
+    },
+    {
+      "id": "complexity-default-cheap",
+      "name": "SIMPLE/MEDIUM/unknown → gemini-2.5-flash-lite",
+      "enabled": true,
+      "cel_expression": "complexity_tier == \"SIMPLE\" || complexity_tier == \"MEDIUM\" || complexity_tier == \"\"",
+      "targets": [{ "provider": "vertex", "model": "gemini-2.5-flash-lite", "weight": 1 }],
+      "scope": "global",
+      "priority": 2
+    }
+  ]
+}
