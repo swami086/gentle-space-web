@@ -125,15 +125,25 @@ export async function pauseGoogleCampaign(campaignResourceName: string): Promise
 }
 
 export async function updateGoogleCampaignBudget(
-  campaignBudgetResourceName: string,
+  campaignResourceName: string,
   dailyBudgetInr: number,
 ): Promise<void> {
-  await customer().mutateResources([
+  const cus = customer();
+  const rows = await cus.query(`
+    SELECT campaign.campaign_budget
+    FROM campaign
+    WHERE campaign.resource_name = '${campaignResourceName}'
+  `);
+  const budgetResourceName = rows[0]?.campaign?.campaign_budget;
+  if (!budgetResourceName) {
+    throw new Error(`google ads: no campaign_budget for ${campaignResourceName}`);
+  }
+  await cus.mutateResources([
     {
       entity: "campaign_budget",
       operation: "update",
       resource: {
-        resource_name: campaignBudgetResourceName,
+        resource_name: budgetResourceName,
         amount_micros: toMicros(dailyBudgetInr),
       },
     },

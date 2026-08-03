@@ -34,6 +34,7 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
     });
   }
 
+  // Budget-reallocation rules need per-campaign CRM signals; they won't fire until attribution exists.
   await recordCrmSignalSnapshot({ campaignId: null, ...leadSignal });
 
   const searchTerms: SearchTermRow[] = googleSearchTerms

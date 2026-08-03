@@ -94,6 +94,28 @@ describe("pauseGoogleCampaign", () => {
   });
 });
 
+describe("updateGoogleCampaignBudget", () => {
+  it("resolves campaign_budget via GAQL and mutates that budget resource", async () => {
+    queryMock.mockResolvedValue([
+      { campaign: { campaign_budget: "customers/1234567890/campaignBudgets/42" } },
+    ]);
+    mutateResourcesMock.mockResolvedValue({ mutate_operation_responses: [{}] });
+    const { updateGoogleCampaignBudget } = await import("./google-ads");
+    await updateGoogleCampaignBudget("customers/1234567890/campaigns/999", 750);
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("campaign.resource_name = 'customers/1234567890/campaigns/999'"));
+    expect(mutateResourcesMock).toHaveBeenCalledWith([
+      {
+        entity: "campaign_budget",
+        operation: "update",
+        resource: {
+          resource_name: "customers/1234567890/campaignBudgets/42",
+          amount_micros: 750_000_000,
+        },
+      },
+    ]);
+  });
+});
+
 describe("addGoogleNegativeKeyword", () => {
   it("creates a negative campaign criterion", async () => {
     mutateResourcesMock.mockResolvedValue({ mutate_operation_responses: [{}] });
