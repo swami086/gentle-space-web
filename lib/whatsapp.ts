@@ -1,4 +1,5 @@
 import { SITE } from "./site";
+import { STEP2_FIELDS, type Step2Answers } from "./leads/step2-fields";
 
 export type NeedType = "office" | "retail" | "lease";
 
@@ -13,9 +14,20 @@ export type LeadPayload = {
   phone: string;
   need: NeedType;
   brief: string;
+  step2Answers?: Step2Answers;
   propertyName?: string;
   propertyUrl?: string;
 };
+
+function step2Lines(payload: LeadPayload): string[] {
+  if (!payload.step2Answers) return [];
+  return STEP2_FIELDS[payload.need]
+    .map((field) => {
+      const value = payload.step2Answers?.[field.key]?.trim();
+      return value ? `${field.label}: ${value}` : null;
+    })
+    .filter((line): line is string => Boolean(line));
+}
 
 export function buildWhatsAppUrl(payload: LeadPayload): string {
   const isProperty = Boolean(payload.propertyName && payload.propertyUrl);
@@ -36,7 +48,8 @@ export function buildWhatsAppUrl(payload: LeadPayload): string {
         `Name: ${payload.name.trim()}`,
         `WhatsApp: ${payload.phone.trim()}`,
         `Need: ${NEED_LABELS[payload.need]}`,
-        `Brief: ${payload.brief.trim()}`,
+        ...step2Lines(payload),
+        ...(payload.brief.trim() ? [`Notes: ${payload.brief.trim()}`] : []),
       ].join("\n");
   return `https://wa.me/${SITE.phoneE164}?text=${encodeURIComponent(body)}`;
 }
