@@ -88,3 +88,14 @@ export async function markProposalFailed(id: string, error: string): Promise<voi
     error,
   ]);
 }
+
+export async function updateProposalPayload(
+  id: string,
+  payload: Record<string, unknown>,
+): Promise<Proposal> {
+  const { rows } = await getPool().query<ProposalRow>(
+    `UPDATE proposals SET payload = $2::jsonb WHERE id = $1 RETURNING *`,
+    [id, JSON.stringify(payload)],
+  );
+  return rowToProposal(rows[0]);
+}

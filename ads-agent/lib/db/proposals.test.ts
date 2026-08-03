@@ -10,6 +10,7 @@ import {
   listProposals,
   markProposalExecuted,
   markProposalFailed,
+  updateProposalPayload,
 } from "./proposals";
 
 const row = {
@@ -116,5 +117,17 @@ describe("markProposalFailed", () => {
       "prop-1",
       "insufficient budget",
     ]);
+  });
+});
+
+describe("updateProposalPayload", () => {
+  it("overwrites the payload column and returns the mapped proposal", async () => {
+    query.mockResolvedValue({ rows: [{ ...row, payload: { dailyBudgetInr: 700 } }] });
+    const result = await updateProposalPayload("prop-1", { dailyBudgetInr: 700 });
+    expect(result.payload).toEqual({ dailyBudgetInr: 700 });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE proposals SET payload = $2::jsonb"),
+      ["prop-1", JSON.stringify({ dailyBudgetInr: 700 })],
+    );
   });
 });

@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProposalActions } from "./ProposalActions";
+import { CampaignProposalEditForm } from "./CampaignProposalEditForm";
 
 export default async function ProposalDetailPage({
   params,
@@ -46,6 +47,9 @@ export default async function ProposalDetailPage({
           </Alert>
         )}
 
+        {proposal.status === "pending" && proposal.kind === "create_campaign" && (
+          <CampaignProposalEditForm proposal={proposal} />
+        )}
         {proposal.status === "pending" && <ProposalActions proposalId={proposal.id} />}
       </CardContent>
     </Card>
