@@ -1,0 +1,187 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Campaign, Proposal } from "../types";
+
+const {
+  getProposalById,
+  markProposalExecuted,
+  markProposalFailed,
+  createCampaignRecord,
+  markCampaignActive,
+  updateCampaignBudget,
+  updateCampaignStatus,
+  getCampaignById,
+  createMetaCampaign,
+  pauseMetaCampaign,
+  updateMetaCampaignBudget,
+  createGoogleCampaign,
+  pauseGoogleCampaign,
+  updateGoogleCampaignBudget,
+  addGoogleNegativeKeyword,
+} = vi.hoisted(() => ({
+  getProposalById: vi.fn(),
+  markProposalExecuted: vi.fn(),
+  markProposalFailed: vi.fn(),
+  createCampaignRecord: vi.fn(),
+  markCampaignActive: vi.fn(),
+  updateCampaignBudget: vi.fn(),
+  updateCampaignStatus: vi.fn(),
+  getCampaignById: vi.fn(),
+  createMetaCampaign: vi.fn(),
+  pauseMetaCampaign: vi.fn(),
+  updateMetaCampaignBudget: vi.fn(),
+  createGoogleCampaign: vi.fn(),
+  pauseGoogleCampaign: vi.fn(),
+  updateGoogleCampaignBudget: vi.fn(),
+  addGoogleNegativeKeyword: vi.fn(),
+}));
+
+vi.mock("../db/proposals", () => ({ getProposalById, markProposalExecuted, markProposalFailed }));
+vi.mock("../db/campaigns", () => ({
+  createCampaignRecord,
+  markCampaignActive,
+  updateCampaignBudget,
+  updateCampaignStatus,
+  getCampaignById,
+}));
+vi.mock("../connectors/meta", () => ({ createMetaCampaign, pauseMetaCampaign, updateMetaCampaignBudget }));
+vi.mock("../connectors/google-ads", () => ({
+  createGoogleCampaign,
+  pauseGoogleCampaign,
+  updateGoogleCampaignBudget,
+  addGoogleNegativeKeyword,
+}));
+
+import { executeProposal } from "./execute";
+
+function approvedProposal(overrides: Partial<Proposal> = {}): Proposal {
+  return {
+    id: "prop-1",
+    kind: "pause",
+    campaignId: "camp-1",
+    payload: { campaignId: "camp-1" },
+    triggeredRule: "kill_rule",
+    rationale: "over budget",
+    status: "approved",
+    error: null,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    decidedAt: "2026-08-03T01:00:00.000Z",
+    executedAt: null,
+    ...overrides,
+  };
+}
+
+function googleCampaign(overrides: Partial<Campaign> = {}): Campaign {
+  return {
+    id: "camp-1",
+    platform: "google",
+    externalId: "customers/1/campaigns/999",
+    name: "Whitefield Search",
+    status: "active",
+    dailyBudget: 500,
+    corridor: "whitefield",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+beforeEach(() => vi.clearAllMocks());
+
+describe("executeProposal", () => {
+  it("throws when the proposal does not exist", async () => {
+    getProposalById.mockResolvedValue(null);
+    await expect(executeProposal("missing")).rejects.toThrow("proposal missing not found");
+  });
+
+  it("throws when the proposal is not approved", async () => {
+    getProposalById.mockResolvedValue(approvedProposal({ status: "pending" }));
+    await expect(executeProposal("prop-1")).rejects.toThrow("not approved");
+  });
+
+  it("pauses the correct platform campaign and marks the proposal executed", async () => {
+    getProposalById.mockResolvedValue(approvedProposal());
+    getCampaignById.mockResolvedValue(googleCampaign());
+    pauseGoogleCampaign.mockResolvedValue(undefined);
+
+    const result = await executeProposal("prop-1");
+
+    expect(pauseGoogleCampaign).toHaveBeenCalledWith("customers/1/campaigns/999");
+    expect(updateCampaignStatus).toHaveBeenCalledWith("camp-1", "paused");
+    expect(markProposalExecuted).toHaveBeenCalledWith("prop-1");
+    expect(result).toEqual({ status: "executed" });
+  });
+
+  it("routes pause to the Meta connector for a meta campaign", async () => {
+    getProposalById.mockResolvedValue(approvedProposal());
+    getCampaignById.mockResolvedValue(googleCampaign({ platform: "meta", externalId: "ext-meta-1" }));
+    pauseMetaCampaign.mockResolvedValue(undefined);
+
+    await executeProposal("prop-1");
+    expect(pauseMetaCampaign).toHaveBeenCalledWith("ext-meta-1");
+  });
+
+  it("creates a Google campaign, records the local row, and marks it active", async () => {
+    getProposalById.mockResolvedValue(
+      approvedProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: { corridor: "whitefield", platform: "google", dailyBudgetInr: 500 },
+      }),
+    );
+    createCampaignRecord.mockResolvedValue(googleCampaign({ status: "proposed", externalId: null }));
+    createGoogleCampaign.mockResolvedValue("customers/1/campaigns/999");
+
+    const result = await executeProposal("prop-1");
+
+    expect(createCampaignRecord).toHaveBeenCalledWith({
+      platform: "google",
+      name: expect.stringContaining("whitefield"),
+      dailyBudget: 500,
+      corridor: "whitefield",
+    });
+    expect(createGoogleCampaign).toHaveBeenCalledWith({
+      name: expect.stringContaining("whitefield"),
+      dailyBudgetInr: 500,
+    });
+    expect(markCampaignActive).toHaveBeenCalledWith("camp-1", "customers/1/campaigns/999");
+    expect(result).toEqual({ status: "executed" });
+  });
+
+  it("updates budget on the correct campaign", async () => {
+    getProposalById.mockResolvedValue(
+      approvedProposal({
+        kind: "budget_change",
+        payload: { campaignId: "camp-1", newDailyBudgetInr: 600 },
+      }),
+    );
+    getCampaignById.mockResolvedValue(googleCampaign());
+
+    await executeProposal("prop-1");
+    expect(updateGoogleCampaignBudget).toHaveBeenCalledWith("customers/1/campaigns/999", 600);
+    expect(updateCampaignBudget).toHaveBeenCalledWith("camp-1", 600);
+  });
+
+  it("adds a negative keyword on the correct campaign", async () => {
+    getProposalById.mockResolvedValue(
+      approvedProposal({
+        kind: "add_negative_keyword",
+        payload: { campaignId: "camp-1", keywordText: "residential" },
+      }),
+    );
+    getCampaignById.mockResolvedValue(googleCampaign());
+
+    await executeProposal("prop-1");
+    expect(addGoogleNegativeKeyword).toHaveBeenCalledWith("customers/1/campaigns/999", "residential");
+  });
+
+  it("marks the proposal failed (never retried) when the connector call throws", async () => {
+    getProposalById.mockResolvedValue(approvedProposal());
+    getCampaignById.mockResolvedValue(googleCampaign());
+    pauseGoogleCampaign.mockRejectedValue(new Error("Google Ads API: rate limited"));
+
+    const result = await executeProposal("prop-1");
+
+    expect(markProposalFailed).toHaveBeenCalledWith("prop-1", "Google Ads API: rate limited");
+    expect(markProposalExecuted).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "failed", error: "Google Ads API: rate limited" });
+  });
+});
