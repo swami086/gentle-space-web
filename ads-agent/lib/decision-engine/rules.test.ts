@@ -111,14 +111,16 @@ describe("budget reallocation rule", () => {
 
   it("proposes a budget increase when a campaign's hot+warm share is 2x the account average", () => {
     const strong = campaign({ id: "camp-strong", dailyBudget: 300 });
-    const weak = campaign({ id: "camp-weak", dailyBudget: 300 });
+    const weakA = campaign({ id: "camp-weak-a", dailyBudget: 300 });
+    const weakB = campaign({ id: "camp-weak-b", dailyBudget: 300 });
     const proposals = evaluateRules(
       {
-        campaigns: [strong, weak],
+        campaigns: [strong, weakA, weakB],
         recentSnapshots: [],
         recentSignals: [
           signal("camp-strong", { hotCount: 8, warmCount: 0, coldCount: 2, unscoredCount: 0 }),
-          signal("camp-weak", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
+          signal("camp-weak-a", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
+          signal("camp-weak-b", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
         ],
         searchTerms: [],
       },
@@ -127,19 +129,21 @@ describe("budget reallocation rule", () => {
     expect(proposals).toContainEqual(
       expect.objectContaining({ kind: "budget_change", campaignId: "camp-strong", triggeredRule: "budget_reallocation" }),
     );
-    expect(proposals.filter((p) => p.campaignId === "camp-weak")).toHaveLength(0);
+    expect(proposals.filter((p) => p.campaignId === "camp-weak-a" || p.campaignId === "camp-weak-b")).toHaveLength(0);
   });
 
   it("never proposes a budget increase that would breach the monthly ceiling", () => {
     const strong = campaign({ id: "camp-strong", dailyBudget: 2_300 }); // already ~69000/mo
-    const weak = campaign({ id: "camp-weak", dailyBudget: 10 });
+    const weakA = campaign({ id: "camp-weak-a", dailyBudget: 10 });
+    const weakB = campaign({ id: "camp-weak-b", dailyBudget: 10 });
     const proposals = evaluateRules(
       {
-        campaigns: [strong, weak],
+        campaigns: [strong, weakA, weakB],
         recentSnapshots: [],
         recentSignals: [
           signal("camp-strong", { hotCount: 8, warmCount: 0, coldCount: 2, unscoredCount: 0 }),
-          signal("camp-weak", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
+          signal("camp-weak-a", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
+          signal("camp-weak-b", { hotCount: 1, warmCount: 0, coldCount: 9, unscoredCount: 0 }),
         ],
         searchTerms: [],
       },

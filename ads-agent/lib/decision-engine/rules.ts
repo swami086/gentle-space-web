@@ -65,6 +65,10 @@ function budgetReallocationProposals(
   const perCampaignSignal = signals.filter((s) => s.campaignId !== null);
   if (perCampaignSignal.length === 0) return [];
 
+  const shares = perCampaignSignal.map((s) => hotWarmShare(s));
+  const accountAverage = shares.reduce((sum, share) => sum + share, 0) / shares.length;
+  if (accountAverage === 0) return [];
+
   const dailyCeiling = strategy.monthlyBudgetInr / 30;
   const currentDailySum = activeDailyBudgetSum(campaigns);
   const proposals: NewProposal[] = [];
@@ -73,11 +77,6 @@ function budgetReallocationProposals(
     const campaign = campaigns.find((c) => c.id === signal.campaignId);
     if (!campaign || campaign.status !== "active" || campaign.dailyBudget === null) continue;
     const share = hotWarmShare(signal);
-    const peerSignals = perCampaignSignal.filter((s) => s.campaignId !== signal.campaignId);
-    if (peerSignals.length === 0) continue;
-    const accountAverage =
-      peerSignals.map((s) => hotWarmShare(s)).reduce((sum, s) => sum + s, 0) / peerSignals.length;
-    if (accountAverage === 0) continue;
     if (share < accountAverage * 2) continue;
 
     const increasedBudget = Math.round(campaign.dailyBudget * 1.2);
