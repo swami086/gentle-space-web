@@ -97,7 +97,7 @@ This task has no application logic to TDD — it is scaffolding. Verify it manua
   },
   "dependencies": {
     "facebook-nodejs-business-sdk": "^22.0.0",
-    "google-ads-api": "^18.0.0",
+    "google-ads-api": "^21.0.0",
     "next": "15.5.21",
     "node-cron": "^3.0.3",
     "pg": "^8.22.0",
@@ -181,6 +181,9 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
     },
+  },
+  test: {
+    passWithNoTests: true,
   },
 });
 ```
