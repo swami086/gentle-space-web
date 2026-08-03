@@ -4,42 +4,43 @@ Bifrost sits between ads-agent and Vertex AI. It handles model routing (complexi
 
 ## Setup
 
-1. **Encode the service-account key** (from repo root):
+1. **Service-account key** (from repo root). Bifrost's Vertex provider expects the
+   **raw** service-account JSON string in `VERTEX_AUTH_CREDENTIALS` (not base64).
+
+   If you keep a base64 blob in `.env.local` for convenience, decode when exporting
+   for Compose:
 
    ```bash
-   base64 -i .secrets/gentle-space-vertex-stackgen.json | tr -d '\n'
+   # Prefer exporting only the needed lines (zsh chokes on CRON_SCHEDULE=0 */6 ...):
+   export VERTEX_PROJECT_ID="$(grep '^VERTEX_PROJECT_ID=' .env.local | cut -d= -f2-)"
+   export VERTEX_AUTH_CREDENTIALS="$(grep '^VERTEX_AUTH_CREDENTIALS=' .env.local | cut -d= -f2- | base64 -d | tr -d '\n')"
    ```
 
-   Put the output in `ads-agent/.env.local` as `VERTEX_AUTH_CREDENTIALS=...`
-   (Node scripts load `.env.local` via `--env-file`).
+   Or set `VERTEX_AUTH_CREDENTIALS` to the one-line JSON directly (no base64).
 
 2. **Required env vars** (also in `.env.example`):
 
    | Variable | Value |
    |----------|-------|
    | `VERTEX_PROJECT_ID` | `propane-galaxy-498403-n8` |
-   | `VERTEX_AUTH_CREDENTIALS` | base64-encoded SA JSON |
+   | `VERTEX_AUTH_CREDENTIALS` | **raw** SA JSON string (Compose / Bifrost) |
    | `BIFROST_BASE_URL` | `http://localhost:8080` |
    | `BIFROST_CHAT_MODEL` | `vertex/gemini-2.5-flash-lite` |
 
-3. **Start Bifrost** from `ads-agent/`.
+3. **Start Bifrost** from `ads-agent/`:
 
-   Docker Compose does **not** auto-read `.env.local` — it interpolates
-   `${VERTEX_AUTH_CREDENTIALS}` from the shell environment or from a file
-   named `.env` in this folder. Either:
+   Docker Compose does **not** auto-read `.env.local`. Export vars (step 1), then:
 
    ```bash
-   set -a && source .env.local && set +a
    docker compose up -d bifrost
    ```
 
-   or copy the Vertex/Bifrost lines into `ads-agent/.env` (gitignored) and run
-   `docker compose up -d bifrost`.
-4. **Smoke test** — use the Task 3 script, or manually:
+   `config.json` is bind-mounted to `/app/data/config.json` (Bifrost's app-dir).
+
+4. **Smoke test:**
 
    ```bash
-   curl http://localhost:8080/
-   curl http://localhost:8080/v1/chat/completions ...
+   npx tsx scripts/smoke-bifrost.ts
    ```
 
 ## Routing (CEL)

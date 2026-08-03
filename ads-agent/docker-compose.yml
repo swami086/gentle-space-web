@@ -24,14 +24,18 @@ services:
       - "8080:8080"
     # Compose does not load .env.local by default; export vars first
     # (`set -a && source .env.local && set +a`) or use ads-agent/.env.
+    # VERTEX_AUTH_CREDENTIALS must be the raw service-account JSON string
+    # (not base64). If .env.local stores base64, decode when exporting:
+    #   export VERTEX_AUTH_CREDENTIALS="$(grep '^VERTEX_AUTH_CREDENTIALS=' .env.local | cut -d= -f2- | base64 -d | tr -d '\n')"
     environment:
       VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
       VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS}
       GOGC: "100"
       GOMEMLIMIT: "450MiB"
     volumes:
-      - ./bifrost/config.json:/app/config.json:ro
+      # Volume first, then bind config on top of /app/data/config.json
       - bifrost-data:/app/data
+      - ./bifrost/config.json:/app/data/config.json:ro
     mem_limit: 512m
     cpus: "1.0"
     restart: unless-stopped
