@@ -1,0 +1,5 @@
+A homepage hero composition styled as an airport/rail split-flap departure board concourse: matte black flap-faces with white painted letters in fixed character cells, brushed steel board frame, amber row lamps, a few rows mid-cascade caught blurred in motion.
+
+Composition: the wordmark "Gentle Space" set as if on one illuminated header row of the board. Below it, this exact headline text presented across large flap rows, legible and dominant: "Find commercial space in Bangalore without wading through inflated listings. No dead-end tours." A solid rectangular call-to-action styled as a glowing amber board button beneath it. Below that, several smaller flap-rows standing in for content, greeked as illegible generic flap-character shapes, not real words.
+
+Style: flat matte design sketch, deliberately unfinished (not a polished mockup), no photorealism, no gloss, landscape 16:9 desktop web viewport, no browser chrome or UI frame.

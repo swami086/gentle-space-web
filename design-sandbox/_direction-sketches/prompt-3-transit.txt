@@ -1,0 +1,5 @@
+A homepage hero composition styled as a midnight-blue enamel metro map mural: porcelain-white station ticks, scarlet/cobalt/amber/green transit lines bending only at 45 and 90 degrees, interchange circles blooming at crossings.
+
+Composition: the wordmark "Gentle Space" set in a humanist transit-sans at top left. Below it, this exact headline text, large and legible: "Find commercial space in Bangalore without wading through inflated listings. No dead-end tours." The transit-line diagram dominates the right two-thirds of the frame, one scarlet line highlighted brighter than the rest, leading toward a solid rectangular call-to-action styled as a station-interchange circle. All secondary content areas are greeked as illegible wavy placeholder lines, not real words.
+
+Style: flat matte design sketch, deliberately unfinished (not a polished mockup), no photorealism, no gloss, landscape 16:9 desktop web viewport, no browser chrome or UI frame.

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gentle Space | Commercial Real Estate Consultants in Bangalore - Taste-Skill Variation</title>
+
+<link rel="preconnect" href="https://api.fontshare.com" />
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&f[]=inter-tight@400,500,600,700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<!--
+  DESIGN READ (design-taste-frontend Section 0.B):
+  B2B service/consultancy landing page, redesign-overhaul mode (new visual
+  language, same real content/IA preserved from the production app), for
+  Bangalore facilities leads and property owners. Modern-trustworthy register,
+  Tailwind utilities + a distinctive type pairing, restrained motion.
+
+  DIALS: DESIGN_VARIANCE 7 / MOTION_INTENSITY 5 / VISUAL_DENSITY 4
+  (redesign-overhaul preset: current production site reads roughly 4/3/4,
+  +2/+2 lands close to the "SaaS mainstream" 7/6/4 preset, motion dialed to 5
+  since a trust-first B2B register shouldn't over-animate).
+
+  DESIGN SYSTEM: no official system applies (Section 2.A doesn't match this
+  brief) -> Tailwind v4 utilities (Play CDN, single static file, matching this
+  sandbox's existing no-build-step pattern) + Phosphor icons (CDN) + Cabinet
+  Grotesk / Inter Tight (a named pairing in the skill, chosen specifically to
+  avoid Inter-as-default and to read distinctly from the other sandbox
+  variation's Zilla Slab / Public Sans / Courier Prime).
+
+  COLOR: brand is already purple -> LILA rule override applies (Section 4.2):
+  kept, refined, and locked as the single accent, set against cool neutrals
+  (not the warm-paper palette used in the other variation) so the two
+  sandboxes read as genuinely different worlds.
+
+  SHAPE: soft-consistent system (Section 4.4 documented exception) - buttons
+  full-pill, cards/inputs 16px/10px radius, applied everywhere.
+
+  IMAGES: two real photorealistic images generated via gemini-3-pro-image
+  (hero building exterior, services interior) - no fake screenshots, no
+  hand-rolled decorative SVG (Section 4.8 / 9.E).
+-->
+
+<header class="site-header">
+  <div class="wrap">
+    <a href="#top" class="brand">
+      <img src="assets/gentle-space-logo-mark.png" alt="Gentle Space" />
+      <span>Gentle Space</span>
+    </a>
+    <nav class="primary-nav">
+      <a href="#services">Services</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#locations">Locations</a>
+      <a href="#founder">Founder</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <button type="button" class="btn btn--accent" data-open-modal>Contact Us</button>
+      <input type="checkbox" id="nav-toggle" class="nav-toggle" />
+      <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu"><i class="ph ph-list"></i></label>
+    </div>
+  </div>
+  <div class="mobile-nav">
+    <a href="#services">Services</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#locations">Locations</a>
+    <a href="#founder">Founder</a>
+    <a href="#contact">Contact</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO: asymmetric split -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy reveal">
+        <h1>Find commercial space in Bangalore without wading through inflated listings. <em>No dead-end tours.</em></h1>
+        <p class="lede">Share your brief and we'll reply within the hour. Your shortlist typically follows within five working days.</p>
+        <div class="hero-actions">
+          <button type="button" class="btn btn--accent" data-open-modal>Contact Us</button>
+          <a href="/spaces" class="btn--link">See Available Properties <i class="ph ph-arrow-right"></i></a>
+        </div>
+      </div>
+      <div class="hero-visual reveal">
+        <img src="assets/hero-photo.png" alt="Modern commercial office tower in Bangalore" />
+      </div>
+    </div>
+  </section>
+
+  <!-- FULL-WIDTH STATEMENT (real copy, relocated rather than rewritten) -->
+  <section class="statement">
+    <div class="wrap">
+      <p class="reveal">Office, retail, warehouse, whatever the brief calls for. We match it to your budget, size, location, and lease terms, then stay through verification, legal, and paperwork until you're handed the keys. For property owners, we find screened tenants and help you lease on clear terms.</p>
+    </div>
+  </section>
+
+  <!-- SERVICES: bento grid -->
+  <section id="services" class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">What we do</span>
+        <h2>Commercial real estate across Bangalore, matched to your brief.</h2>
+      </div>
+
+      <div class="services-grid">
+        <div class="svc-cell svc-cell--featured reveal">
+          <img src="assets/services-photo.png" alt="Bright modern office interior in Bangalore" />
+          <div class="svc-content">
+            <span class="svc-group-label" style="color:#fff;">For companies</span>
+            <h3>Tenant Representation</h3>
+            <p>We search, tour, and negotiate to your brief. Verification, legal, and paperwork are handled through handover.</p>
+          </div>
+        </div>
+        <div class="svc-cell reveal">
+          <span class="svc-group-label">For companies</span>
+          <h3>Managed &amp; Coworking Advisory</h3>
+          <p>Need a space ready to move into? We help with managed offices, coworking, and furnished floors.</p>
+        </div>
+        <div class="svc-cell reveal">
+          <span class="svc-group-label">For companies</span>
+          <h3>Multi-location Portfolio Strategy</h3>
+          <p>Opening a second or third Bangalore location? We plan the leases together, on the same timeline, so terms and renewal dates line up across your footprint.</p>
+        </div>
+        <div class="svc-cell reveal">
+          <span class="svc-group-label">For property owners</span>
+          <h3>Tenant Sourcing &amp; Leasing</h3>
+          <p>We screen occupants against your asset, corridor, and lease goals before they ever see the space.</p>
+        </div>
+        <div class="svc-cell reveal">
+          <span class="svc-group-label">For property owners</span>
+          <h3>Rent &amp; Asset Positioning</h3>
+          <p>We price your space against current Bangalore rent and vacancy data for that corridor, so the number holds up in negotiation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS: horizontal scroll-snap -->
+  <section id="how-it-works" class="section" style="padding-top:0;">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>From brief to signed lease, six steps.</h2>
+      </div>
+      <div class="steps-track">
+        <div class="step-card reveal"><div class="step-num">01</div><h4>Client Requirement</h4><p>Team size, budget, locations, lease length, timeline: every detail that decides whether a space actually fits your business.</p></div>
+        <div class="step-card reveal"><div class="step-num">02</div><h4>Pre-Vetted Sourcing</h4><p>We source Bangalore options across every property type and score them on rent, location, and building quality.</p></div>
+        <div class="step-card reveal"><div class="step-num">03</div><h4>Shortlist</h4><p>Built around your parameters: location, budget, size, quality, commute, lease terms.</p></div>
+        <div class="step-card reveal"><div class="step-num">04</div><h4>Property Tours</h4><p>We walk you through each option with real context on pricing and demand in that corridor.</p></div>
+        <div class="step-card reveal"><div class="step-num">05</div><h4>Price Negotiations</h4><p>We negotiate rent, lock-in, and incentives using live Bangalore lease comps.</p></div>
+        <div class="step-card reveal"><div class="step-num">06</div><h4>Verification, Legal &amp; Paperwork</h4><p>Handled through to handover.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY US: vertical stack + callout -->
+  <section id="why-us" class="section">
+    <div class="wrap">
+      <div class="reveal">
+        <span class="eyebrow">Why Gentle Space</span>
+        <h2 style="margin-top:12px; max-width:28ch;">Why companies and owners work with Gentle Space</h2>
+        <p class="whyus-body">Most leases run into trouble in the fine print. We check it before you tour a property, then stay on the deal through legal and handover. Property owners get the same coverage from the other side: a tenant we've actually vetted, and a close we manage end to end.</p>
+      </div>
+      <div class="fee-callout reveal">
+        <i class="ph ph-receipt"></i>
+        <p><b style="color:var(--ink); font-weight:600;">How our fee works.</b> Standard requirements cost you nothing. A highly customised search outside our existing network carries a fixed fee, agreed upfront.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOCATIONS: chip wrap -->
+  <section id="locations" class="section" style="padding-block:56px;">
+    <div class="wrap reveal">
+      <h2 style="max-width:24ch;">We cover all locations in and around Bengaluru.</h2>
+      <div class="locality-row">
+        <span class="locality-chip">Whitefield</span>
+        <span class="locality-chip">Outer Ring Road</span>
+        <span class="locality-chip">Koramangala</span>
+        <span class="locality-chip">Indiranagar</span>
+        <span class="locality-chip">HSR Layout</span>
+        <span class="locality-chip">Electronic City</span>
+        <span class="locality-chip">MG Road</span>
+        <span class="locality-chip">Sarjapur Road</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS: minimal divider grid -->
+  <section class="section" style="background:var(--surface); border-block:1px solid var(--border);">
+    <div class="wrap">
+      <h2 class="reveal" style="max-width:20ch;">What Bangalore clients say about Gentle Space</h2>
+      <div class="testi-grid">
+        <figure class="testi reveal">
+          <blockquote>&ldquo;They understood the Whitefield brief quickly and kept the search tight. We signed without a long detour through irrelevant floors.&rdquo;</blockquote>
+          <figcaption><b>Priya Nair</b> - Admin Head, Health Insurance Company</figcaption>
+        </figure>
+        <figure class="testi reveal">
+          <blockquote>&ldquo;Gentle Space ran the negotiation end to end. Clear process, no surprises on fee or timeline.&rdquo;</blockquote>
+          <figcaption><b>Arjun Mehta</b> - CEO, Series B SaaS Startup</figcaption>
+        </figure>
+        <figure class="testi reveal">
+          <blockquote>&ldquo;Helped us take our first Bangalore office. Practical advice on rent and location, not a brochure pitch.&rdquo;</blockquote>
+          <figcaption><b>Karthik Iyer</b> - Head of India Operations, US-based GCC</figcaption>
+        </figure>
+        <figure class="testi reveal">
+          <blockquote>&ldquo;Found a tenant quickly and landed a fair rent. Straightforward from first call to handover.&rdquo;</blockquote>
+          <figcaption><b>Suresh Rao</b> - Owner, commercial building on Outer Ring Road</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOUNDER: split -->
+  <section id="founder" class="section">
+    <div class="wrap">
+      <span class="eyebrow reveal">About the founder</span>
+      <div class="founder-grid">
+        <div class="founder-photo reveal">
+          <img src="assets/sanjay-singh-portrait.jpg" alt="Sanjay Singh portrait" />
+        </div>
+        <div class="reveal">
+          <h2>Meet Sanjay Singh</h2>
+          <p class="founder-role">Founder · Gentle Space Global Solutions · Bangalore</p>
+          <p class="founder-bio">Raised in Bangalore, Sanjay is a former corporate professional who launched Gentle Space to pursue his passion back in 2024. Sanjay has worked across a broad range of commercial real estate requirements in the city and brings deep, intricate knowledge of the local geography and ecosystem which very few real estate consultants possess. Today, his clientele ranges from tech companies wanting to open their first Bangalore office, F&amp;B establishments, and manufacturing businesses looking for that ideal space. He is also a highly trusted consultant for overseas businesses arriving in India.</p>
+
+          <div class="registry-row">
+            <div class="registry-item">
+              <div class="label">Office</div>
+              <div class="value">Rear wing, Ground Floor, Vakil Square, BTM 1st Stage, Bengaluru 560029</div>
+            </div>
+            <div class="registry-item">
+              <div class="label">GSTIN</div>
+              <div class="value">29AAKCG5685J1ZU</div>
+            </div>
+            <div class="registry-item">
+              <div class="label">CIN</div>
+              <div class="value">U68100KA2023PTC175577</div>
+            </div>
+          </div>
+
+          <div class="founder-links">
+            <a href="https://in.linkedin.com/in/sanjay-singh-5a354347" target="_blank" rel="noreferrer noopener" class="btn btn--ghost"><i class="ph ph-linkedin-logo"></i> LinkedIn</a>
+            <a href="https://www.google.com/maps?daddr=Rear+wing,+Ground+Floor,+Vakil+Square,+KEB+Colony,+New+Gurappana+Palya,+1st+Stage,+BTM+1st+Stage,+Bengaluru,+Karnataka+560029" target="_blank" rel="noreferrer noopener" class="btn--link">Get directions <i class="ph ph-arrow-right"></i></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" style="background:var(--surface); border-block:1px solid var(--border);">
+    <div class="wrap">
+      <h2 class="reveal" style="max-width:24ch;">FAQs: commercial real estate consultants in Bangalore</h2>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary><span>How do fees work?</span><i class="ph ph-plus"></i></summary>
+          <p>Standard requirements cost nothing. If we need to search outside our existing network for something highly specific, we agree a fixed fee with you first.</p>
+        </details>
+        <details class="faq-item">
+          <summary><span>Which Bangalore locations do you cover?</span><i class="ph ph-plus"></i></summary>
+          <p>All of Bangalore and the areas around it. Whitefield, Outer Ring Road, Koramangala, Indiranagar, HSR Layout, Electronic City, MG Road, and Sarjapur Road see the most activity, and that's just a sample of where we work.</p>
+        </details>
+        <details class="faq-item">
+          <summary><span>How are commercial real estate consultants different from property listings?</span><i class="ph ph-plus"></i></summary>
+          <p>Listings show you what's available. They don't tell you if the building has legal issues, if the landlord is reliable, or if the price is inflated. We check all of that before you tour anything.</p>
+        </details>
+        <details class="faq-item">
+          <summary><span>How long does the consulting process take?</span><i class="ph ph-plus"></i></summary>
+          <p>A shortlist usually follows your brief within five working days. Getting from brief to signed lease typically takes one to four weeks, depending on what you need.</p>
+        </details>
+        <details class="faq-item">
+          <summary><span>Do you handle verification, legal, and paperwork?</span><i class="ph ph-plus"></i></summary>
+          <p>Yes, through handover, and we stay involved for renewals and expansions after you've moved in.</p>
+        </details>
+        <details class="faq-item">
+          <summary><span>Why choose Gentle Space as commercial real estate consultants in Bangalore?</span><i class="ph ph-plus"></i></summary>
+          <p>We work across every commercial property type in Bangalore, for both companies and property owners, and we stay on the deal through verification, legal, and paperwork instead of handing you off after the intro call.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BAND -->
+  <section class="cta-band">
+    <div class="wrap">
+      <h2>Ready to find the right commercial space in Bangalore?</h2>
+      <p>Share your brief on WhatsApp and we'll reply within the hour, with your private shortlist typically ready in about five working days.</p>
+      <div class="hero-actions" style="justify-content:center;">
+        <button type="button" class="btn btn--accent" data-open-modal>Contact Us</button>
+        <a href="/spaces" class="btn btn--ghost">See Available Properties</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="contact" class="site-footer">
+  <div class="wrap footer-grid">
+    <div class="footer-about">
+      <a href="#top" class="brand">
+        <img src="assets/gentle-space-logo-mark.png" alt="" />
+        <span>Gentle Space</span>
+      </a>
+      <p>Commercial real estate consulting in Bangalore, for companies and property owners across every property type.</p>
+    </div>
+    <div>
+      <div class="footer-heading">Company</div>
+      <ul class="footer-links">
+        <li><a href="#founder">About the Founder</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#locations">Locations</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-heading">Contact</div>
+      <ul class="footer-links">
+        <li><a href="mailto:email@gentlespacesolutions.com">email@gentlespacesolutions.com</a></li>
+        <li><a href="tel:+918105279639">+91 81052 79639</a></li>
+        <li>Rear wing, Ground Floor, Vakil Square, BTM 1st Stage, Bengaluru 560029</li>
+        <li>GSTIN: 29AAKCG5685J1ZU</li>
+        <li>CIN: U68100KA2023PTC175577</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wrap"><p class="copyright">© 2026 Gentle Space Global Solutions. All rights reserved.</p></div>
+</footer>
+
+<!-- LEAD CAPTURE MODAL -->
+<div class="modal-overlay" data-modal-overlay>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lead-title">
+    <div class="modal-head">
+      <div>
+        <h2 id="lead-title">Get your private property e-brochure</h2>
+        <p>Share your brief. We'll send a private shortlist on WhatsApp.</p>
+      </div>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+    </div>
+
+    <form id="lead-form">
+      <label class="field"><span>Full name</span><input type="text" id="lead-name" placeholder="Your name" /></label>
+      <label class="field"><span>WhatsApp number</span><input type="text" id="lead-phone" placeholder="+91 …" /></label>
+      <fieldset class="field">
+        <span>I need</span>
+        <div class="need-options">
+          <button type="button" class="need-btn active" data-need="office">Office space</button>
+          <button type="button" class="need-btn" data-need="retail">Retail space</button>
+          <button type="button" class="need-btn" data-need="lease">Lease out my property</button>
+        </div>
+      </fieldset>
+      <label class="field"><span>Your brief</span><textarea id="lead-brief" placeholder="Corridors, size, budget, timing…"></textarea></label>
+      <button type="submit" class="btn btn--accent">Send on WhatsApp</button>
+      <p class="disclaimer">Opens WhatsApp with your brief ready to send to Gentle Space.</p>
+    </form>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
