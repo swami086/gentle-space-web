@@ -15,11 +15,18 @@ shadcn-style dashboard behind a persistent sidebar; see
 [`docs/superpowers/specs/2026-08-03-ads-agent-admin-dashboard-design.md`](../docs/superpowers/specs/2026-08-03-ads-agent-admin-dashboard-design.md)
 for the design.
 
+### Conversational campaign creation
+
+From **Campaigns → New Campaign**, describe the ad in chat; the assistant fills a
+draft setup card. When the draft is ready, click **Create Proposal**, review/edit on
+the proposal page, then approve. Requires `OPENAI_API_KEY` for the chat assistant and
+for proposal rationale generation (`lib/decision-engine/rationale.ts`).
+
 ## Local setup
 
 1. `npm install`
 2. `docker compose up -d` (starts this service's own Postgres on host port 5434)
-3. `cp .env.example .env.local` and fill in `DATABASE_URL` (already correct for the compose default) plus credentials below
+3. `cp .env.example .env.local` and fill in `DATABASE_URL` (already correct for the compose default), `OPENAI_API_KEY` (chat + rationale), plus credentials below
 4. `npm run migrate` (applies `lib/db/schema.sql`)
 5. `npm run dev` (admin UI at http://localhost:3030)
 6. In a second terminal: `npm run worker` (cron worker; starts with `cron_settings.enabled = false`, flip it on in `/settings`)

@@ -132,4 +132,12 @@ describe("draftCampaignChatReply", () => {
     expect(result.fieldUpdates).toBeNull();
     expect(result.reply).toMatch(/unavailable/i);
   });
+
+  it("returns a friendly message when fetch throws (network/timeout)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
+    expect(result.fieldUpdates).toBeNull();
+    expect(result.reply).toMatch(/unavailable/i);
+  });
 });

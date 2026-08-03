@@ -54,6 +54,20 @@ describe("validateDraftFields", () => {
   it("ignores fields that are not present in the patch", () => {
     expect(validateDraftFields({ corridor: "koramangala" })).toEqual([]);
   });
+
+  it("flags a blank headline", () => {
+    expect(validateDraftFields({ headlines: ["Valid", "   ", "Also valid"] })).toEqual(["headlines[1] must not be blank"]);
+  });
+
+  it("flags a blank description", () => {
+    expect(validateDraftFields({ descriptions: ["Valid", ""] })).toEqual(["descriptions[1] must not be blank"]);
+  });
+
+  it("flags a keyword with empty text", () => {
+    expect(validateDraftFields({ keywords: [{ text: "office space", matchType: "phrase" }, { text: "  ", matchType: "exact" }] })).toEqual([
+      "keywords[1].text must not be blank",
+    ]);
+  });
 });
 
 describe("isDraftReady", () => {
@@ -79,5 +93,25 @@ describe("isDraftReady", () => {
 
   it("is false when a headline exceeds the character limit even if counts are right", () => {
     expect(isDraftReady(draft({ headlines: ["ok", "ok", "This one headline is far too long for RSA rules"] }))).toBe(false);
+  });
+
+  it("is false when corridor is whitespace-only", () => {
+    expect(isDraftReady(draft({ corridor: "   " }))).toBe(false);
+  });
+
+  it("is false when adGroupName is whitespace-only", () => {
+    expect(isDraftReady(draft({ adGroupName: "  " }))).toBe(false);
+  });
+
+  it("is false when a headline is blank", () => {
+    expect(isDraftReady(draft({ headlines: ["Valid", "   ", "Also valid"] }))).toBe(false);
+  });
+
+  it("is false when a description is blank", () => {
+    expect(isDraftReady(draft({ descriptions: ["Valid", ""] }))).toBe(false);
+  });
+
+  it("is false when a keyword text is blank", () => {
+    expect(isDraftReady(draft({ keywords: [{ text: "office space", matchType: "phrase" }, { text: "  ", matchType: "exact" }] }))).toBe(false);
   });
 });

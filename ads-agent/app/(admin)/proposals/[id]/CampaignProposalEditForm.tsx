@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CampaignDraftKeyword, Proposal } from "@/lib/types";
+
+const MATCH_TYPES: CampaignDraftKeyword["matchType"][] = ["broad", "phrase", "exact"];
 
 type EditableFields = {
   dailyBudgetInr: number;
@@ -31,6 +33,7 @@ export function CampaignProposalEditForm({ proposal }: { proposal: Proposal }) {
   const [fields, setFields] = useState<EditableFields>(() => toEditable(proposal.payload));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const negativeKeywords = (proposal.payload.negativeKeywords as string[] | undefined) ?? [];
 
   function updateListField(key: "headlines" | "descriptions", index: number, value: string) {
     setFields((prev) => {
@@ -38,6 +41,21 @@ export function CampaignProposalEditForm({ proposal }: { proposal: Proposal }) {
       next[index] = value;
       return { ...prev, [key]: next };
     });
+  }
+
+  function updateKeyword(index: number, patch: Partial<CampaignDraftKeyword>) {
+    setFields((prev) => ({
+      ...prev,
+      keywords: prev.keywords.map((keyword, i) => (i === index ? { ...keyword, ...patch } : keyword)),
+    }));
+  }
+
+  function removeKeyword(index: number) {
+    setFields((prev) => ({ ...prev, keywords: prev.keywords.filter((_, i) => i !== index) }));
+  }
+
+  function addKeyword() {
+    setFields((prev) => ({ ...prev, keywords: [...prev.keywords, { text: "", matchType: "phrase" }] }));
   }
 
   async function save() {
@@ -82,6 +100,50 @@ export function CampaignProposalEditForm({ proposal }: { proposal: Proposal }) {
           onChange={(e) => setFields((prev) => ({ ...prev, adGroupName: e.target.value }))}
         />
       </label>
+
+      <div className="flex flex-col gap-2 text-sm">
+        <div className="flex items-center justify-between">
+          <span>Keywords</span>
+          <Button type="button" variant="ghost" size="sm" onClick={addKeyword}>
+            <Plus className="size-3" />
+            Add
+          </Button>
+        </div>
+        {fields.keywords.map((keyword, index) => (
+          <div key={index} className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1"
+              value={keyword.text}
+              onChange={(e) => updateKeyword(index, { text: e.target.value })}
+            />
+            <select
+              className="rounded-md border border-border bg-background px-2 py-1"
+              value={keyword.matchType}
+              onChange={(e) => updateKeyword(index, { matchType: e.target.value as CampaignDraftKeyword["matchType"] })}
+            >
+              {MATCH_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeKeyword(index)}>
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {negativeKeywords.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">Negative keywords (read-only)</span>
+          <ul className="list-inside list-disc text-muted-foreground">
+            {negativeKeywords.map((keyword) => (
+              <li key={keyword}>{keyword}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1 text-sm">
         <span>Headlines (3-15, ≤30 chars)</span>

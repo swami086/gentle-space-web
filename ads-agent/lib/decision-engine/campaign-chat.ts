@@ -68,20 +68,24 @@ async function callOpenAi(
   apiKey: string,
   messages: Record<string, unknown>[],
 ): Promise<OpenAiChatResponse | null> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature: 0.3,
-      max_tokens: 600,
-      messages,
-      tools: [UPDATE_DRAFT_TOOL],
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as OpenAiChatResponse;
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        max_tokens: 600,
+        messages,
+        tools: [UPDATE_DRAFT_TOOL],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as OpenAiChatResponse;
+  } catch {
+    return null;
+  }
 }
 
 type ParsedToolCall =
