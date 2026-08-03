@@ -32,11 +32,9 @@ class FakeCampaign {
 }
 
 vi.mock("facebook-nodejs-business-sdk", () => ({
-  default: {
-    FacebookAdsApi: { init: initMock },
-    AdAccount: FakeAdAccount,
-    Campaign: FakeCampaign,
-  },
+  FacebookAdsApi: { init: initMock },
+  AdAccount: FakeAdAccount,
+  Campaign: FakeCampaign,
 }));
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
-import bizSdk from "facebook-nodejs-business-sdk";
+import * as bizSdk from "facebook-nodejs-business-sdk";
 import { requireEnv } from "../env";
 
-const { FacebookAdsApi, AdAccount, Campaign } = bizSdk;
+const { FacebookAdsApi, AdAccount, Campaign } = bizSdk as typeof import("facebook-nodejs-business-sdk");
 
 type RawInsightRow = {
   campaign_id: string;
