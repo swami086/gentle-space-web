@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { buildWhatsAppUrl, NEED_LABELS, type NeedType } from "@/lib/whatsapp";
+import { buildWhatsAppUrl, NEED_LABELS, type LeadPayload, type NeedType } from "@/lib/whatsapp";
+import { step2FieldsFor, type Step2Answers } from "@/lib/leads/step2-fields";
+import {
+  canAdvanceFromIdentify,
+  nextStepIndex,
+  previousStepIndex,
+  wizardSteps,
+} from "@/lib/leads/wizard-steps";
 import { useLeadCapture } from "./LeadCaptureContext";
 
 const NEED_OPTIONS: NeedType[] = ["office", "retail", "lease"];
+const LEADS_FETCH_TIMEOUT_MS = 2500;
 
 function IconClose({ className }: { className?: string }) {
   return (
@@ -23,27 +31,51 @@ function IconWhatsApp({ className }: { className?: string }) {
   );
 }
 
+async function postLead(payload: LeadPayload) {
+  try {
+    await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(LEADS_FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    // Soft-fail: WhatsApp always opens regardless. The server keeps working
+    // on the AI qualification + CRM write even after this fetch gives up —
+    // see docs/superpowers/specs/2026-08-03-whatsapp-ai-lead-qualification-design.md.
+  }
+}
+
 export function LeadCaptureModal() {
   const { open, propertyContext, closeModal } = useLeadCapture();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [need, setNeed] = useState<NeedType>("office");
-  const [brief, setBrief] = useState("");
+  const [step2Answers, setStep2Answers] = useState<Step2Answers>({});
+  const [notes, setNotes] = useState("");
+  const [stepIndex, setStepIndex] = useState(0);
+
+  const steps = wizardSteps(Boolean(propertyContext));
+  const currentStep = steps[stepIndex];
 
   useEffect(() => {
     if (!open) {
       setName("");
       setPhone("");
       setNeed("office");
-      setBrief("");
+      setStep2Answers({});
+      setNotes("");
+      setStepIndex(0);
       return;
     }
+    setStep2Answers({});
+    setStepIndex(0);
     if (propertyContext) {
       setNeed("office");
-      setBrief(`Interested in: ${propertyContext.propertyName}\nListing: ${propertyContext.propertyUrl}`);
+      setNotes(`Interested in: ${propertyContext.propertyName}\nListing: ${propertyContext.propertyUrl}`);
     } else {
       setNeed("office");
-      setBrief("");
+      setNotes("");
     }
   }, [open, propertyContext]);
 
@@ -58,37 +90,45 @@ export function LeadCaptureModal() {
 
   if (!open) return null;
 
-  const canSubmit = Boolean(name.trim() && phone.trim() && brief.trim());
+  const canAdvance = currentStep !== "identify" || canAdvanceFromIdentify(name, phone);
+  const isLastStep = stepIndex === steps.length - 1;
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleNeedChange = (option: NeedType) => {
+    setNeed(option);
+    setStep2Answers({});
+  };
+
+  const handleNext = () => setStepIndex((index) => nextStepIndex(steps, index));
+  const handleBack = () => setStepIndex((index) => previousStepIndex(index));
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSubmit) return;
-    window.open(
-      buildWhatsAppUrl({
-        name,
-        phone,
-        need,
-        brief,
-        ...(propertyContext && {
-          propertyName: propertyContext.propertyName,
-          propertyUrl: propertyContext.propertyUrl,
-        }),
+    if (!canAdvance) return;
+    if (!isLastStep) {
+      handleNext();
+      return;
+    }
+    const lead: LeadPayload = {
+      name,
+      phone,
+      need,
+      brief: notes,
+      ...(Object.keys(step2Answers).length > 0 && { step2Answers }),
+      ...(propertyContext && {
+        propertyName: propertyContext.propertyName,
+        propertyUrl: propertyContext.propertyUrl,
       }),
-      "_blank",
-      "noopener,noreferrer",
-    );
+    };
+    await postLead(lead);
+    window.open(buildWhatsAppUrl(lead), "_blank", "noopener,noreferrer");
     closeModal();
   };
 
   const title = propertyContext ? "Message on WhatsApp" : "Get your private property e-brochure";
   const headerHelper = propertyContext
     ? `About: ${propertyContext.propertyName}`
-    : "Share your brief. We’ll send a private shortlist on WhatsApp.";
-  const briefLabel = propertyContext ? "Your brief (prefilled)" : "Your brief";
-  const submitLabel = propertyContext ? "Open WhatsApp draft" : "Send on WhatsApp";
-  const disclaimer = propertyContext
-    ? "We'll open WhatsApp with your message ready. Nothing is sent automatically."
-    : "Opens WhatsApp with your brief ready to send to Gentle Space CRE.";
+    : "Share your brief. We'll send a private shortlist on WhatsApp.";
+  const submitLabel = isLastStep ? (propertyContext ? "Open WhatsApp draft" : "Send on WhatsApp") : "Next";
 
   return (
     <div
@@ -109,6 +149,9 @@ export function LeadCaptureModal() {
               {title}
             </h2>
             <p className="text-[15px] leading-[1.45] text-[var(--ink-secondary)]">{headerHelper}</p>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Step {stepIndex + 1} of {steps.length}
+            </p>
           </div>
           <button
             type="button"
@@ -121,72 +164,110 @@ export function LeadCaptureModal() {
         </div>
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">Full name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-              placeholder="Your name"
-            />
-          </label>
+          {currentStep === "identify" && (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">Full name</span>
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                  placeholder="Your name"
+                />
+              </label>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">WhatsApp number</span>
-            <input
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-              placeholder="+91 …"
-            />
-          </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">WhatsApp number</span>
+                <input
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                  placeholder="+91 …"
+                />
+              </label>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-[13px] font-semibold text-[var(--ink-secondary)]">I need</legend>
-            <div className="flex flex-wrap gap-2">
-              {NEED_OPTIONS.map((option) => {
-                const selected = need === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setNeed(option)}
-                    className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
-                      selected
-                        ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
-                        : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    }`}
-                  >
-                    {NEED_LABELS[option]}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-[13px] font-semibold text-[var(--ink-secondary)]">I need</legend>
+                <div className="flex flex-wrap gap-2">
+                  {NEED_OPTIONS.map((option) => {
+                    const selected = need === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => handleNeedChange(option)}
+                        className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
+                          selected
+                            ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                        }`}
+                      >
+                        {NEED_LABELS[option]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </>
+          )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{briefLabel}</span>
-            <textarea
-              value={brief}
-              onChange={(event) => setBrief(event.target.value)}
-              rows={4}
-              className="h-[100px] w-full resize-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-              placeholder="Corridors, size, budget, timing…"
-            />
-          </label>
+          {currentStep === "details" &&
+            step2FieldsFor(need).map((field) => (
+              <label key={field.key} className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{field.label}</span>
+                <input
+                  value={step2Answers[field.key] ?? ""}
+                  onChange={(event) =>
+                    setStep2Answers((prev) => ({ ...prev, [field.key]: event.target.value }))
+                  }
+                  className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                  placeholder={field.placeholder}
+                />
+              </label>
+            ))}
+
+          {currentStep === "notes" && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">
+                Anything else? (optional)
+              </span>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={4}
+                className="h-[100px] w-full resize-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                placeholder="Corridors, size, budget, timing…"
+              />
+            </label>
+          )}
 
           <div className="flex flex-col gap-2.5">
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <IconWhatsApp className="h-[18px] w-[18px]" />
-              {submitLabel}
-            </button>
-            <p className="text-center text-[13px] text-[var(--muted)]">
-              {disclaimer}
-            </p>
+            <div className="flex gap-2.5">
+              {stepIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="inline-flex flex-1 items-center justify-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 text-[15px] font-semibold text-[var(--ink-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                >
+                  Back
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={!canAdvance}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLastStep && <IconWhatsApp className="h-[18px] w-[18px]" />}
+                {submitLabel}
+              </button>
+            </div>
+            {isLastStep && (
+              <p className="text-center text-[13px] text-[var(--muted)]">
+                {propertyContext
+                  ? "We'll open WhatsApp with your message ready. Nothing is sent automatically."
+                  : "Opens WhatsApp with your brief ready to send to Gentle Space CRE."}
+              </p>
+            )}
           </div>
         </form>
       </div>
