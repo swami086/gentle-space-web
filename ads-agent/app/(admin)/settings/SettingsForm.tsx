@@ -1,8 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CronSettings } from "@/lib/types";
+import { RunNowButton } from "@/components/RunNowButton";
+import { Switch } from "@/components/ui/switch";
 
 export function SettingsForm({ settings }: { settings: CronSettings }) {
   const router = useRouter();
@@ -22,31 +24,18 @@ export function SettingsForm({ settings }: { settings: CronSettings }) {
     }
   }
 
-  async function runNow() {
-    setPending(true);
-    try {
-      await fetch("/api/cycle/run", { method: "POST" });
-      router.refresh();
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
-    <div>
-      <p>
-        <strong>Cron:</strong> {settings.enabled ? "enabled" : "disabled"}
-      </p>
-      <p>
-        <strong>Last run:</strong>{" "}
-        {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
-      </p>
-      <button disabled={pending} onClick={toggle}>
-        {settings.enabled ? "Disable cron" : "Enable cron"}
-      </button>{" "}
-      <button disabled={pending} onClick={runNow}>
-        Run cycle now
-      </button>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-foreground">Run decision cycle on a schedule</p>
+          <p className="text-sm text-muted-foreground">
+            Last run: {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
+          </p>
+        </div>
+        <Switch checked={settings.enabled} disabled={pending} onCheckedChange={toggle} />
+      </div>
+      <RunNowButton />
     </div>
   );
 }
