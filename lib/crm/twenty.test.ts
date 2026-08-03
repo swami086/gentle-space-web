@@ -61,9 +61,36 @@ describe("createLeadInTwenty", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("/rest/people");
     expect(String(fetchMock.mock.calls[1][0])).toContain("/rest/opportunities");
     const opportunityBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
-    expect(opportunityBody.tier).toBe("hot");
+    expect(opportunityBody.tier).toBe("HOT");
+    expect(opportunityBody.need).toBe("OFFICE");
+    expect(opportunityBody.stage).toBe("NEW_BRIEF");
     expect(opportunityBody.cheatSheet).toBe("Ask about move-in date.");
     expect(opportunityBody.listingUrl).toBe("http://localhost:3000/spaces/cowrks");
+  });
+
+  it("extracts ids from Twenty createPerson/createOpportunity wrappers", async () => {
+    process.env.TWENTY_API_KEY = "test-key";
+    process.env.TWENTY_BASE_URL = "http://localhost:3020";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { createPerson: { id: "person-wrap" } } }), {
+          status: 201,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { createOpportunity: { id: "opp-wrap" } } }), {
+          status: 201,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createLeadInTwenty } = await import("./twenty");
+    await expect(createLeadInTwenty(payload, qualification)).resolves.toEqual({
+      status: "created",
+      personId: "person-wrap",
+      opportunityId: "opp-wrap",
+    });
   });
 
   it("folds step2Answers into the brief field instead of separate CRM fields", async () => {

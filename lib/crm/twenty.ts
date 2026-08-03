@@ -35,10 +35,21 @@ function extractId(json: unknown): string | undefined {
   const rec = json as Record<string, unknown>;
   if (typeof rec.id === "string") return rec.id;
   const data = rec.data;
-  if (data && typeof data === "object" && typeof (data as { id?: unknown }).id === "string") {
-    return (data as { id: string }).id;
+  if (!data || typeof data !== "object") return undefined;
+  const dataRec = data as Record<string, unknown>;
+  if (typeof dataRec.id === "string") return dataRec.id;
+  // Twenty REST wraps creates as { data: { createPerson|createOpportunity: { id } } }
+  for (const value of Object.values(dataRec)) {
+    if (value && typeof value === "object" && typeof (value as { id?: unknown }).id === "string") {
+      return (value as { id: string }).id;
+    }
   }
   return undefined;
+}
+
+/** Twenty SELECT option values are UPPER_SNAKE; app uses lowercase labels. */
+function toTwentySelect(value: string): string {
+  return value.trim().toUpperCase().replace(/\s+/g, "_");
 }
 
 async function twentyPost(
@@ -71,9 +82,9 @@ async function twentyPost(
 
 /**
  * Create Person + Opportunity. Field names must match Twenty workspace
- * (see infra/twenty/README.md, populated by the human bootstrap task). Stage
- * label defaults to "New brief". Step 2 structured answers fold into `brief`
- * via foldStep2Answers rather than becoming separate CRM fields.
+ * (see infra/twenty/README.md). SELECT values are UPPER_SNAKE (`NEW_BRIEF`,
+ * `HOT`, `OFFICE`). Step 2 structured answers fold into `brief` via
+ * foldStep2Answers rather than becoming separate CRM fields.
  */
 export async function createLeadInTwenty(
   payload: LeadPayload,
@@ -98,11 +109,11 @@ export async function createLeadInTwenty(
     const opportunityBody: Record<string, unknown> = {
       name: `${payload.need}: ${firstName} ${lastName}`.slice(0, 120),
       pointOfContactId: person.id,
-      need: payload.need,
+      need: toTwentySelect(payload.need),
       brief: foldStep2Answers(payload.need, payload.step2Answers, payload.brief),
       source: "website",
-      stage: "New brief",
-      tier: qualification.tier,
+      stage: "NEW_BRIEF",
+      tier: toTwentySelect(qualification.tier),
       cheatSheet: qualification.cheatSheet,
     };
     if (payload.propertyUrl) opportunityBody.listingUrl = payload.propertyUrl.trim();
