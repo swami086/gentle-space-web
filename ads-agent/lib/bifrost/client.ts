@@ -17,7 +17,10 @@ export type ChatCompletionOptions = {
 };
 
 export type ChatCompletionResponse = {
+  id?: string;
+  model?: string;
   choices?: { message?: { role?: string; content?: string | null } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   extra_fields?: { provider?: string };
 };
 

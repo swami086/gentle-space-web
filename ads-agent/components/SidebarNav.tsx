@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LayoutDashboard, Megaphone, Settings as SettingsIcon } from "lucide-react";
+import { ClipboardList, CreditCard, LayoutDashboard, Megaphone, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/proposals", label: "Proposals", icon: ClipboardList },
+  { href: "/credits", label: "Usage & Credits", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

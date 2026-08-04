@@ -73,6 +73,31 @@ describe("bifrost client", () => {
     expect(body.max_tokens).toBe(50);
   });
 
+  it("chatCompletion parses id, model, and usage from the response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "req-abc",
+          model: "gemini-2.5-flash-lite",
+          choices: [{ message: { role: "assistant", content: "hello" } }],
+          usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+          extra_fields: { provider: "vertex" },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { chatCompletion } = await import("./client");
+    const response = await chatCompletion({ messages: [{ role: "user", content: "hi" }] });
+
+    expect(response.id).toBe("req-abc");
+    expect(response.model).toBe("gemini-2.5-flash-lite");
+    expect(response.usage?.prompt_tokens).toBe(100);
+    expect(response.usage?.completion_tokens).toBe(50);
+    expect(response.usage?.total_tokens).toBe(150);
+  });
+
   it("chatCompletion includes response_format when provided", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 }),
