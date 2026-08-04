@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+import { campaignLibrary, parseSetupCardResponse } from "./campaign-library";
+
+describe("campaignLibrary", () => {
+  it("has SetupCard as its root component", () => {
+    expect(campaignLibrary.root).toBe("SetupCard");
+    expect(Object.keys(campaignLibrary.components)).toEqual(["SetupCard"]);
+  });
+
+  it("generates a non-empty system prompt", () => {
+    const prompt = campaignLibrary.prompt({ preamble: "test preamble" });
+    expect(prompt).toContain("SetupCard");
+    expect(prompt).toContain("test preamble");
+  });
+});
+
+describe("parseSetupCardResponse", () => {
+  it("parses a well-formed SetupCard statement", () => {
+    const text = `root = SetupCard("Got it, set the corridor.", "chatting", "whitefield", 500, "", [], [], [], "https://www.gentlespacesolutions.com/spaces")`;
+    const result = parseSetupCardResponse(text);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.props.assistantReply).toBe("Got it, set the corridor.");
+      expect(result.props.corridor).toBe("whitefield");
+      expect(result.props.dailyBudgetInr).toBe(500);
+    }
+  });
+
+  it("returns a parse_error for text with no SetupCard root", () => {
+    const result = parseSetupCardResponse("not openui lang at all");
+    expect(result.kind).toBe("parse_error");
+  });
+
+  it("returns a parse_error when a required prop is missing", () => {
+    const text = `root = SetupCard("reply only")`;
+    const result = parseSetupCardResponse(text);
+    expect(result.kind).toBe("parse_error");
+  });
+});
