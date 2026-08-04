@@ -50,19 +50,28 @@ async function ensureShadowRows(session: Session): Promise<void> {
 export async function getSession(): Promise<Session | null> {
   const token = (await cookies()).get("gs_session")?.value;
   if (!token) return null;
+
+  let session: Session;
   try {
     const { payload } = await jwtVerify(token, getJwks(), { issuer: AUTH_ISSUER });
-    const session: Session = {
+    session = {
       userId: String(payload.sub),
       email: String(payload.email ?? ""),
       orgId: typeof payload.orgId === "string" ? payload.orgId : null,
       role: typeof payload.role === "string" ? (payload.role as MemberRole) : null,
     };
-    await ensureShadowRows(session);
-    return session;
-  } catch {
+  } catch (err) {
+    console.error("[auth/dal] jwtVerify failed:", err instanceof Error ? err.message : err);
     return null;
   }
+
+  // Shadow upsert must not look like logout — JWT already proved the session.
+  try {
+    await ensureShadowRows(session);
+  } catch (err) {
+    console.error("[auth/dal] ensureShadowRows failed:", err instanceof Error ? err.message : err);
+  }
+  return session;
 }
 
 export async function requireSession(): Promise<Session> {

@@ -68,6 +68,20 @@ describe("getSession", () => {
       expect.arrayContaining(["u-1", "org-1", "a@x.com"]),
     );
   });
+
+  it("still returns the session when shadow upsert fails", async () => {
+    cookieStore.get.mockReturnValue({ value: "good-token" });
+    jwtVerifyMock.mockResolvedValue({
+      payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "admin" },
+    });
+    query.mockRejectedValueOnce(new Error("relation missing"));
+    await expect(getSession()).resolves.toEqual({
+      userId: "u-1",
+      email: "a@x.com",
+      orgId: "org-1",
+      role: "admin",
+    });
+  });
 });
 
 describe("requireSession", () => {

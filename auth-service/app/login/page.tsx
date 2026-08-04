@@ -1,12 +1,14 @@
 import { signIn } from "@/auth";
 
+const DEFAULT_RETURN_TO = process.env.ADS_APP_URL?.trim() || "http://localhost:3030/";
+
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ return_to?: string }>;
 }) {
   const { return_to } = await searchParams;
-  const returnTo = return_to ?? "/";
+  const returnTo = return_to && return_to.length > 0 ? return_to : DEFAULT_RETURN_TO;
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center">

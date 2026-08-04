@@ -86,9 +86,12 @@ describe("GET /bridge", () => {
       orgId: "00000000-0000-0000-0000-000000000001",
       role: "admin",
     });
-    expect(res.headers.get("set-cookie")).toContain("gs_session=signed-jwt");
+    // Local COOKIE_DOMAIN=localhost → handoff to ads /api/auth/accept (not Domain cookie).
+    const loc = res.headers.get("location") ?? "";
+    expect(loc).toContain("http://localhost:3030/api/auth/accept");
+    expect(loc).toContain("gs_session=signed-jwt");
+    expect(loc).toContain(encodeURIComponent("http://localhost:3030/"));
     expect(res.headers.get("set-cookie")).toContain("gs_refresh=raw-refresh-token");
-    expect(res.headers.get("location")).toBe("http://localhost:3030/");
   });
 
   it("leaves a non-bootstrap first-time user pending (orgId/role null)", async () => {

@@ -1,11 +1,15 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
+// Blank shell exports (GOOGLE_CLIENT_ID="") shadow Next's .env.local — treat "" as unset.
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() || undefined;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || undefined;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
     }),
   ],
   session: { strategy: "jwt" },

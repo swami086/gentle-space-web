@@ -4,6 +4,7 @@ import { findUserById } from "@/lib/db/users";
 import { getMembership } from "@/lib/db/org-members";
 import { mintAccessToken } from "@/lib/jwt";
 import { safeReturnTo } from "@/lib/safe-redirect";
+import { authCookieBase } from "@/lib/cookies";
 
 function extractRefreshCookie(req: Request): string | null {
   const cookieHeader = req.headers.get("cookie") ?? "";
@@ -35,20 +36,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   });
 
   const res = NextResponse.redirect(returnTo);
-  res.cookies.set("gs_session", accessToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    domain: cookieDomain,
-    path: "/",
-    maxAge: 20 * 60,
-  });
-  res.cookies.set("gs_refresh", rotated.newRawToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+  res.cookies.set("gs_session", accessToken, authCookieBase(20 * 60, { shareDomain: true }));
+  res.cookies.set("gs_refresh", rotated.newRawToken, authCookieBase(60 * 60 * 24 * 30, { shareDomain: false }));
   return res;
 }
