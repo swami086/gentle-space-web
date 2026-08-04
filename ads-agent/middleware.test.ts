@@ -20,6 +20,19 @@ describe("middleware", () => {
     );
   });
 
+  it("uses x-forwarded-host/proto for return_to behind a reverse proxy", () => {
+    const req = new NextRequest("http://localhost:3030/campaigns", {
+      headers: {
+        "x-forwarded-host": "ads.gentlespacesolutions.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    const res = middleware(req);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost:3040/login?return_to=https%3A%2F%2Fads.gentlespacesolutions.com%2Fcampaigns",
+    );
+  });
+
   it("passes the request through when a gs_session cookie is present", () => {
     const req = new NextRequest("http://localhost:3030/campaigns", {
       headers: { cookie: "gs_session=some-token" },
