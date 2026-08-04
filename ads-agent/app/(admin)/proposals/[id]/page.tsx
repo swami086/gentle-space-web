@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { AlertCircle } from "lucide-react";
+import { ForbiddenNotice } from "@/components/ForbiddenNotice";
+import { requireRole } from "@/lib/auth/dal";
 import { getProposalById } from "@/lib/db/proposals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +14,9 @@ export default async function ProposalDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const access = await requireRole("operator");
+  if (!access.ok) return <ForbiddenNotice />;
+
   const { id } = await params;
   const proposal = await getProposalById(id);
   if (!proposal) notFound();

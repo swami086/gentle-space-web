@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { ForbiddenNotice } from "@/components/ForbiddenNotice";
+import { requireRole } from "@/lib/auth/dal";
 import { listCampaignsWithLatestCpl } from "@/lib/db/dashboard";
 import type { CampaignWithCplRow } from "@/lib/db/dashboard";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +22,9 @@ const STATUS_VARIANT: Record<CampaignWithCplRow["status"], "default" | "secondar
 };
 
 export default async function CampaignsPage() {
+  const access = await requireRole("operator");
+  if (!access.ok) return <ForbiddenNotice />;
+
   const campaigns = await listCampaignsWithLatestCpl();
 
   return (

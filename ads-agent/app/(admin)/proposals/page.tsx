@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ForbiddenNotice } from "@/components/ForbiddenNotice";
+import { requireRole } from "@/lib/auth/dal";
 import type { ProposalStatus } from "@/lib/types";
 import { listProposals } from "@/lib/db/proposals";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +25,9 @@ export default async function ProposalsPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  const access = await requireRole("operator");
+  if (!access.ok) return <ForbiddenNotice />;
+
   const { status: rawStatus } = await searchParams;
   const status: ProposalStatus = rawStatus && isProposalStatus(rawStatus) ? rawStatus : "pending";
   const proposals = await listProposals(status);

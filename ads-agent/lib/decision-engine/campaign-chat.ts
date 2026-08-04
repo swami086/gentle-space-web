@@ -9,6 +9,7 @@ import {
 } from "../bifrost/client";
 import { callMeteredChatCompletion } from "../metering/metered-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
+import { getSession } from "../auth/dal";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 
 const PRODUCT_CONTEXT = `Gentle Space is a Bangalore commercial real estate (CRE) consultancy with an
@@ -258,9 +259,10 @@ export async function draftCampaignChatReply(input: {
     };
   }
 
+  const session = await getSession();
   const ctx: MeteringContext = {
-    orgId: DEFAULT_ORG_ID,
-    userId: DEFAULT_USER_ID,
+    orgId: session?.orgId ?? DEFAULT_ORG_ID,
+    userId: session?.userId ?? DEFAULT_USER_ID,
     feature: "ads-agent:campaign-chat",
   };
 

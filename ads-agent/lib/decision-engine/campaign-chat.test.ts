@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "../types";
-import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 
-const { callMeteredChatCompletion, isBifrostConfigured } = vi.hoisted(() => ({
-  callMeteredChatCompletion: vi.fn(),
+const callMeteredChatCompletion = vi.fn();
+vi.mock("../metering/metered-client", () => ({ callMeteredChatCompletion }));
+
+const getSession = vi.fn();
+vi.mock("../auth/dal", () => ({ getSession }));
+
+const { isBifrostConfigured } = vi.hoisted(() => ({
   isBifrostConfigured: vi.fn(() => true),
 }));
 
-vi.mock("../metering/metered-client", () => ({ callMeteredChatCompletion }));
 vi.mock("../bifrost/client", async () => {
   const actual = await vi.importActual<typeof import("../bifrost/client")>("../bifrost/client");
   return { ...actual, isBifrostConfigured };
@@ -38,8 +41,15 @@ function jsonResponse(payload: Record<string, unknown>) {
 describe("draftCampaignChatReply", () => {
   beforeEach(() => {
     callMeteredChatCompletion.mockReset();
+    getSession.mockReset();
     isBifrostConfigured.mockReset();
     isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue({
+      userId: "00000000-0000-0000-0000-000000000002",
+      email: "operator@x.com",
+      orgId: "00000000-0000-0000-0000-000000000001",
+      role: "operator",
+    });
   });
 
   it("returns a clarifying question when the model only sends assistantReply", async () => {
@@ -51,8 +61,8 @@ describe("draftCampaignChatReply", () => {
     expect(result).toEqual({ reply: "What's your daily budget?", fieldUpdates: {}, validationErrors: [] });
     expect(callMeteredChatCompletion).toHaveBeenCalledTimes(1);
     expect(callMeteredChatCompletion.mock.calls[0][0]).toEqual({
-      orgId: DEFAULT_ORG_ID,
-      userId: DEFAULT_USER_ID,
+      orgId: "00000000-0000-0000-0000-000000000001",
+      userId: "00000000-0000-0000-0000-000000000002",
       feature: "ads-agent:campaign-chat",
     });
     const request = callMeteredChatCompletion.mock.calls[0][1];
@@ -187,5 +197,15 @@ describe("draftCampaignChatReply", () => {
     const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
     expect(result.fieldUpdates).toBeNull();
     expect(result.reply).toMatch(/credit/i);
+  });
+
+  it("falls back to the dev-context identity when there is no session (e.g. a direct script call)", async () => {
+    getSession.mockResolvedValue(null);
+    callMeteredChatCompletion.mockResolvedValue(jsonResponse({ headlines: ["H1"], descriptions: [] }));
+    await import("./campaign-chat").then((m) => m.draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" }));
+    expect(callMeteredChatCompletion.mock.calls[0][0]).toMatchObject({
+      orgId: "00000000-0000-0000-0000-000000000001",
+      userId: "00000000-0000-0000-0000-000000000002",
+    });
   });
 });
