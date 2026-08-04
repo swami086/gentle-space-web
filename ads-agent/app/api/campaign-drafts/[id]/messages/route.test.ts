@@ -61,6 +61,19 @@ function postRequest(body: unknown) {
   return new Request("http://localhost", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** Reads a `data: {...}\n\n` SSE Response body into an array of parsed events. */
+async function readEvents(res: Response): Promise<Record<string, unknown>[]> {
+  const text = await res.text();
+  return text
+    .split("\n\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line.replace(/^data: /, "")));
+}
+
+async function* singleDoneEvent(event: Record<string, unknown>) {
+  yield event;
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("POST /api/campaign-drafts/[id]/messages", () => {
@@ -83,21 +96,26 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     expect(appendDraftMessage).not.toHaveBeenCalled();
   });
 
-  it("appends the user message and the assistant reply when there are no field updates", async () => {
+  it("streams no deltas and a done event when there are no field updates", async () => {
     getDraftById.mockResolvedValue(draft());
     listDraftMessages.mockResolvedValue([userMessage()]);
-    draftCampaignChatReply.mockResolvedValue({ reply: "What's your daily budget?", fieldUpdates: null, validationErrors: [] });
+    draftCampaignChatReply.mockReturnValue(
+      singleDoneEvent({ type: "done", reply: "What's your daily budget?", fieldUpdates: null, validationErrors: [] }),
+    );
 
-    const res = await POST(postRequest({ content: "Launch a campaign in Whitefield" }), { params: Promise.resolve({ id: "draft-1" }) });
+    const res = await POST(postRequest({ content: "Launch a campaign in Whitefield" }), {
+      params: Promise.resolve({ id: "draft-1" }),
+    });
 
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    const events = await readEvents(res);
+    expect(events).toEqual([{ done: true, reply: "What's your daily budget?", draft: draft() }]);
     expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "user", "Launch a campaign in Whitefield");
     expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "assistant", "What's your daily budget?");
     expect(updateDraftFields).not.toHaveBeenCalled();
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ reply: "What's your daily budget?", draft: draft() });
   });
 
-  it("persists field updates and marks the draft ready when it becomes complete", async () => {
+  it("streams deltas, persists field updates, and marks the draft ready when it becomes complete", async () => {
     const completeDraft = draft({
       status: "ready",
       corridor: "whitefield",
@@ -109,17 +127,27 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     });
     getDraftById.mockResolvedValueOnce(draft()).mockResolvedValueOnce(completeDraft);
     listDraftMessages.mockResolvedValue([userMessage()]);
-    draftCampaignChatReply.mockResolvedValue({
-      reply: "Here's your draft — take a look.",
-      fieldUpdates: { corridor: "whitefield", dailyBudgetInr: 500 },
-      validationErrors: [],
+    draftCampaignChatReply.mockImplementation(async function* () {
+      yield { type: "delta", content: "root = SetupCard(" };
+      yield { type: "delta", content: "\"Here's your draft.\", \"ready\", \"whitefield\", 500, ...)" };
+      yield {
+        type: "done",
+        reply: "Here's your draft — take a look.",
+        fieldUpdates: { corridor: "whitefield", dailyBudgetInr: 500 },
+        validationErrors: [],
+      };
     });
     updateDraftFields.mockResolvedValue(completeDraft);
 
-    const res = await POST(postRequest({ content: "Whitefield, 500 rupees a day" }), { params: Promise.resolve({ id: "draft-1" }) });
+    const res = await POST(postRequest({ content: "Whitefield, 500 rupees a day" }), {
+      params: Promise.resolve({ id: "draft-1" }),
+    });
 
+    const events = await readEvents(res);
+    expect(events[0]).toEqual({ delta: "root = SetupCard(" });
+    expect(events[1]).toEqual({ delta: expect.stringContaining("whitefield") });
+    expect(events[2]).toEqual({ done: true, reply: "Here's your draft — take a look.", draft: completeDraft });
     expect(updateDraftFields).toHaveBeenCalledWith("draft-1", { corridor: "whitefield", dailyBudgetInr: 500 });
     expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "ready");
-    expect(await res.json()).toEqual({ reply: "Here's your draft — take a look.", draft: completeDraft });
   });
 });
