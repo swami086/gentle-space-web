@@ -1,0 +1,48 @@
+services:
+  caddy:
+    networks:
+      - default
+      - twenty_default
+
+  auth:
+    build: ../auth-service
+    environment:
+      DATABASE_URL: ${AUTH_DATABASE_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      AUTH_JWT_PRIVATE_KEY_PEM: ${AUTH_JWT_PRIVATE_KEY_PEM}
+      AUTH_JWT_PUBLIC_KEY_PEM: ${AUTH_JWT_PUBLIC_KEY_PEM}
+      AUTH_JWT_KID: auth-service-key-1
+      ADMIN_BOOTSTRAP_EMAILS: ${ADMIN_BOOTSTRAP_EMAILS}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      COOKIE_DOMAIN: .gentlespacesolutions.com
+    restart: unless-stopped
+
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: auth_service
+      POSTGRES_USER: auth_service
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  ads-agent:
+    build: ../ads-agent
+    environment:
+      DATABASE_URL: ${ADS_AGENT_DATABASE_URL}
+      AUTH_SERVICE_URL: https://auth.gentlespacesolutions.com
+      AUTH_SERVICE_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # ...existing ads-agent env vars (Bifrost, Google Ads, Meta, Twenty) unchanged, see
+      # ads-agent/.env.example
+    restart: unless-stopped
+
+networks:
+  twenty_default:
+    external: true
+
+volumes:
+  auth-db-data:

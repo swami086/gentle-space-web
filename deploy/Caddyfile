@@ -8,3 +8,20 @@ gentlespacesolutions.com, www.gentlespacesolutions.com {
 http://34.47.192.145 {
 	reverse_proxy web:3000
 }
+
+# Twenty CRM (internal tool). `server` resolves via the shared
+# gentle_space_net network — see infra/twenty/docker-compose.prod.yml.
+crm.gentlespacesolutions.com {
+	reverse_proxy server:3000
+}
+
+# auth-service — Google SSO + RBAC identity provider for the admin portal.
+auth.gentlespacesolutions.com {
+	reverse_proxy auth:3040
+}
+
+# ads-agent admin portal — now behind real authentication (see
+# docs/superpowers/specs/2026-08-04-rbac-auth-service-design.md).
+ads.gentlespacesolutions.com {
+	reverse_proxy ads-agent:3030
+}
