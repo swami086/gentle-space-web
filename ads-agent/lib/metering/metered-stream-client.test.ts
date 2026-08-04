@@ -46,6 +46,22 @@ describe("callMeteredStreamingChatCompletion", () => {
     );
   });
 
+  it("throws when the stream ends without a usage chunk and does not debit", async () => {
+    const { callMeteredStreamingChatCompletion } = await import("./metered-stream-client");
+    const streamFn = fakeStream([
+      { type: "delta", content: "hi" },
+      { type: "delta", content: " there" },
+    ]);
+
+    const ctx = { orgId: "org-1", userId: "user-1", feature: "test" };
+    await expect(async () => {
+      for await (const _ of callMeteredStreamingChatCompletion(ctx, { messages: [] }, streamFn)) {
+        // drain
+      }
+    }).rejects.toThrow("stream ended without a usage chunk — no debit recorded");
+    expect(debitUsage).not.toHaveBeenCalled();
+  });
+
   it("throws InsufficientCreditsError before calling streamFn when org balance is zero", async () => {
     getOrgBalance.mockResolvedValue(0);
     const { callMeteredStreamingChatCompletion } = await import("./metered-stream-client");

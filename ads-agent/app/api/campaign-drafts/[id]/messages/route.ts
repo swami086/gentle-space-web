@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiRole } from "@/lib/auth/dal";
 import {
   appendDraftMessage,
   getDraftById,
@@ -11,6 +12,9 @@ import { isDraftReady } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireApiRole("operator");
+  if (!access.ok) return access.response;
+
   const { id } = await params;
   const draft = await getDraftById(id);
   if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });

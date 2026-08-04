@@ -36,5 +36,6 @@ export async function* callMeteredStreamingChatCompletion(
 
   if (!debited) {
     console.error("[metered-stream-client] stream ended without a usage chunk — no debit recorded");
+    throw new Error("stream ended without a usage chunk — no debit recorded");
   }
 }

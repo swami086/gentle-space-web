@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, CampaignDraftMessage } from "@/lib/types";
 
@@ -8,6 +9,7 @@ const {
   setDraftStatus,
   updateDraftFields,
   draftCampaignChatReply,
+  requireApiRole,
 } = vi.hoisted(() => ({
   appendDraftMessage: vi.fn(),
   getDraftById: vi.fn(),
@@ -15,6 +17,7 @@ const {
   setDraftStatus: vi.fn(),
   updateDraftFields: vi.fn(),
   draftCampaignChatReply: vi.fn(),
+  requireApiRole: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({
@@ -25,6 +28,7 @@ vi.mock("@/lib/db/campaign-drafts", () => ({
   updateDraftFields,
 }));
 vi.mock("@/lib/decision-engine/campaign-chat", () => ({ draftCampaignChatReply }));
+vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { POST } from "./route";
 
@@ -74,9 +78,26 @@ async function* singleDoneEvent(event: Record<string, unknown>) {
   yield event;
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireApiRole.mockResolvedValue({
+    ok: true,
+    session: { orgId: "org-1", email: "op@x.com", userId: "u-1", role: "operator" },
+  });
+});
 
 describe("POST /api/campaign-drafts/[id]/messages", () => {
+  it("returns 401 when requireApiRole rejects the caller", async () => {
+    requireApiRole.mockResolvedValue({
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    });
+    const res = await POST(postRequest({ content: "hi" }), { params: Promise.resolve({ id: "draft-1" }) });
+    expect(res.status).toBe(401);
+    expect(getDraftById).not.toHaveBeenCalled();
+    expect(draftCampaignChatReply).not.toHaveBeenCalled();
+  });
+
   it("returns 404 when the draft does not exist", async () => {
     getDraftById.mockResolvedValue(null);
     const res = await POST(postRequest({ content: "hi" }), { params: Promise.resolve({ id: "missing" }) });
