@@ -74,8 +74,8 @@ describe("streamChatCompletion", () => {
     delete process.env.BIFROST_BASE_URL;
     const { streamChatCompletion } = await import("./bifrost-stream");
     await expect(async () => {
-      for await (const _ of streamChatCompletion({ messages: [] })) {
-        // drain
+      for await (const chunk of streamChatCompletion({ messages: [] })) {
+        void chunk;
       }
     }).rejects.toThrow("BIFROST_BASE_URL is not set");
   });

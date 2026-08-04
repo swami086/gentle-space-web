@@ -55,8 +55,8 @@ describe("callMeteredStreamingChatCompletion", () => {
 
     const ctx = { orgId: "org-1", userId: "user-1", feature: "test" };
     await expect(async () => {
-      for await (const _ of callMeteredStreamingChatCompletion(ctx, { messages: [] }, streamFn)) {
-        // drain
+      for await (const chunk of callMeteredStreamingChatCompletion(ctx, { messages: [] }, streamFn)) {
+        void chunk;
       }
     }).rejects.toThrow("stream ended without a usage chunk — no debit recorded");
     expect(debitUsage).not.toHaveBeenCalled();
@@ -70,8 +70,8 @@ describe("callMeteredStreamingChatCompletion", () => {
 
     const ctx = { orgId: "org-1", userId: "user-1", feature: "test" };
     await expect(async () => {
-      for await (const _ of callMeteredStreamingChatCompletion(ctx, { messages: [] }, streamFn)) {
-        // drain
+      for await (const chunk of callMeteredStreamingChatCompletion(ctx, { messages: [] }, streamFn)) {
+        void chunk;
       }
     }).rejects.toThrow(InsufficientCreditsError);
     expect(streamFn).not.toHaveBeenCalled();

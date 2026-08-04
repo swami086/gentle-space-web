@@ -1,4 +1,4 @@
-import { defineComponent, createLibrary, createParser } from "@openuidev/react-lang";
+import { defineComponent, createLibrary, createParser } from "@openuidev/lang-core";
 import React from "react";
 import { z } from "zod";
 import type { CampaignDraftKeyword } from "../types";
@@ -30,8 +30,14 @@ function formatInr(value: number | null): string {
  * happens exclusively through ManualEditForm; this view is used both as OpenUI's rendered output
  * (via SetupCard below) and directly, driven by real draft state, for the "AI view, at rest" case. */
 export function SetupCardView(props: SetupCardProps) {
-  // ponytail: lazy require keeps vitest from loading badge.tsx (JSX) during schema/parser-only tests
-  const { Badge } = require("@/components/ui/badge") as typeof import("@/components/ui/badge");
+  // ponytail: plain span instead of Badge — keeps this module free of client-only UI imports so
+  // campaign-chat (server) can import campaignLibrary.prompt()/parseSetupCardResponse without
+  // pulling shadcn into the API route bundle. Ceiling: no Badge variant styling; upgrade by
+  // splitting SetupCardView into a .tsx client module if visual parity with ManualEditForm is needed.
+  const statusClass =
+    props.status === "ready"
+      ? "inline-flex rounded-md bg-primary px-2 py-0.5 text-xs text-primary-foreground"
+      : "inline-flex rounded-md border px-2 py-0.5 text-xs";
 
   return React.createElement(
     "div",
@@ -40,11 +46,7 @@ export function SetupCardView(props: SetupCardProps) {
       "div",
       { className: "flex items-center justify-between" },
       React.createElement("span", { className: "text-sm font-medium" }, "Status"),
-      React.createElement(
-        Badge,
-        { variant: props.status === "ready" ? "default" : "outline" },
-        props.status,
-      ),
+      React.createElement("span", { className: statusClass }, props.status),
     ),
     React.createElement(
       "div",
@@ -126,7 +128,7 @@ const SetupCard = defineComponent({
     "readiness status, corridor, daily budget in INR, ad group name, keywords, headlines (3-15, " +
     "each <=30 chars), descriptions (2-4, each <=90 chars), and the final URL.",
   props: SetupCardSchema,
-  component: ({ props }) => React.createElement(SetupCardView, props),
+  component: ({ props }: { props: SetupCardProps }) => React.createElement(SetupCardView, props),
 });
 
 export const campaignLibrary = createLibrary({ root: "SetupCard", components: [SetupCard] });
