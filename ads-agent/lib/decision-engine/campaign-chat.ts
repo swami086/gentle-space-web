@@ -3,11 +3,13 @@ import { validateDraftFields } from "./campaign-draft-rules";
 import { playbookContextFor } from "./playbook-context";
 import { STRATEGY } from "./strategy-config";
 import {
-  chatCompletion,
   firstChoiceContent,
   isBifrostConfigured,
   type ChatMessage,
 } from "../bifrost/client";
+import { callMeteredChatCompletion } from "../metering/metered-client";
+import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
+import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 
 const PRODUCT_CONTEXT = `Gentle Space is a Bangalore commercial real estate (CRE) consultancy with an
 AI-assisted space-search product. It matches a brief to office/retail/warehouse inventory and verifies
@@ -149,10 +151,11 @@ const DESCRIPTIONS_TOPUP_SCHEMA: Record<string, unknown> = {
 };
 
 async function callDraftModel(
+  ctx: MeteringContext,
   messages: ChatMessage[],
   schema: Record<string, unknown> = DRAFT_RESPONSE_SCHEMA,
 ): Promise<ParsedTurn> {
-  const response = await chatCompletion({
+  const response = await callMeteredChatCompletion(ctx, {
     messages,
     temperature: 0.3,
     maxTokens: 2048,
@@ -186,7 +189,16 @@ function buildMessages(input: { history: CampaignDraftMessage[]; userMessage: st
   ];
 }
 
+function creditsExhaustedReply(): ChatReply {
+  return {
+    reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits.",
+    fieldUpdates: null,
+    validationErrors: [],
+  };
+}
+
 async function topUpDescriptions(
+  ctx: MeteringContext,
   messages: ChatMessage[],
   headlines: string[],
   baseFields: CampaignDraftFields,
@@ -199,7 +211,7 @@ async function topUpDescriptions(
     },
   ];
   try {
-    let toppedUp = await callDraftModel(topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
+    let toppedUp = await callDraftModel(ctx, topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
     if (toppedUp.kind !== "ok") return null;
 
     let errors = validateDraftFields({ descriptions: toppedUp.fieldUpdates.descriptions });
@@ -209,7 +221,7 @@ async function topUpDescriptions(
         role: "user",
         content: `Rejected: ${errors.join("; ")}. Return corrected JSON with assistantReply and descriptions only.`,
       });
-      toppedUp = await callDraftModel(topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
+      toppedUp = await callDraftModel(ctx, topUpMessages, DESCRIPTIONS_TOPUP_SCHEMA);
       if (toppedUp.kind !== "ok") return null;
       errors = validateDraftFields({ descriptions: toppedUp.fieldUpdates.descriptions });
       if (errors.length > 0) return null;
@@ -226,7 +238,8 @@ async function topUpDescriptions(
       fieldUpdates: merged,
       validationErrors: [],
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) throw err;
     return null;
   }
 }
@@ -245,19 +258,31 @@ export async function draftCampaignChatReply(input: {
     };
   }
 
+  const ctx: MeteringContext = {
+    orgId: DEFAULT_ORG_ID,
+    userId: DEFAULT_USER_ID,
+    feature: "ads-agent:campaign-chat",
+  };
+
   const messages = buildMessages(input);
 
   // If headlines already exist and the user only asked for descriptions, don't let the
   // model rewrite headlines (that was causing RSA-limit failures on follow-up turns).
   if (wantsDescriptionsOnly(input.userMessage) && input.draft.headlines.length > 0) {
-    const topped = await topUpDescriptions(messages, input.draft.headlines, {});
-    if (topped) return topped;
+    try {
+      const topped = await topUpDescriptions(ctx, messages, input.draft.headlines, {});
+      if (topped) return topped;
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) return creditsExhaustedReply();
+      throw err;
+    }
   }
 
   let first: ParsedTurn;
   try {
-    first = await callDraftModel(messages);
-  } catch {
+    first = await callDraftModel(ctx, messages);
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) return creditsExhaustedReply();
     return { reply: "The campaign assistant is unavailable right now — try again shortly.", fieldUpdates: null, validationErrors: [] };
   }
 
@@ -271,8 +296,13 @@ export async function draftCampaignChatReply(input: {
     const missingDescriptions = headlines.length > 0 && (first.fieldUpdates.descriptions?.length ?? 0) === 0;
     if (wantsAdCopy(input.userMessage) && missingDescriptions) {
       messages.push({ role: "assistant", content: first.rawJson });
-      const topped = await topUpDescriptions(messages, headlines, first.fieldUpdates);
-      if (topped) return topped;
+      try {
+        const topped = await topUpDescriptions(ctx, messages, headlines, first.fieldUpdates);
+        if (topped) return topped;
+      } catch (err) {
+        if (err instanceof InsufficientCreditsError) return creditsExhaustedReply();
+        throw err;
+      }
     }
     return { reply: first.reply, fieldUpdates: first.fieldUpdates, validationErrors: [] };
   }
@@ -285,8 +315,9 @@ export async function draftCampaignChatReply(input: {
 
   let second: ParsedTurn;
   try {
-    second = await callDraftModel(messages);
-  } catch {
+    second = await callDraftModel(ctx, messages);
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) return creditsExhaustedReply();
     return {
       reply: "The campaign assistant is unavailable right now — try again shortly.",
       fieldUpdates: null,
