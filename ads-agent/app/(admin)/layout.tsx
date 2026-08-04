@@ -1,10 +1,27 @@
 import type { ReactNode } from "react";
 import { getCronSettings } from "@/lib/db/settings";
 import { cn } from "@/lib/utils";
+import { requireSession } from "@/lib/auth/dal";
 import { RunNowButton } from "@/components/RunNowButton";
 import { SidebarNav } from "@/components/SidebarNav";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const session = await requireSession();
+
+  if (!session.role) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center px-6 text-center">
+        <div className="flex max-w-md flex-col gap-2">
+          <p className="text-lg font-semibold text-foreground">Your account is pending approval</p>
+          <p className="text-sm text-muted-foreground">
+            Signed in as {session.email}. An admin needs to assign you a role from Usage &amp;
+            Credits → Users before you can access the dashboard.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const settings = await getCronSettings();
 
   return (

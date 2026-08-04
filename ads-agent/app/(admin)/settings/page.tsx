@@ -1,5 +1,7 @@
 import { getCronSettings } from "@/lib/db/settings";
 import { getConnectorStatus } from "@/lib/env-status";
+import { requireRole } from "@/lib/auth/dal";
+import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SettingsForm } from "./SettingsForm";
 
@@ -11,6 +13,9 @@ const CONNECTOR_LABELS = {
 } as const;
 
 export default async function SettingsPage() {
+  const access = await requireRole("admin");
+  if (!access.ok) return <ForbiddenNotice />;
+
   const settings = await getCronSettings();
   const connectorStatus = getConnectorStatus();
 

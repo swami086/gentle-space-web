@@ -5,7 +5,8 @@ import {
   listMemberBalances,
   listOrgBalances,
 } from "@/lib/db/credits";
-import { DEFAULT_ORG_ID } from "@/lib/metering/dev-context";
+import { requireRole } from "@/lib/auth/dal";
+import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,15 +18,19 @@ function formatCredits(value: number): string {
 }
 
 export default async function CreditsPage() {
+  const access = await requireRole("admin");
+  if (!access.ok) return <ForbiddenNotice />;
+  const orgId = access.session.orgId!;
+
   const [orgBalances, members, spendByFeature, spendByModel, trend] = await Promise.all([
     listOrgBalances(),
-    listMemberBalances(DEFAULT_ORG_ID),
-    getSpendByFeature(DEFAULT_ORG_ID, 30),
-    getSpendByModel(DEFAULT_ORG_ID, 30),
-    getSpendTrend(DEFAULT_ORG_ID, 30),
+    listMemberBalances(orgId),
+    getSpendByFeature(orgId, 30),
+    getSpendByModel(orgId, 30),
+    getSpendTrend(orgId, 30),
   ]);
 
-  const org = orgBalances.find((o) => o.orgId === DEFAULT_ORG_ID);
+  const org = orgBalances.find((o) => o.orgId === orgId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,7 +53,7 @@ export default async function CreditsPage() {
                 {formatCredits(org?.balanceCredits ?? 0)} credits
               </p>
             </div>
-            <AllocateCreditsForm orgId={DEFAULT_ORG_ID} />
+            <AllocateCreditsForm orgId={orgId} />
           </CardHeader>
         </Card>
       )}
