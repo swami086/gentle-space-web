@@ -14,8 +14,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="flex max-w-md flex-col gap-2">
           <p className="text-lg font-semibold text-foreground">Your account is pending approval</p>
           <p className="text-sm text-muted-foreground">
-            Signed in as {session.email}. An admin needs to assign you a role from Usage &amp;
-            Credits → Users before you can access the dashboard.
+            Signed in as {session.email}. An admin needs to assign you a role from the Users
+            page before you can access the dashboard.
           </p>
         </div>
       </div>

@@ -17,8 +17,8 @@ npm run dev   # http://localhost:3040
 ## Tests
 
 ```bash
-npx vitest run --env-file=.env.local
+node --env-file=.env.local ./node_modules/.bin/vitest run
 ```
 
-(`--env-file=.env.local` is required for `lib/jwt.test.ts`, which signs/verifies real tokens against
-the RS256 keypair in `.env.local`.)
+(Vitest 4 lacks `--env-file`; use Node's flag. Required for `lib/jwt.test.ts`, which signs/verifies
+real tokens against the RS256 keypair in `.env.local`.)
