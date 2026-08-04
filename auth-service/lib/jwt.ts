@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify, importPKCS8, importSPKI, exportJWK } from "jose";
+import { SignJWT, jwtVerify, importPKCS8, importSPKI, exportJWK, type KeyLike } from "jose";
 import type { MemberRole } from "./types";
 
 // This literal MUST match the AUTH_ISSUER constant in ads-agent/lib/auth/dal.ts exactly — there is
@@ -6,9 +6,6 @@ import type { MemberRole } from "./types";
 // Global Constraints).
 const AUTH_ISSUER = "gentlespace-auth-service";
 const ACCESS_TOKEN_TTL = "20m";
-
-// jose v6 dropped the KeyLike export; importPKCS8/SPKI resolve to CryptoKey in Node.
-type ImportedKey = Awaited<ReturnType<typeof importPKCS8>>;
 
 function pem(name: string): string {
   const value = process.env[name];
@@ -22,14 +19,14 @@ function kid(): string {
   return value;
 }
 
-let privateKeyPromise: Promise<ImportedKey> | null = null;
-function getPrivateKey(): Promise<ImportedKey> {
+let privateKeyPromise: Promise<KeyLike> | null = null;
+function getPrivateKey(): Promise<KeyLike> {
   if (!privateKeyPromise) privateKeyPromise = importPKCS8(pem("AUTH_JWT_PRIVATE_KEY_PEM"), "RS256");
   return privateKeyPromise;
 }
 
-let publicKeyPromise: Promise<ImportedKey> | null = null;
-function getPublicKey(): Promise<ImportedKey> {
+let publicKeyPromise: Promise<KeyLike> | null = null;
+function getPublicKey(): Promise<KeyLike> {
   if (!publicKeyPromise) publicKeyPromise = importSPKI(pem("AUTH_JWT_PUBLIC_KEY_PEM"), "RS256");
   return publicKeyPromise;
 }
