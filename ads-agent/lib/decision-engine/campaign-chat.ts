@@ -4,7 +4,12 @@ import { playbookContextFor } from "./playbook-context";
 import { STRATEGY } from "./strategy-config";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
-import { campaignLibrary, parseSetupCardResponse, type SetupCardProps } from "../openui/campaign-library";
+import {
+  buildCampaignPromptOptions,
+  campaignLibrary,
+  parseSetupCardResponse,
+  type SetupCardProps,
+} from "../openui/campaign-library";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -22,12 +27,12 @@ function buildSystemPrompt(): string {
   const preamble = [
     `You help a non-technical business owner draft a real Google Search ad campaign, conversationally.
 Always render a SetupCard reflecting everything you know about the draft so far — fill a subset of
-fields per turn as you learn them. assistantReply is a short conversational message (follow-up
-question if something is missing/ambiguous, or a brief acknowledgment of what you just set).
+fields per turn as you learn them. The first positional arg is the short conversational reply
+(follow-up if something is missing/ambiguous, or a brief acknowledgment of what you just set).
 
 CRITICAL: Never claim you wrote headlines, descriptions, keywords, or other draft fields in
-assistantReply unless those exact values are also present in the SetupCard's own props — the setup
-card the user sees only updates from those props, not from your prose. When the user asks you to
+the reply unless those exact values are also present in later SetupCard args — the setup
+card the user sees only updates from those args, not from your prose. When the user asks you to
 propose ad copy, include both headlines (3-15) and descriptions (2-4) in the same SetupCard.
 
 Never claim you created or launched a campaign; a human always reviews and approves before anything
@@ -41,7 +46,8 @@ goes live.`,
     .filter(Boolean)
     .join("\n\n");
 
-  return [preamble, campaignLibrary.prompt()].join("\n\n");
+  // Official OpenUI PromptOptions (examples + additionalRules) — not a raw prompt concat.
+  return campaignLibrary.prompt(buildCampaignPromptOptions(preamble));
 }
 
 function sanitizeReply(reply: string, props: SetupCardProps): string {

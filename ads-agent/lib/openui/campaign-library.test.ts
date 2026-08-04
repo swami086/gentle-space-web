@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { campaignLibrary, parseSetupCardResponse } from "./campaign-library";
+import { campaignLibrary, parseSetupCardResponse, buildCampaignPromptOptions } from "./campaign-library";
 
 describe("campaignLibrary", () => {
   it("has SetupCard as its root component", () => {
@@ -35,5 +35,15 @@ describe("parseSetupCardResponse", () => {
     const text = `root = SetupCard("reply only")`;
     const result = parseSetupCardResponse(text);
     expect(result.kind).toBe("parse_error");
+  });
+
+  it("includes PromptOptions examples when building the campaign prompt", () => {
+    const prompt = campaignLibrary.prompt(
+      buildCampaignPromptOptions("test preamble for campaign drafting"),
+    );
+    expect(prompt).toContain("test preamble for campaign drafting");
+    expect(prompt).toContain("## Examples");
+    expect(prompt).toContain('SetupCard("Got Whitefield');
+    expect(prompt).toContain("POSITIONAL only");
   });
 });

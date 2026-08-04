@@ -2,28 +2,39 @@ import { defineComponent, createLibrary, createParser } from "@openuidev/lang-co
 import React from "react";
 import { z } from "zod";
 import type { CampaignDraftKeyword } from "../types";
+import {
+  DEFAULT_FINAL_URL,
+  normalizeSetupCardLang,
+} from "./normalize-setup-card";
+
+export { DEFAULT_FINAL_URL, SETUP_CARD_PROP_KEYS, normalizeSetupCardLang } from "./normalize-setup-card";
 
 const KeywordSchema = z.object({
   text: z.string(),
   matchType: z.enum(["broad", "phrase", "exact"]),
 });
 
+/**
+ * OpenUI maps positional args by Zod key order. Use `.optional().default(...)`
+ * (not `.nullable()`): the parser rejects `null` on required fields even when
+ * Zod allows null — see OpenUI defining-components + v0.5 core rules.
+ */
 const SetupCardSchema = z.object({
   assistantReply: z.string(),
   status: z.enum(["chatting", "ready", "converted"]),
-  corridor: z.string().nullable(),
-  dailyBudgetInr: z.number().nullable(),
-  adGroupName: z.string().nullable(),
-  keywords: z.array(KeywordSchema),
-  headlines: z.array(z.string()),
-  descriptions: z.array(z.string()),
-  finalUrl: z.string(),
+  corridor: z.string().optional().default(""),
+  dailyBudgetInr: z.number().optional().default(0),
+  adGroupName: z.string().optional().default(""),
+  keywords: z.array(KeywordSchema).optional().default([]),
+  headlines: z.array(z.string()).optional().default([]),
+  descriptions: z.array(z.string()).optional().default([]),
+  finalUrl: z.string().optional().default(DEFAULT_FINAL_URL),
 });
 
 export type SetupCardProps = z.infer<typeof SetupCardSchema>;
 
-function formatInr(value: number | null): string {
-  return value === null ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+function formatInr(value: number): string {
+  return value === 0 ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 /** Pure, read-only presentation of a campaign draft's setup fields. No inputs/onChange — editing
@@ -53,7 +64,7 @@ export function SetupCardView(props: SetupCardProps) {
       { className: "text-sm" },
       React.createElement("span", { className: "font-medium" }, "Corridor:"),
       " ",
-      props.corridor ?? "Not set yet",
+      props.corridor || "Not set yet",
     ),
     React.createElement(
       "div",
@@ -67,7 +78,7 @@ export function SetupCardView(props: SetupCardProps) {
       { className: "text-sm" },
       React.createElement("span", { className: "font-medium" }, "Ad group:"),
       " ",
-      props.adGroupName ?? "Not set yet",
+      props.adGroupName || "Not set yet",
     ),
     React.createElement(
       "div",
@@ -126,12 +137,33 @@ const SetupCard = defineComponent({
   description:
     "Displays the assistant's proposed Google Ads campaign draft: a short conversational reply, " +
     "readiness status, corridor, daily budget in INR, ad group name, keywords, headlines (3-15, " +
-    "each <=30 chars), descriptions (2-4, each <=90 chars), and the final URL.",
+    "each <=30 chars), descriptions (2-4, each <=90 chars), and the final URL. " +
+    "Args are POSITIONAL in that key order. Unset strings use \"\"; unset budget uses 0; unset lists use []. Never null.",
   props: SetupCardSchema,
   component: ({ props }: { props: SetupCardProps }) => React.createElement(SetupCardView, props),
 });
 
 export const campaignLibrary = createLibrary({ root: "SetupCard", components: [SetupCard] });
+
+/**
+ * Official OpenUI PromptOptions (preamble / additionalRules / examples).
+ * @see https://www.openui.com/docs/openui-lang/defining-components#prompt-options
+ */
+export function buildCampaignPromptOptions(preamble: string) {
+  return {
+    preamble,
+    additionalRules: [
+      "SetupCard arguments are POSITIONAL only (Zod key order). Write SetupCard(\"reply\", \"chatting\", \"Whitefield\", 500) — NEVER assistantReply=\"...\" or status: \"chatting\".",
+      'Unset fields: use "" for strings, 0 for dailyBudgetInr, [] for lists. Never emit null.',
+      `Omit trailing optional args when unset is fine; otherwise default finalUrl to ${DEFAULT_FINAL_URL}.`,
+      "Output only openui-lang (root = SetupCard(...)). No markdown fences, no prose outside the statement.",
+    ],
+    examples: [
+      `root = SetupCard("Got Whitefield at ₹500/day. What ad group name should we use?", "chatting", "Whitefield", 500)`,
+      `root = SetupCard("Sure — which Bangalore corridor should this campaign target?", "chatting")`,
+    ],
+  };
+}
 
 export type ParsedSetupCard =
   | { kind: "ok"; props: SetupCardProps }
@@ -141,16 +173,21 @@ export type ParsedSetupCard =
 export function parseSetupCardResponse(text: string): ParsedSetupCard {
   if (!text.trim()) return { kind: "parse_error", errors: ["empty response"] };
 
+  const normalized = normalizeSetupCardLang(text);
   const parser = createParser(campaignLibrary.toJSONSchema());
   let result: ReturnType<typeof parser.parse>;
   try {
-    result = parser.parse(text);
+    result = parser.parse(normalized);
   } catch (err) {
     return { kind: "parse_error", errors: [err instanceof Error ? err.message : "parse exception"] };
   }
 
   if (!result.root || result.root.typeName !== "SetupCard") {
-    return { kind: "parse_error", errors: ["no SetupCard root parsed"] };
+    const meta = result.meta.errors.map((e) => `${e.path || "(root)"}: ${e.message}`);
+    return {
+      kind: "parse_error",
+      errors: meta.length > 0 ? meta : ["no SetupCard root parsed"],
+    };
   }
   if (result.meta.errors.length > 0) {
     return { kind: "parse_error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
