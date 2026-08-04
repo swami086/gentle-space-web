@@ -23,48 +23,38 @@ export default async function OverviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle>Active campaigns</CardTitle>
-            <Megaphone className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-foreground">
-            {stats.activeCampaignCount}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle>Pending proposals</CardTitle>
-            <Clock3 className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-foreground">
-            {stats.pendingProposalCount}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle>This month&apos;s spend</CardTitle>
-            <TrendingUp className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-foreground">
-            {formatInr(stats.monthSpendInr)}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle>Blended CPL</CardTitle>
-            <AlertCircle
-              className={cplOverBreakeven ? "size-4 text-destructive" : "size-4 text-muted-foreground"}
-            />
-          </CardHeader>
-          <CardContent className="flex items-baseline gap-2 text-2xl font-semibold text-foreground">
-            {formatInr(stats.blendedCplInr)}
-            <span className="text-sm font-normal text-muted-foreground">
-              vs {formatInr(STRATEGY.breakevenCplInr)} breakeven
-            </span>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-lg border border-border sm:grid-cols-4 sm:divide-y-0">
+        <div className="flex flex-col gap-1 px-5 py-4">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            Active campaigns
+            <Megaphone className="size-4" />
+          </div>
+          <span className="text-2xl font-semibold text-foreground">{stats.activeCampaignCount}</span>
+        </div>
+        <div className="flex flex-col gap-1 px-5 py-4">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            Pending proposals
+            <Clock3 className="size-4" />
+          </div>
+          <span className="text-2xl font-semibold text-foreground">{stats.pendingProposalCount}</span>
+        </div>
+        <div className="flex flex-col gap-1 px-5 py-4">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            This month&apos;s spend
+            <TrendingUp className="size-4" />
+          </div>
+          <span className="text-2xl font-semibold text-foreground">{formatInr(stats.monthSpendInr)}</span>
+        </div>
+        <div className="flex flex-col gap-1 px-5 py-4">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            Blended CPL
+            <AlertCircle className={cplOverBreakeven ? "size-4 text-destructive" : "size-4"} />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-semibold text-foreground">{formatInr(stats.blendedCplInr)}</span>
+            <span className="text-sm text-muted-foreground">vs {formatInr(STRATEGY.breakevenCplInr)}</span>
+          </div>
+        </div>
       </div>
 
       <Card>
