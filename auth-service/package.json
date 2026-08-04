@@ -11,6 +11,7 @@
     "migrate": "tsx --env-file=.env.local lib/db/migrate.ts"
   },
   "dependencies": {
+    "jose": "^6.2.8",
     "next": "15.5.21",
     "pg": "^8.22.0",
     "react": "19.2.4",
