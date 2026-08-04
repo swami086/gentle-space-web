@@ -78,3 +78,79 @@ CREATE TABLE IF NOT EXISTS campaign_draft_messages (
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS orgs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'external' CHECK (kind IN ('internal','external')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES orgs(id),
+  email TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS org_balances (
+  org_id UUID PRIMARY KEY REFERENCES orgs(id),
+  balance_credits NUMERIC NOT NULL DEFAULT 0 CHECK (balance_credits >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_balances (
+  user_id UUID PRIMARY KEY REFERENCES users(id),
+  org_id UUID NOT NULL REFERENCES orgs(id),
+  balance_credits NUMERIC NOT NULL DEFAULT 0 CHECK (balance_credits >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS credit_grants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES orgs(id),
+  user_id UUID REFERENCES users(id),
+  amount_credits NUMERIC NOT NULL CHECK (amount_credits > 0),
+  granted_by TEXT NOT NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS usage_ledger (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES orgs(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  feature TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  prompt_tokens INT NOT NULL,
+  completion_tokens INT NOT NULL,
+  total_tokens INT NOT NULL,
+  cost_usd NUMERIC NOT NULL,
+  credits_debited NUMERIC NOT NULL,
+  request_id TEXT,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Dev seed: no auth system exists yet, so every metered call runs as this one fixed org/user
+-- until a real login flow is built (see design spec Non-goals). Fixed literal ids everywhere so
+-- re-running this file (npm run migrate) never duplicates a row.
+INSERT INTO orgs (id, name, kind) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Gentle Space (internal)', 'internal')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO users (id, org_id, email, display_name, role) VALUES
+  ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
+   'dev@gentlespacesolutions.com', 'Dev User', 'admin')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO org_balances (org_id, balance_credits) VALUES
+  ('00000000-0000-0000-0000-000000000001', 1000)
+ON CONFLICT (org_id) DO NOTHING;
+
+INSERT INTO credit_grants (id, org_id, user_id, amount_credits, granted_by, note) VALUES
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', NULL, 1000,
+   'seed', 'Initial dev seed grant')
+ON CONFLICT (id) DO NOTHING;
