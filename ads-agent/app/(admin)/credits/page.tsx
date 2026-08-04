@@ -8,7 +8,7 @@ import {
 import { requireRole } from "@/lib/auth/dal";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AllocateCreditsForm } from "./AllocateCreditsForm";
 import { UsagePoller } from "./UsagePoller";
