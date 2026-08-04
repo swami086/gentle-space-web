@@ -5,6 +5,7 @@ import { getMembership, upsertMembership, INTERNAL_ORG_ID } from "@/lib/db/org-m
 import { createRefreshToken } from "@/lib/db/refresh-tokens";
 import { mintAccessToken } from "@/lib/jwt";
 import { safeReturnTo } from "@/lib/safe-redirect";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function bootstrapEmails(): Set<string> {
   return new Set(
@@ -15,8 +16,18 @@ function bootstrapEmails(): Set<string> {
   );
 }
 
+function clientIp(req: Request): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+}
+
 export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
+
+  // Global Constraints: login/callback rate limiter (in-memory; see rate-limit.ts ponytail).
+  if (!checkRateLimit(`bridge:${clientIp(req)}`, 20, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const session = await auth();
 
   if (!session?.googleSub || !session.user?.email) {
