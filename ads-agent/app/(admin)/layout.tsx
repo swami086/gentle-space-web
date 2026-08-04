@@ -1,23 +1,37 @@
 import type { ReactNode } from "react";
+import { Clock } from "lucide-react";
 import { getCronSettings } from "@/lib/db/settings";
 import { cn } from "@/lib/utils";
 import { requireSession } from "@/lib/auth/dal";
 import { RunNowButton } from "@/components/RunNowButton";
 import { SidebarNav } from "@/components/SidebarNav";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireSession();
 
   if (!session.role) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-6 text-center">
-        <div className="flex max-w-md flex-col gap-2">
-          <p className="text-lg font-semibold text-foreground">Your account is pending approval</p>
-          <p className="text-sm text-muted-foreground">
-            Signed in as {session.email}. An admin needs to assign you a role from the Users
-            page before you can access the dashboard.
-          </p>
-        </div>
+      <div className="flex min-h-dvh items-center justify-center px-6">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="items-center gap-4 pt-8 text-center">
+            <span className="flex size-10 items-center justify-center rounded-full bg-accent">
+              <Clock className="size-5 text-accent-foreground" strokeWidth={2} aria-hidden="true" />
+            </span>
+            <div className="flex flex-col gap-1.5">
+              <CardTitle className="text-xl font-semibold text-foreground">
+                Your account is pending approval
+              </CardTitle>
+              <CardDescription className="text-balance">
+                Signed in as {session.email}. An admin needs to assign you a role from the Users
+                page before you can access the dashboard.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-8 text-center text-xs text-muted-foreground">
+            Refresh this page after your role is assigned.
+          </CardContent>
+        </Card>
       </div>
     );
   }

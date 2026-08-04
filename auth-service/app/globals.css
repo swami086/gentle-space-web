@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #1a1524;
+  --card: #ffffff;
+  --card-foreground: #1a1524;
+  --primary: #6840b8;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f5f8;
+  --secondary-foreground: #1a1524;
+  --muted: #f6f5f8;
+  --muted-foreground: #6e667c;
+  --accent: #f0ebf8;
+  --accent-foreground: #1a1524;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e2dde9;
+  --input: #e2dde9;
+  --ring: #6840b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141218;
+    --foreground: #f2eff7;
+    --card: #1c1824;
+    --card-foreground: #f2eff7;
+    --primary: #8b6fd1;
+    --primary-foreground: #141218;
+    --secondary: #1c1824;
+    --secondary-foreground: #f2eff7;
+    --muted: #1c1824;
+    --muted-foreground: #9b93ad;
+    --accent: #2a2438;
+    --accent-foreground: #f2eff7;
+    --destructive: #f87171;
+    --destructive-foreground: #141218;
+    --border: #342e42;
+    --input: #342e42;
+    --ring: #8b6fd1;
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+/* Minimal, motivated entrance for the auth card only — no decorative/looping motion. */
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-card-enter {
+  animation: auth-card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card-enter {
+    animation: none;
+  }
+}
