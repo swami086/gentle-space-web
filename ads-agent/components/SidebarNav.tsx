@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, CreditCard, LayoutDashboard, Megaphone, Settings as SettingsIcon } from "lucide-react";
+import { ClipboardList, CreditCard, LayoutDashboard, Megaphone, Settings as SettingsIcon, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/proposals", label: "Proposals", icon: ClipboardList },
   { href: "/credits", label: "Usage & Credits", icon: CreditCard },
+  { href: "/users", label: "Users", icon: Users },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
