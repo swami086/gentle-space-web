@@ -205,7 +205,7 @@ descriptions.`,
     const merged: CampaignDraftFields = { ...baseFields, descriptions: toppedUp.props.descriptions };
     return {
       type: "done",
-      reply: sanitizeReply(toppedUp.reply, { ...toppedUp.props, ...merged }),
+      reply: sanitizeReply(toppedUp.reply, toppedUp.props),
       fieldUpdates: merged,
       validationErrors: [],
     };
