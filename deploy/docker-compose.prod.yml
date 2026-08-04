@@ -55,6 +55,8 @@ services:
     depends_on:
       ads-db:
         condition: service_healthy
+      bifrost:
+        condition: service_started
     networks:
       - default
     environment:
@@ -74,13 +76,33 @@ services:
       GOOGLE_ADS_CUSTOMER_ID: ${GOOGLE_ADS_CUSTOMER_ID:-}
       TWENTY_BASE_URL: ${TWENTY_BASE_URL:-}
       TWENTY_API_KEY: ${TWENTY_API_KEY:-}
-      BIFROST_BASE_URL: ${BIFROST_BASE_URL:-}
-      BIFROST_CHAT_MODEL: ${BIFROST_CHAT_MODEL:-}
-      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-}
-      VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS:-}
+      # Hardcoded compose DNS — do not use localhost from local .env.local copies
+      BIFROST_BASE_URL: http://bifrost:8080
+      BIFROST_CHAT_MODEL: ${BIFROST_CHAT_MODEL:-vertex/gemini-2.5-flash-lite}
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
       CRON_SCHEDULE: ${CRON_SCHEDULE:-0 */6 * * *}
     expose:
       - "3030"
+    restart: unless-stopped
+
+  # Internal-only Vertex gateway (not in Caddy). Campaign chat + rationale call this.
+  bifrost:
+    image: maximhq/bifrost:latest
+    networks:
+      - default
+    environment:
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
+      # Must be raw SA JSON (one line), not base64 — see ads-agent/bifrost/README.md
+      VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS}
+      GOGC: "100"
+      GOMEMLIMIT: "450MiB"
+    volumes:
+      - bifrost-data:/app/data
+      - ../ads-agent/bifrost/config.json:/app/data/config.json:ro
+    expose:
+      - "8080"
+    mem_limit: 512m
+    cpus: "1.0"
     restart: unless-stopped
 
   ads-db:
@@ -107,3 +129,4 @@ networks:
 volumes:
   auth-db-data:
   ads-db-data:
+  bifrost-data:
