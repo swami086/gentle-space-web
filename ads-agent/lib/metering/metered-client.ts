@@ -3,10 +3,7 @@ import { getOrgBalance, getUserCap, debitUsage } from "./ledger";
 import { computeCostUsd, creditsFromCostUsd } from "./pricing";
 import { InsufficientCreditsError, type MeteringContext } from "./types";
 
-export async function callMeteredChatCompletion(
-  ctx: MeteringContext,
-  request: ChatCompletionOptions,
-): Promise<ChatCompletionResponse> {
+export async function assertSufficientCredits(ctx: MeteringContext): Promise<void> {
   const orgBalance = await getOrgBalance(ctx.orgId);
   if (orgBalance <= 0) {
     throw new InsufficientCreditsError(`Org ${ctx.orgId} has no remaining credits`);
@@ -16,6 +13,13 @@ export async function callMeteredChatCompletion(
   if (userCap !== null && userCap <= 0) {
     throw new InsufficientCreditsError(`User ${ctx.userId} has exhausted their individual credit cap`);
   }
+}
+
+export async function callMeteredChatCompletion(
+  ctx: MeteringContext,
+  request: ChatCompletionOptions,
+): Promise<ChatCompletionResponse> {
+  await assertSufficientCredits(ctx);
 
   const response = await chatCompletion(request);
 

@@ -82,3 +82,20 @@ describe("callMeteredChatCompletion", () => {
     expect(debitUsage.mock.calls[0][0].creditsDebited).toBe(0);
   });
 });
+
+it("assertSufficientCredits throws InsufficientCreditsError when org balance is zero", async () => {
+  getOrgBalance.mockResolvedValue(0);
+  const { assertSufficientCredits } = await import("./metered-client");
+  await expect(
+    assertSufficientCredits({ orgId: "org-1", userId: "user-1", feature: "test" }),
+  ).rejects.toThrow(InsufficientCreditsError);
+});
+
+it("assertSufficientCredits resolves when balance and cap are both sufficient", async () => {
+  getOrgBalance.mockResolvedValue(100);
+  getUserCap.mockResolvedValue(50);
+  const { assertSufficientCredits } = await import("./metered-client");
+  await expect(
+    assertSufficientCredits({ orgId: "org-1", userId: "user-1", feature: "test" }),
+  ).resolves.toBeUndefined();
+});
