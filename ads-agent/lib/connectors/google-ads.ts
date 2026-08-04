@@ -35,12 +35,12 @@ export async function fetchGoogleAdsPerformance(): Promise<GoogleAdsPerformanceR
     WHERE campaign.status = "ENABLED"
     DURING LAST_3_DAYS
   `);
-  return rows.map((row: Record<string, Record<string, unknown>>) => ({
-    externalCampaignId: String(row.campaign.id),
-    spend: Number(row.metrics.cost_micros) / 1_000_000,
-    clicks: Number(row.metrics.clicks),
-    impressions: Number(row.metrics.impressions),
-    conversions: Number(row.metrics.all_conversions),
+  return rows.map((row) => ({
+    externalCampaignId: String(row.campaign?.id ?? ""),
+    spend: Number(row.metrics?.cost_micros ?? 0) / 1_000_000,
+    clicks: Number(row.metrics?.clicks ?? 0),
+    impressions: Number(row.metrics?.impressions ?? 0),
+    conversions: Number(row.metrics?.all_conversions ?? 0),
   }));
 }
 
@@ -58,11 +58,11 @@ export async function fetchGoogleSearchTerms(): Promise<GoogleSearchTermRow[]> {
     WHERE metrics.clicks > 0
     DURING LAST_7_DAYS
   `);
-  return rows.map((row: Record<string, Record<string, unknown>>) => ({
-    externalCampaignId: String(row.campaign.id),
-    searchTerm: String(row.search_term_view.search_term),
-    clicks: Number(row.metrics.clicks),
-    conversions: Number(row.metrics.conversions),
+  return rows.map((row) => ({
+    externalCampaignId: String(row.campaign?.id ?? ""),
+    searchTerm: String(row.search_term_view?.search_term ?? ""),
+    clicks: Number(row.metrics?.clicks ?? 0),
+    conversions: Number(row.metrics?.conversions ?? 0),
   }));
 }
 

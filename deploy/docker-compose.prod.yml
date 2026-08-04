@@ -3,11 +3,22 @@ services:
     networks:
       - default
       - twenty_default
+    depends_on:
+      - web
+      - auth
+      - ads-agent
 
   auth:
     build: ../auth-service
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - default
     environment:
-      DATABASE_URL: ${AUTH_DATABASE_URL}
+      DATABASE_URL: ${AUTH_DATABASE_URL:-postgres://auth_service:${AUTH_DB_PASSWORD}@auth-db:5432/auth_service}
+      AUTH_URL: https://auth.gentlespacesolutions.com
+      ADS_APP_URL: https://ads.gentlespacesolutions.com/
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       AUTH_SECRET: ${AUTH_SECRET}
@@ -18,26 +29,75 @@ services:
       ADMIN_BOOTSTRAP_EMAILS: ${ADMIN_BOOTSTRAP_EMAILS}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       COOKIE_DOMAIN: .gentlespacesolutions.com
+    expose:
+      - "3040"
     restart: unless-stopped
 
   auth-db:
     image: postgres:16
+    networks:
+      - default
     environment:
       POSTGRES_DB: auth_service
       POSTGRES_USER: auth_service
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
     volumes:
       - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U auth_service -h localhost -d auth_service
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   ads-agent:
     build: ../ads-agent
+    depends_on:
+      ads-db:
+        condition: service_healthy
+    networks:
+      - default
     environment:
-      DATABASE_URL: ${ADS_AGENT_DATABASE_URL}
+      DATABASE_URL: ${ADS_AGENT_DATABASE_URL:-postgres://ads_agent:${ADS_DB_PASSWORD}@ads-db:5432/ads_agent}
       AUTH_SERVICE_URL: https://auth.gentlespacesolutions.com
       AUTH_SERVICE_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      # ...existing ads-agent env vars (Bifrost, Google Ads, Meta, Twenty) unchanged, see
-      # ads-agent/.env.example
+      ADS_APP_URL: https://ads.gentlespacesolutions.com/
+      # Meta / Google Ads / Twenty / Bifrost — supply via deploy/.env.production (see ads-agent/.env.example)
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-}
+      META_AD_ACCOUNT_ID: ${META_AD_ACCOUNT_ID:-}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${GOOGLE_ADS_DEVELOPER_TOKEN:-}
+      GOOGLE_ADS_CLIENT_ID: ${GOOGLE_ADS_CLIENT_ID:-}
+      GOOGLE_ADS_CLIENT_SECRET: ${GOOGLE_ADS_CLIENT_SECRET:-}
+      GOOGLE_ADS_REFRESH_TOKEN: ${GOOGLE_ADS_REFRESH_TOKEN:-}
+      GOOGLE_ADS_CUSTOMER_ID: ${GOOGLE_ADS_CUSTOMER_ID:-}
+      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-}
+      TWENTY_API_KEY: ${TWENTY_API_KEY:-}
+      BIFROST_BASE_URL: ${BIFROST_BASE_URL:-}
+      BIFROST_CHAT_MODEL: ${BIFROST_CHAT_MODEL:-}
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-}
+      VERTEX_AUTH_CREDENTIALS: ${VERTEX_AUTH_CREDENTIALS:-}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 */6 * * *}
+    expose:
+      - "3030"
+    restart: unless-stopped
+
+  ads-db:
+    image: postgres:16
+    networks:
+      - default
+    environment:
+      POSTGRES_DB: ads_agent
+      POSTGRES_USER: ads_agent
+      POSTGRES_PASSWORD: ${ADS_DB_PASSWORD}
+    volumes:
+      - ads-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ads_agent -h localhost -d ads_agent
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
 networks:
@@ -46,3 +106,4 @@ networks:
 
 volumes:
   auth-db-data:
+  ads-db-data:
