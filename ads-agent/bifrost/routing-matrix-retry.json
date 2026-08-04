@@ -1,0 +1,202 @@
+{
+  "passed": 5,
+  "total": 14,
+  "results": [
+    {
+      "id": "COMPLEX-01",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Draft RSA headlines and descriptions for a Bangalore office campaign with CPL budget constraints.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "COMPLEX-01b",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "RSA headlines descriptions campaign keyword CPL budget architecture for Bangalore office.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "COMPLEX-05",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Map RSA headline variants to keyword themes under a fixed budget and CPL target for Bangalore offices.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "DOMAIN-01",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Generate 15 RSA headlines and 4 descriptions for Gentle Space coworking in Bangalore with CPL under 2500 and keyword themes for Indiranagar.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "DOMAIN-03",
+      "expected": "gemini-2.5-flash-lite",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": true,
+      "http": 200,
+      "ftype": "ok",
+      "prompt": "hi, thanks \u2014 what is the next field I should fill?",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-cheap",
+      "expected": "gemini-2.5-flash-lite",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": true,
+      "http": 200,
+      "ftype": "ok",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-complex",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-reasoning",
+      "expected": "gemini-2.5-pro",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-bare-cheap",
+      "expected": "gemini-2.5-flash-lite",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": true,
+      "http": 200,
+      "ftype": "ok",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-bare-complex",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "ALIAS-bare-reasoning",
+      "expected": "gemini-2.5-pro",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "Say hi.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "PIN-01",
+      "expected": "gemini-2.5-flash-lite",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": true,
+      "http": 200,
+      "ftype": "ok",
+      "prompt": "hello",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "COMPLEX-tech-heavy",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash",
+      "pass": true,
+      "http": 200,
+      "ftype": "ok",
+      "prompt": "Update campaign architecture JSON schema API for RSA headline description keyword budget CPL.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash",
+        "key": "vertex-sa"
+      }
+    },
+    {
+      "id": "COMPLEX-minimal-tech",
+      "expected": "gemini-2.5-flash",
+      "actual": "gemini-2.5-flash-lite",
+      "pass": false,
+      "http": 200,
+      "ftype": "misroute",
+      "prompt": "RSA campaign headline description keyword budget CPL.",
+      "raw_routing": {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash-lite",
+        "key": "vertex-sa"
+      }
+    }
+  ]
+}

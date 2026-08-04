@@ -1,0 +1,196 @@
+{
+  "passed": 5,
+  "total": 19,
+  "results": [
+    {
+      "id": "S1",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "hello"
+    },
+    {
+      "id": "S2",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "thanks"
+    },
+    {
+      "id": "S3",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "what is CPL?"
+    },
+    {
+      "id": "M1",
+      "pass_": true,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Tell me a short tip for writing clearer ads."
+    },
+    {
+      "id": "T1",
+      "pass_": true,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Draft RSA headlines and descriptions for a Bangalore office campaign with CPL budget constraints."
+    },
+    {
+      "id": "T2",
+      "pass_": true,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Generate 15 RSA headlines and 4 descriptions with CPL under 2500 and keyword themes."
+    },
+    {
+      "id": "C1",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash",
+      "actual_model": "gemini-2.5-flash",
+      "expected_rule": "complexity-complex",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Debug the campaign keyword matching function class for RSA description length limits and CPL budget."
+    },
+    {
+      "id": "C2",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash",
+      "actual_model": "gemini-2.5-flash",
+      "expected_rule": "complexity-complex",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Update campaign architecture JSON schema API for RSA headline description keyword budget CPL."
+    },
+    {
+      "id": "C3",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash",
+      "actual_model": "gemini-2.5-flash",
+      "expected_rule": "complexity-complex",
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Propose keyword schema and campaign architecture for coworking RSA ads including budget."
+    },
+    {
+      "id": "R1",
+      "pass_": false,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": "complexity-reasoning",
+      "actual_rule": "complexity-complex",
+      "http": 200,
+      "prompt": "Reason about root cause and tradeoffs step by step: explain why audience segments change CPL."
+    },
+    {
+      "id": "R2",
+      "pass_": false,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": "complexity-reasoning",
+      "actual_rule": "complexity-complex",
+      "http": 200,
+      "prompt": "Step by step, explain why campaign architecture tradeoffs affect RSA keyword budget and CPL."
+    },
+    {
+      "id": "R3",
+      "pass_": true,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": "complexity-reasoning",
+      "actual_rule": "complexity-reasoning",
+      "http": 200,
+      "prompt": "Root cause analysis: reason about tradeoffs between audience segments and Bangalore office RSA budget."
+    },
+    {
+      "id": "A1",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": null,
+      "actual_rule": "complexity-reasoning",
+      "http": 200,
+      "prompt": "Color of the sky tomorrow?"
+    },
+    {
+      "id": "A2",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash",
+      "actual_model": "gemini-2.5-flash",
+      "expected_rule": null,
+      "actual_rule": "complexity-reasoning",
+      "http": 200,
+      "prompt": "Color of the sky tomorrow?"
+    },
+    {
+      "id": "A3",
+      "pass_": true,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": null,
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "Color of the sky tomorrow?"
+    },
+    {
+      "id": "A4",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash-lite",
+      "actual_model": "gemini-2.5-flash-lite",
+      "expected_rule": "complexity-default-cheap",
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "hi"
+    },
+    {
+      "id": "P1",
+      "pass_": false,
+      "expected_model": "gemini-2.5-flash",
+      "actual_model": "gemini-2.5-flash",
+      "expected_rule": null,
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Color of the sky tomorrow?"
+    },
+    {
+      "id": "P2",
+      "pass_": false,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": null,
+      "actual_rule": "complexity-default-cheap",
+      "http": 200,
+      "prompt": "Color of the sky tomorrow?"
+    },
+    {
+      "id": "P3",
+      "pass_": false,
+      "expected_model": "gemini-2.5-pro",
+      "actual_model": "gemini-2.5-pro",
+      "expected_rule": "complexity-reasoning",
+      "actual_rule": null,
+      "http": 200,
+      "prompt": "Reason about root cause and tradeoffs step by step for audience segments."
+    }
+  ]
+}
