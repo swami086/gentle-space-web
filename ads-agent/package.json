@@ -19,6 +19,7 @@
     "clsx": "^2.1.1",
     "facebook-nodejs-business-sdk": "^22.0.0",
     "google-ads-api": "^21.0.0",
+    "jose": "^6.2.8",
     "lucide-react": "^1.28.0",
     "next": "15.5.21",
     "node-cron": "^3.0.3",
