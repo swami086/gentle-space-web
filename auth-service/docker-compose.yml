@@ -1,0 +1,22 @@
+name: auth-service
+
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: auth_service
+      POSTGRES_USER: auth_service
+      POSTGRES_PASSWORD: auth_service_local_dev
+    volumes:
+      - auth-service-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U auth_service -h localhost -d auth_service
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  auth-service-db-data:
