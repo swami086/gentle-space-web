@@ -2,22 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2, Plus, Send, Trash2 } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { CampaignDraft, CampaignDraftKeyword, CampaignDraftMessage } from "@/lib/types";
+import type { CampaignDraft, CampaignDraftMessage } from "@/lib/types";
+import { ManualEditForm } from "@/components/campaign-draft-chat/ManualEditForm";
+import { AiSetupView } from "@/components/campaign-draft-chat/AiSetupView";
 
 type Props = {
   initialDraft: CampaignDraft;
   initialMessages: CampaignDraftMessage[];
 };
 
-const MATCH_TYPES: CampaignDraftKeyword["matchType"][] = ["broad", "phrase", "exact"];
-
-function formatInr(value: number | null): string {
-  return value === null ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
+type StreamEvent =
+  | { delta: string }
+  | { done: true; reply: string; draft: CampaignDraft }
+  | { done: true; error: string };
 
 export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
   const router = useRouter();
@@ -27,6 +28,8 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
 
   async function patchDraft(fields: Record<string, unknown>) {
     setError(null);
@@ -48,6 +51,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
     if (!content || sending) return;
     setSending(true);
     setError(null);
+    setStreamingText("");
     setMessages((prev) => [
       ...prev,
       { id: `local-${Date.now()}`, draftId: draft.id, role: "user", content, createdAt: new Date().toISOString() },
@@ -60,18 +64,52 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      const body = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
+        const body = await res.json().catch(() => ({}));
         setError(body.error ?? "Failed to send message");
         return;
       }
-      setMessages((prev) => [
-        ...prev,
-        { id: `local-reply-${Date.now()}`, draftId: draft.id, role: "assistant", content: body.reply, createdAt: new Date().toISOString() },
-      ]);
-      setDraft(body.draft);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 2);
+          if (!rawEvent.startsWith("data:")) continue;
+
+          const event = JSON.parse(rawEvent.slice("data:".length).trim()) as StreamEvent;
+          if ("delta" in event) {
+            accumulated += event.delta;
+            setStreamingText(accumulated);
+          } else if ("error" in event) {
+            setError(event.error);
+          } else {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `local-reply-${Date.now()}`,
+                draftId: draft.id,
+                role: "assistant",
+                content: event.reply,
+                createdAt: new Date().toISOString(),
+              },
+            ]);
+            setDraft(event.draft);
+          }
+        }
+      }
     } finally {
       setSending(false);
+      setStreamingText("");
     }
   }
 
@@ -89,35 +127,6 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
     } finally {
       setCreating(false);
     }
-  }
-
-  function updateHeadline(index: number, value: string) {
-    const next = [...draft.headlines];
-    next[index] = value;
-    setDraft((prev) => ({ ...prev, headlines: next }));
-  }
-
-  function updateDescription(index: number, value: string) {
-    const next = [...draft.descriptions];
-    next[index] = value;
-    setDraft((prev) => ({ ...prev, descriptions: next }));
-  }
-
-  function updateKeyword(index: number, patch: Partial<CampaignDraftKeyword>) {
-    setDraft((prev) => ({
-      ...prev,
-      keywords: prev.keywords.map((keyword, i) => (i === index ? { ...keyword, ...patch } : keyword)),
-    }));
-  }
-
-  function removeKeyword(index: number) {
-    const next = draft.keywords.filter((_, i) => i !== index);
-    setDraft((prev) => ({ ...prev, keywords: next }));
-    void patchDraft({ keywords: next });
-  }
-
-  function addKeyword() {
-    setDraft((prev) => ({ ...prev, keywords: [...prev.keywords, { text: "", matchType: "phrase" as const }] }));
   }
 
   return (
@@ -145,6 +154,11 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
                 {message.content}
               </div>
             ))}
+            {sending && (
+              <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                Thinking…
+              </div>
+            )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
@@ -171,135 +185,31 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold text-foreground">Campaign setup</CardTitle>
-          <Badge variant={draft.status === "ready" ? "default" : "outline"}>{draft.status}</Badge>
+          <div className="flex items-center gap-2">
+            {!editMode && <Badge variant={draft.status === "ready" ? "default" : "outline"}>{draft.status}</Badge>}
+            <Button variant="outline" size="sm" onClick={() => setEditMode((v) => !v)}>
+              {editMode ? "AI view" : "Edit manually"}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            Corridor
-            <input
-              className="rounded-md border border-border bg-background px-2 py-1"
-              value={draft.corridor ?? ""}
-              placeholder="e.g. whitefield"
-              onChange={(e) => setDraft((prev) => ({ ...prev, corridor: e.target.value }))}
-              onBlur={() => void patchDraft({ corridor: draft.corridor })}
+        <CardContent>
+          {editMode ? (
+            <ManualEditForm
+              draft={draft}
+              onDraftChange={setDraft}
+              onPatch={patchDraft}
+              onCreateProposal={createProposal}
+              creating={creating}
             />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            Daily budget (INR)
-            <input
-              type="number"
-              className="rounded-md border border-border bg-background px-2 py-1"
-              value={draft.dailyBudgetInr ?? ""}
-              placeholder="e.g. 500"
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, dailyBudgetInr: e.target.value ? Number(e.target.value) : null }))
-              }
-              onBlur={() => void patchDraft({ dailyBudgetInr: draft.dailyBudgetInr })}
+          ) : (
+            <AiSetupView
+              draft={draft}
+              streamingText={streamingText}
+              isStreaming={sending}
+              onCreateProposal={createProposal}
+              creating={creating}
             />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            Ad group name
-            <input
-              className="rounded-md border border-border bg-background px-2 py-1"
-              value={draft.adGroupName ?? ""}
-              placeholder="Not set yet"
-              onChange={(e) => setDraft((prev) => ({ ...prev, adGroupName: e.target.value }))}
-              onBlur={() => void patchDraft({ adGroupName: draft.adGroupName })}
-            />
-          </label>
-
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span>Keywords</span>
-              <Button variant="ghost" size="sm" onClick={addKeyword}>
-                <Plus className="size-3" />
-                Add
-              </Button>
-            </div>
-            {draft.keywords.length === 0 && (
-              <p className="text-muted-foreground">Not set yet — describe your product in the chat.</p>
-            )}
-            {draft.keywords.map((keyword, index) => (
-              <div key={index} className="flex gap-2">
-                <input
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1"
-                  value={keyword.text}
-                  onChange={(e) => updateKeyword(index, { text: e.target.value })}
-                  onBlur={() => void patchDraft({ keywords: draft.keywords })}
-                />
-                <select
-                  className="rounded-md border border-border bg-background px-2 py-1"
-                  value={keyword.matchType}
-                  onChange={(e) => {
-                    const matchType = e.target.value as CampaignDraftKeyword["matchType"];
-                    const next = draft.keywords.map((k, i) => (i === index ? { ...k, matchType } : k));
-                    setDraft((prev) => ({ ...prev, keywords: next }));
-                    void patchDraft({ keywords: next });
-                  }}
-                >
-                  {MATCH_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-                <Button variant="ghost" size="icon" onClick={() => removeKeyword(index)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2 text-sm">
-            <span>Headlines ({draft.headlines.length}/15, ≤30 chars)</span>
-            {draft.headlines.length === 0 && <p className="text-muted-foreground">Not set yet.</p>}
-            {draft.headlines.map((headline, index) => (
-              <input
-                key={index}
-                className="rounded-md border border-border bg-background px-2 py-1"
-                value={headline}
-                maxLength={30}
-                onChange={(e) => updateHeadline(index, e.target.value)}
-                onBlur={() => void patchDraft({ headlines: draft.headlines })}
-              />
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2 text-sm">
-            <span>Descriptions ({draft.descriptions.length}/4, ≤90 chars)</span>
-            {draft.descriptions.length === 0 && <p className="text-muted-foreground">Not set yet.</p>}
-            {draft.descriptions.map((description, index) => (
-              <input
-                key={index}
-                className="rounded-md border border-border bg-background px-2 py-1"
-                value={description}
-                maxLength={90}
-                onChange={(e) => updateDescription(index, e.target.value)}
-                onBlur={() => void patchDraft({ descriptions: draft.descriptions })}
-              />
-            ))}
-          </div>
-
-          <label className="flex flex-col gap-1 text-sm">
-            Final URL
-            <input
-              className="rounded-md border border-border bg-background px-2 py-1"
-              value={draft.finalUrl}
-              onChange={(e) => setDraft((prev) => ({ ...prev, finalUrl: e.target.value }))}
-              onBlur={() => void patchDraft({ finalUrl: draft.finalUrl })}
-            />
-          </label>
-
-          <Button disabled={draft.status !== "ready" || creating} onClick={() => void createProposal()}>
-            {creating && <Loader2 className="size-4 animate-spin" />}
-            Create Proposal
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Daily budget shown here ({formatInr(draft.dailyBudgetInr)}) is a starting point; nothing spends until you
-            approve the resulting proposal.
-          </p>
+          )}
         </CardContent>
       </Card>
     </div>
