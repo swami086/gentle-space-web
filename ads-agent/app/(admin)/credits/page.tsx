@@ -37,11 +37,7 @@ export default async function CreditsPage() {
       <UsagePoller />
 
       {orgBalances.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No organizations yet.
-          </CardContent>
-        </Card>
+        <p className="py-10 text-center text-sm text-muted-foreground">No organizations yet.</p>
       ) : (
         <Card>
           <CardHeader className="flex-row items-center justify-between">
@@ -58,125 +54,109 @@ export default async function CreditsPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-foreground">Members</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {members.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No members yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Individual cap</TableHead>
+      <div className="flex flex-col gap-3 border-t border-border pt-6">
+        <h2 className="text-sm font-semibold text-foreground">Members</h2>
+        {members.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No members yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Individual cap</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((m) => (
+                <TableRow key={m.userId}>
+                  <TableCell className="font-medium text-foreground">{m.displayName ?? m.email}</TableCell>
+                  <TableCell>
+                    {m.capCredits === null ? (
+                      <Badge variant="outline">No cap — draws from org pool</Badge>
+                    ) : (
+                      formatCredits(m.capCredits)
+                    )}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.userId}>
-                    <TableCell className="font-medium text-foreground">{m.displayName ?? m.email}</TableCell>
-                    <TableCell>
-                      {m.capCredits === null ? (
-                        <Badge variant="outline">No cap — draws from org pool</Badge>
-                      ) : (
-                        formatCredits(m.capCredits)
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold text-foreground">Spend by feature (30d)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {spendByFeature.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No usage yet.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Feature</TableHead>
-                    <TableHead>Credits</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {spendByFeature.map((row) => (
-                    <TableRow key={row.key}>
-                      <TableCell>{row.key}</TableCell>
-                      <TableCell>{formatCredits(row.totalCredits)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold text-foreground">Spend by model (30d)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {spendByModel.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No usage yet.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Model</TableHead>
-                    <TableHead>Credits</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {spendByModel.map((row) => (
-                    <TableRow key={row.key}>
-                      <TableCell>{row.key}</TableCell>
-                      <TableCell>{formatCredits(row.totalCredits)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-foreground">Daily spend, last 30 days</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {trend.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No usage data yet.</p>
+      <div className="grid grid-cols-1 gap-6 border-t border-border pt-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Spend by feature (30d)</h2>
+          {spendByFeature.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No usage yet.</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Feature</TableHead>
                   <TableHead>Credits</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {trend.map((point) => (
-                  <TableRow key={point.date}>
-                    <TableCell>{point.date}</TableCell>
-                    <TableCell>{formatCredits(point.totalCredits)}</TableCell>
+                {spendByFeature.map((row) => (
+                  <TableRow key={row.key}>
+                    <TableCell>{row.key}</TableCell>
+                    <TableCell>{formatCredits(row.totalCredits)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Spend by model (30d)</h2>
+          {spendByModel.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No usage yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Credits</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {spendByModel.map((row) => (
+                  <TableRow key={row.key}>
+                    <TableCell>{row.key}</TableCell>
+                    <TableCell>{formatCredits(row.totalCredits)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-border pt-6">
+        <h2 className="text-sm font-semibold text-foreground">Daily spend, last 30 days</h2>
+        {trend.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">No usage data yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Credits</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {trend.map((point) => (
+                <TableRow key={point.date}>
+                  <TableCell>{point.date}</TableCell>
+                  <TableCell>{formatCredits(point.totalCredits)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }
