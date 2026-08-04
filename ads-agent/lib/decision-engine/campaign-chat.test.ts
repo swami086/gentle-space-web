@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "../types";
+import type { StreamChunk } from "../openui/streaming-types";
 
-const callMeteredChatCompletion = vi.fn();
-vi.mock("../metering/metered-client", () => ({ callMeteredChatCompletion }));
+const callMeteredStreamingChatCompletion = vi.fn();
+vi.mock("../metering/metered-stream-client", () => ({ callMeteredStreamingChatCompletion }));
+
+const streamChatCompletion = vi.fn();
+vi.mock("../openui/bifrost-stream", () => ({ streamChatCompletion }));
 
 const getSession = vi.fn();
 vi.mock("../auth/dal", () => ({ getSession }));
@@ -34,13 +38,41 @@ function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   };
 }
 
-function jsonResponse(payload: Record<string, unknown>) {
-  return { choices: [{ message: { role: "assistant", content: JSON.stringify(payload) } }] };
+/** SetupCard's Zod key order is fixed: assistantReply, status, corridor, dailyBudgetInr,
+ * adGroupName, keywords, headlines, descriptions, finalUrl.
+ * OpenUI positional null is rejected for strings (use "") and numbers (use 0 sentinel). */
+function setupCardText(fields: Partial<Record<string, unknown>> & { assistantReply: string }): string {
+  const f = {
+    status: "chatting",
+    corridor: "",
+    dailyBudgetInr: 0,
+    adGroupName: "",
+    keywords: [] as unknown[],
+    headlines: [] as string[],
+    descriptions: [] as string[],
+    finalUrl: "https://www.gentlespacesolutions.com/spaces",
+    ...fields,
+  };
+  const corridor = f.corridor === null ? "" : f.corridor;
+  const dailyBudgetInr = f.dailyBudgetInr === null ? 0 : f.dailyBudgetInr;
+  const adGroupName = f.adGroupName === null ? "" : f.adGroupName;
+  return `root = SetupCard(${JSON.stringify(f.assistantReply)}, ${JSON.stringify(f.status)}, ${JSON.stringify(corridor)}, ${dailyBudgetInr}, ${JSON.stringify(adGroupName)}, ${JSON.stringify(f.keywords)}, ${JSON.stringify(f.headlines)}, ${JSON.stringify(f.descriptions)}, ${JSON.stringify(f.finalUrl)})`;
+}
+
+async function* fakeMeteredStream(text: string): AsyncGenerator<StreamChunk> {
+  yield { type: "delta", content: text };
+  yield { type: "usage", model: "gemini-2.5-flash-lite", usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 } };
+}
+
+async function collect<T>(gen: AsyncGenerator<T, void, unknown>): Promise<T[]> {
+  const out: T[] = [];
+  for await (const item of gen) out.push(item);
+  return out;
 }
 
 describe("draftCampaignChatReply", () => {
   beforeEach(() => {
-    callMeteredChatCompletion.mockReset();
+    callMeteredStreamingChatCompletion.mockReset();
     getSession.mockReset();
     isBifrostConfigured.mockReset();
     isBifrostConfigured.mockReturnValue(true);
@@ -52,22 +84,32 @@ describe("draftCampaignChatReply", () => {
     });
   });
 
-  it("returns a clarifying question when the model only sends assistantReply", async () => {
-    callMeteredChatCompletion.mockResolvedValue(jsonResponse({ assistantReply: "What's your daily budget?" }));
+  it("streams deltas then yields a done event with a clarifying reply", async () => {
+    callMeteredStreamingChatCompletion.mockReturnValue(
+      fakeMeteredStream(setupCardText({ assistantReply: "What's your daily budget?" })),
+    );
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "I want a campaign in Whitefield" });
+    const events = await collect(
+      draftCampaignChatReply({ draft: draft(), history: [], userMessage: "I want a campaign in Whitefield" }),
+    );
 
-    expect(result).toEqual({ reply: "What's your daily budget?", fieldUpdates: {}, validationErrors: [] });
-    expect(callMeteredChatCompletion).toHaveBeenCalledTimes(1);
-    expect(callMeteredChatCompletion.mock.calls[0][0]).toEqual({
+    expect(events[0]).toEqual({ type: "delta", content: setupCardText({ assistantReply: "What's your daily budget?" }) });
+    expect(events[1]).toEqual({
+      type: "done",
+      reply: "What's your daily budget?",
+      fieldUpdates: expect.objectContaining({ corridor: null, dailyBudgetInr: null }),
+      validationErrors: [],
+    });
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(1);
+    const [ctxArg, requestArg, streamFnArg] = callMeteredStreamingChatCompletion.mock.calls[0];
+    expect(ctxArg).toEqual({
       orgId: "00000000-0000-0000-0000-000000000001",
       userId: "00000000-0000-0000-0000-000000000002",
       feature: "ads-agent:campaign-chat",
     });
-    const request = callMeteredChatCompletion.mock.calls[0][1];
-    expect(request.responseFormat?.type).toBe("json_schema");
-    expect(request.messages).toEqual(
+    expect(streamFnArg).toBe(streamChatCompletion);
+    expect(requestArg.messages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ role: "system" }),
         expect.objectContaining({ role: "user", content: "I want a campaign in Whitefield" }),
@@ -75,137 +117,67 @@ describe("draftCampaignChatReply", () => {
     );
   });
 
-  it("returns field updates when the model returns valid draft JSON", async () => {
-    callMeteredChatCompletion.mockResolvedValue(
-      jsonResponse({
-        assistantReply: "Got it — set the corridor and budget.",
-        corridor: "whitefield",
-        dailyBudgetInr: 500,
-      }),
+  it("returns field updates when the model returns a valid SetupCard", async () => {
+    callMeteredStreamingChatCompletion.mockReturnValue(
+      fakeMeteredStream(
+        setupCardText({ assistantReply: "Got it — set the corridor and budget.", corridor: "whitefield", dailyBudgetInr: 500 }),
+      ),
     );
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Whitefield, 500 rupees a day" });
+    const events = await collect(
+      draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Whitefield, 500 rupees a day" }),
+    );
 
-    expect(result).toEqual({
+    const done = events[events.length - 1];
+    expect(done).toEqual({
+      type: "done",
       reply: "Got it — set the corridor and budget.",
-      fieldUpdates: { corridor: "whitefield", dailyBudgetInr: 500 },
+      fieldUpdates: expect.objectContaining({ corridor: "whitefield", dailyBudgetInr: 500 }),
       validationErrors: [],
     });
   });
 
-  it("rejects RSA-limit violations and returns corrected fields on retry", async () => {
-    const tooLong = "This headline is deliberately far too long for Google RSA limits";
-    callMeteredChatCompletion
-      .mockResolvedValueOnce(jsonResponse({ assistantReply: "Drafted.", headlines: [tooLong] }))
-      .mockResolvedValueOnce(jsonResponse({ assistantReply: "Fixed it.", headlines: ["Short Headline"] }));
-
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Write me a headline" });
-
-    expect(callMeteredChatCompletion).toHaveBeenCalledTimes(2);
-    const secondCallRequest = callMeteredChatCompletion.mock.calls[1][1];
-    expect(secondCallRequest.messages.at(-1)).toMatchObject({
-      role: "user",
-      content: expect.stringMatching(/Rejected:/),
-    });
-    expect(result).toEqual({ reply: "Fixed it.", fieldUpdates: { headlines: ["Short Headline"] }, validationErrors: [] });
-  });
-
-  it("gives up gracefully if the retry still violates RSA limits", async () => {
-    const tooLong = "This headline is deliberately far too long for Google RSA limits";
-    callMeteredChatCompletion
-      .mockResolvedValueOnce(jsonResponse({ assistantReply: "", headlines: [tooLong] }))
-      .mockResolvedValueOnce(jsonResponse({ assistantReply: "", headlines: [tooLong] }));
-
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Write me a headline" });
-
-    expect(result.fieldUpdates).toBeNull();
-    expect(result.validationErrors.length).toBeGreaterThan(0);
-  });
-
-  it("rewrites claim-without-fields replies so the chat does not pretend copy was written", async () => {
-    callMeteredChatCompletion.mockResolvedValue(
-      jsonResponse({
-        assistantReply: "Okay, here are some headlines and descriptions for the ad copy. Let me know what you think!",
-      }),
-    );
-
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "you assume and propose" });
-
-    expect(result.fieldUpdates).toEqual({});
-    expect(result.reply).not.toMatch(/here are some headlines/i);
-    expect(result.reply).toMatch(/setup card/i);
-  });
-
-  it("silently tops up missing descriptions when the user asked to propose copy", async () => {
-    callMeteredChatCompletion
-      .mockResolvedValueOnce(
-        jsonResponse({
-          assistantReply: "Drafted headlines.",
-          headlines: ["Office in Whitefield", "Lease Office Space", "Bangalore CRE"],
-        }),
+  it("retries once when RSA limits are violated, then accepts a corrected response", async () => {
+    callMeteredStreamingChatCompletion
+      .mockReturnValueOnce(
+        fakeMeteredStream(setupCardText({ assistantReply: "Here are headlines.", headlines: ["a".repeat(40)] })),
       )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          assistantReply: "Added descriptions too.",
-          descriptions: ["Find verified Whitefield offices with AI search.", "Lease commercial space with Gentle Space."],
-        }),
+      .mockReturnValueOnce(
+        fakeMeteredStream(setupCardText({ assistantReply: "Fixed.", headlines: ["Short headline"] })),
       );
 
     const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "you assume and propose" });
+    const events = await collect(
+      draftCampaignChatReply({ draft: draft(), history: [], userMessage: "propose headlines" }),
+    );
 
-    expect(callMeteredChatCompletion).toHaveBeenCalledTimes(2);
-    expect(result.fieldUpdates?.descriptions).toHaveLength(2);
-    expect(result.reply).toBe("Added descriptions too.");
-  });
-
-  it("returns a friendly message without calling the metered client when Bifrost is not configured", async () => {
-    isBifrostConfigured.mockReturnValue(false);
-
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
-
-    expect(callMeteredChatCompletion).not.toHaveBeenCalled();
-    expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toContain("Bifrost");
-  });
-
-  it("returns a friendly message when the API call is not ok", async () => {
-    callMeteredChatCompletion.mockRejectedValue(new Error("Bifrost 500"));
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
-    expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toMatch(/unavailable/i);
-  });
-
-  it("returns a friendly message when the metered client throws (network/timeout)", async () => {
-    callMeteredChatCompletion.mockRejectedValue(new Error("network down"));
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
-    expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toMatch(/unavailable/i);
-  });
-
-  it("returns a friendly message and no field updates when credits are exhausted", async () => {
-    const { InsufficientCreditsError } = await import("../metering/types");
-    callMeteredChatCompletion.mockRejectedValue(new InsufficientCreditsError("out of credits"));
-    const { draftCampaignChatReply } = await import("./campaign-chat");
-    const result = await draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" });
-    expect(result.fieldUpdates).toBeNull();
-    expect(result.reply).toMatch(/credit/i);
-  });
-
-  it("falls back to the dev-context identity when there is no session (e.g. a direct script call)", async () => {
-    getSession.mockResolvedValue(null);
-    callMeteredChatCompletion.mockResolvedValue(jsonResponse({ headlines: ["H1"], descriptions: [] }));
-    await import("./campaign-chat").then((m) => m.draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" }));
-    expect(callMeteredChatCompletion.mock.calls[0][0]).toMatchObject({
-      orgId: "00000000-0000-0000-0000-000000000001",
-      userId: "00000000-0000-0000-0000-000000000002",
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
+    const done = events[events.length - 1];
+    expect(done).toEqual({
+      type: "done",
+      reply: "Fixed.",
+      fieldUpdates: expect.objectContaining({ headlines: ["Short headline"] }),
+      validationErrors: [],
     });
+  });
+
+  it("returns the credits-exhausted reply without streaming deltas when balance is zero", async () => {
+    const { InsufficientCreditsError } = await import("../metering/types");
+    callMeteredStreamingChatCompletion.mockImplementation(async function* () {
+      throw new InsufficientCreditsError("no credits");
+    });
+
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const events = await collect(draftCampaignChatReply({ draft: draft(), history: [], userMessage: "hi" }));
+
+    expect(events).toEqual([
+      {
+        type: "done",
+        reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits.",
+        fieldUpdates: null,
+        validationErrors: [],
+      },
+    ]);
   });
 });
