@@ -22,6 +22,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "facebook-nodejs-business-sdk": "^22.0.0",
+    "framer-motion": "^12.43.0",
     "google-ads-api": "^21.0.0",
     "jose": "^6.2.8",
     "lucide-react": "^1.28.0",
