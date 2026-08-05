@@ -23,12 +23,14 @@ export function CrmAssistantPanel() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setStreamingText("");
+    setRenderError(null);
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: trimmed }]);
     setInput("");
 
@@ -79,6 +81,7 @@ export function CrmAssistantPanel() {
           library={crmChatLibrary}
           toolProvider={crmChatToolProvider}
           isStreaming={false}
+          onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
         />
       ) : (
         m.content
@@ -90,7 +93,13 @@ export function CrmAssistantPanel() {
       id: "streaming",
       role: "assistant",
       content: looksLikeOpenUiLang(streamingText) ? (
-        <Renderer response={streamingText} library={crmChatLibrary} toolProvider={crmChatToolProvider} isStreaming />
+        <Renderer
+          response={streamingText}
+          library={crmChatLibrary}
+          toolProvider={crmChatToolProvider}
+          isStreaming
+          onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+        />
       ) : (
         streamingText
       ),
@@ -98,14 +107,17 @@ export function CrmAssistantPanel() {
   }
 
   return (
-    <SideAssistantPanel
-      title="CRM Assistant"
-      messages={renderedMessages}
-      input={input}
-      onInputChange={setInput}
-      onSend={() => void sendMessage(input)}
-      sending={sending}
-      placeholder="Ask about leads or opportunities…"
-    />
+    <div className="flex h-full flex-col gap-2">
+      <SideAssistantPanel
+        title="CRM Assistant"
+        messages={renderedMessages}
+        input={input}
+        onInputChange={setInput}
+        onSend={() => void sendMessage(input)}
+        sending={sending}
+        placeholder="Ask about leads or opportunities…"
+      />
+      {renderError && <p className="text-xs text-destructive">{renderError}</p>}
+    </div>
   );
 }

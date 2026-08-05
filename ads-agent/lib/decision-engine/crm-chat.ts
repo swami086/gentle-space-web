@@ -1,11 +1,8 @@
-import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { crmLibrary } from "../openui/crm-library";
 import { crmToolSpecs } from "../openui/crm-tools";
-import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
-import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -13,8 +10,6 @@ import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 
 export type CrmChatMessage = { role: "user" | "assistant"; content: string };
 export type CrmChatTurnEvent = { type: "delta"; content: string } | { type: "done"; reply: string };
-
-const PLAIN_ACK_MAX_LENGTH = 120;
 
 function buildSystemPrompt(): string {
   return crmLibrary.prompt({
@@ -24,42 +19,29 @@ function buildSystemPrompt(): string {
       "confirmation before the stage is actually changed (the confirm button calls a separate API " +
       "route, not you — you only need to render the confirmation).",
     tools: crmToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
+    toolExamples: [
+      `leads = Query("list_opportunities", {}, [])`,
+      `root = OpportunityList(@Each(leads, "lead", {name: lead.name, stage: lead.stage, tier: lead.tier, amountLabel: "" + lead.amountInr, maskedPhone: lead.maskedPhone, source: lead.source}))`,
+    ],
     additionalRules: [
       "Prefer OpportunityCard/OpportunityList/StageChangeConfirm over plain text whenever the answer " +
         "concerns specific leads.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
-      "Always emit `root = ComponentName(...)` with positional args.",
-      "Use Query() for list/search/get opportunity tools. For stage moves, render StageChangeConfirm " +
-        "with opportunityId, opportunityName, fromStage, toStage — never call advance_opportunity_stage " +
-        "yourself; the Confirm button PATCHes the stage route.",
-      "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment.",
+      "Always emit `root = ComponentName(...)` with positional args (Zod key order) — never named " +
+        "kwargs like OpportunityCard(name: \"...\").",
+      "Use Query() for list/search/get opportunity tools; reshape each tool row into the exact " +
+        "OpportunityCard field names via @Each(rows, \"lead\", {name: ..., stage: ..., tier: ..., " +
+        "amountLabel: ..., maskedPhone: ..., source: ...}) — the tool's own field names (e.g. " +
+        "amountInr) do not match the component's props, so passing rows through unreshaped will " +
+        "fail to render. For stage moves, render StageChangeConfirm with opportunityId, " +
+        "opportunityName, fromStage, toStage — never call advance_opportunity_stage yourself; the " +
+        "Confirm button PATCHes the stage route.",
+      "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
+        "markdown fences, no JSON, and no invented Root() wrapper (Root is not a real component).",
+      "If there are no matching leads, emit root = OpportunityList([]).",
     ],
   });
-}
-
-function parseCrmResponse(text: string): ParseAttempt<string> {
-  const normalized = normalizeOpenUiResponse(text);
-  if (!normalized) return { kind: "error", errors: ["empty response"] };
-  if (!looksLikeOpenUiLang(normalized)) {
-    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
-    return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
-  }
-  const parser = createParser(crmLibrary.toJSONSchema());
-  let result: ReturnType<typeof parser.parse>;
-  try {
-    result = parser.parse(normalized);
-  } catch (err) {
-    return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
-  }
-  if (!result.root) {
-    const meta = result.meta.errors.map((e) => `${e.path || "(root)"}: ${e.message}`);
-    return { kind: "error", errors: meta.length > 0 ? meta : ["no component root parsed"] };
-  }
-  if (result.meta.errors.length > 0) {
-    return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
-  }
-  return { kind: "ok", value: normalized };
 }
 
 async function* runCrmModel(
@@ -78,13 +60,6 @@ async function* runCrmModel(
     }
   }
   return full;
-}
-
-async function runCrmModelSilent(ctx: MeteringContext, messages: ChatMessage[]): Promise<string> {
-  const gen = runCrmModel(ctx, messages);
-  let result = await gen.next();
-  while (!result.done) result = await gen.next();
-  return result.value;
 }
 
 export async function* draftCrmChatReply(input: {
@@ -109,9 +84,9 @@ export async function* draftCrmChatReply(input: {
     { role: "user", content: input.userMessage },
   ];
 
-  let firstRaw: string;
+  let raw: string;
   try {
-    firstRaw = yield* runCrmModel(ctx, messages);
+    raw = yield* runCrmModel(ctx, messages);
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
@@ -121,26 +96,14 @@ export async function* draftCrmChatReply(input: {
     return;
   }
 
-  let attempt: ParseAttempt<string>;
-  try {
-    attempt = await parseWithBoundedRetry(firstRaw, parseCrmResponse, async (feedback) => {
-      messages.push({ role: "assistant", content: firstRaw });
-      messages.push({ role: "user", content: feedback });
-      return await runCrmModelSilent(ctx, messages);
-    });
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
-      return;
-    }
-    yield { type: "done", reply: "The CRM Assistant is unavailable right now — try again shortly." };
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    yield { type: "done", reply: "I didn't get a response — try asking again." };
     return;
   }
 
-  if (attempt.kind === "error") {
-    yield { type: "done", reply: "I had trouble putting that together — could you rephrase, or name the lead more specifically?" };
-    return;
-  }
-
-  yield { type: "done", reply: attempt.value };
+  // Non-blocking hygiene only (root=/fence-strip/named→positional). Never rejects or retries —
+  // the client Renderer (with its toolProvider) parses and executes Query()/Mutation() for real.
+  // See docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md.
+  yield { type: "done", reply: normalizeOpenUiResponse(trimmed) };
 }
