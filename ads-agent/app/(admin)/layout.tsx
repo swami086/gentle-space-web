@@ -9,6 +9,9 @@ import { RunNowButton } from "@/components/RunNowButton";
 import { SidebarNav } from "@/components/SidebarNav";
 import { UserMenu } from "@/components/UserMenu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CopilotProvider } from "@/components/copilot/CopilotProvider";
+import { CopilotFab } from "@/components/copilot/CopilotFab";
+import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireSession();
@@ -40,9 +43,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   const settings = await getCronSettings();
+  // Same minimum tier as the Copilot route's requireApiRole("operator") gate (lib/auth/dal.ts) —
+  // defense in depth, mirroring how SidebarNav/nav-config.ts already gate nav visibility by role.
+  const canUseCopilot = session.role === "operator" || session.role === "admin";
 
   return (
-    <div className="mx-auto grid min-h-dvh max-w-[1400px] grid-cols-[220px_1fr]">
+    <CopilotProvider>
+      <div className="mx-auto grid min-h-dvh max-w-[1400px] grid-cols-[220px_1fr]">
       <aside className="border-r border-border">
         <div className="px-4 py-4 text-sm font-semibold tracking-tight">ads-agent</div>
         <SidebarNav role={session.role} />
@@ -75,6 +82,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <main className="flex-1 px-6 py-6">{children}</main>
       </div>
       <CommandPalette role={session.role} />
+      {canUseCopilot && (
+        <>
+          <CopilotFab />
+          <CopilotPanel />
+        </>
+      )}
     </div>
+    </CopilotProvider>
   );
 }
