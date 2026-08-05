@@ -56,6 +56,25 @@ OpenAI.
 4. Set `GOOGLE_ADS_CUSTOMER_ID` to your Ads account ID (digits only, no
    dashes)
 
+### Future: MCP-based Meta/Google Ads integration
+
+`lib/connectors/meta.ts` and `lib/connectors/google-ads.ts` are unconfigured today (no credentials
+in `.env.local`) — there is nothing live to migrate. When real ad-account credentials are added, the
+target end state (matching the Twenty CRM MCP integration — see `bifrost/README.md`'s "Twenty MCP"
+section) is the same shape: connect with the official `@modelcontextprotocol/client` SDK directly,
+not through Bifrost's MCP Gateway feature.
+
+- **Meta Ads**: Meta's official hosted MCP endpoint, `mcp.facebook.com/ads` (OAuth, 29 tools,
+  launched April 2026 as part of Meta's "Ads AI Connectors"). Use `StreamableHTTPClientTransport`
+  with the SDK's OAuth client helpers — no self-hosting needed, unlike Twenty.
+- **Google Ads**: Google's officially published Google Ads MCP server
+  (`developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server`). Self-hosted, similar
+  shape to the Twenty MCP setup — check whether it speaks stdio or HTTP natively before deciding if
+  it needs a `supergateway`-style bridge like Twenty's does.
+
+Until credentials exist, `lib/connectors/meta.ts` and `lib/connectors/google-ads.ts` keep their
+current (direct API, unconfigured) code paths unchanged.
+
 ### Twenty CRM
 
 Reuse the main app's already-live instance — no new setup. `TWENTY_BASE_URL`
