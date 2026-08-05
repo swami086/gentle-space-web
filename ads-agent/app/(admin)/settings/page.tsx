@@ -2,8 +2,14 @@ import { getCronSettings } from "@/lib/db/settings";
 import { getConnectorStatus } from "@/lib/env-status";
 import { requireRole } from "@/lib/auth/dal";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
+import { TabStrip } from "@/components/pencil/TabStrip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SettingsForm } from "./SettingsForm";
+
+const SETTINGS_TABS = [
+  { href: "/settings", label: "Workspace Settings" },
+  { href: "/credits", label: "Usage & Credits" },
+];
 
 const CONNECTOR_LABELS = {
   meta: "Meta Marketing API",
@@ -21,6 +27,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
+      <TabStrip tabs={SETTINGS_TABS} />
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold text-foreground">Decision cycle</CardTitle>
