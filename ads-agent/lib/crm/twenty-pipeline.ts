@@ -1,5 +1,8 @@
 // ads-agent/lib/crm/twenty-pipeline.ts
 
+import { callTwentyTool } from "../bifrost/mcp-client";
+import { TWENTY_MCP_TOOLS } from "../bifrost/twenty-mcp-tools";
+
 /** The real, configured Twenty pipeline (infra/twenty/README.md "Opportunity stages (API values)")
  * — the single source of truth for every stage list in this app. Corrects the Pencil mock's guessed
  * 4-column "New Brief/Qualified/Proposal/Won" board (see plan's Global Constraints). */
@@ -48,16 +51,8 @@ type RawOpportunity = {
   createdAt: string;
 };
 
-function baseUrl(): string {
-  return (process.env.TWENTY_BASE_URL ?? "http://localhost:3020").replace(/\/$/, "");
-}
-
 function isConfigured(): boolean {
   return Boolean(process.env.TWENTY_API_KEY?.trim());
-}
-
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${process.env.TWENTY_API_KEY!.trim()}` };
 }
 
 /** Masks a phone number to show only the country code, the mobile number's first digit, and its
@@ -105,34 +100,29 @@ function toOpportunity(raw: RawOpportunity): Opportunity {
   };
 }
 
-/** List every open opportunity. Twenty's REST list endpoint shape mirrors the one
- * ads-agent/lib/connectors/twenty.ts's fetchLeadSignal() already reads ({ data: { opportunities: [] } }).
- * Fails soft (empty array) on missing config or a non-ok response — same fail-soft convention as
- * fetchLeadSignal, so a Twenty outage degrades the board to "no leads" rather than a crashed page. */
+/** List every open opportunity, via the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
+ * called directly through lib/bifrost/mcp-client.ts (no Bifrost involved — this is a plain data read,
+ * not a model decision). Fails soft (empty array) on missing config or a failed tool call — same
+ * fail-soft convention as before, so an outage degrades the board to "no leads" rather than a
+ * crashed page. */
 export async function listOpportunities(): Promise<Opportunity[]> {
   if (!isConfigured()) return [];
   try {
-    const res = await fetch(`${baseUrl()}/rest/opportunities?limit=200`, { headers: authHeaders() });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { data?: { opportunities?: RawOpportunity[] } };
-    const opportunities = json.data?.opportunities ?? [];
-    return opportunities.map(toOpportunity);
+    const result = (await callTwentyTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 })) as {
+      records?: RawOpportunity[];
+    };
+    return (result.records ?? []).map(toOpportunity);
   } catch {
     return [];
   }
 }
 
-/** Fetch a single opportunity by id. NOTE (see plan's Global Constraints — Twenty REST semantics
- * assumption): GET-by-id has no existing precedent in this repo; verify this response envelope
- * against the local Twenty instance during this task's manual-verification step. */
+/** Fetch a single opportunity by id via the Twenty MCP server. */
 export async function getOpportunity(id: string): Promise<Opportunity | null> {
   if (!isConfigured()) return null;
   try {
-    const res = await fetch(`${baseUrl()}/rest/opportunities/${id}`, { headers: authHeaders() });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { data?: { opportunity?: RawOpportunity } };
-    const opportunity = json.data?.opportunity;
-    return opportunity ? toOpportunity(opportunity) : null;
+    const record = (await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id })) as RawOpportunity | null;
+    return record ? toOpportunity(record) : null;
   } catch {
     return null;
   }
@@ -140,20 +130,14 @@ export async function getOpportunity(id: string): Promise<Opportunity | null> {
 
 export type UpdateStageResult = { ok: true } | { ok: false; error: string };
 
-/** Advance (or move back) an opportunity's stage. NOTE (see plan's Global Constraints): PATCH has no
- * existing precedent in this repo either — verify against the local Twenty instance. */
+/** Advance (or move back) an opportunity's stage via the Twenty MCP server. */
 export async function updateOpportunityStage(
   id: string,
   stage: PipelineStageValue,
 ): Promise<UpdateStageResult> {
   if (!isConfigured()) return { ok: false, error: "Twenty is not configured" };
   try {
-    const res = await fetch(`${baseUrl()}/rest/opportunities/${id}`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ stage }),
-    });
-    if (!res.ok) return { ok: false, error: `Twenty PATCH opportunities/${id} ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    await callTwentyTool(TWENTY_MCP_TOOLS.updateOpportunity, { id, stage });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
