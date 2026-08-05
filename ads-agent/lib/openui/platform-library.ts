@@ -1,4 +1,4 @@
-import { createLibrary } from "@openuidev/lang-core";
+import { createLibrary, type DefinedComponent } from "@openuidev/lang-core";
 import { campaignLibrary } from "./campaign-library";
 import { sharedLibrary } from "./shared-library";
 
@@ -12,5 +12,10 @@ import { sharedLibrary } from "./shared-library";
  * this composition.
  */
 export const platformLibrary = createLibrary({
-  components: [...Object.values(campaignLibrary.components), ...Object.values(sharedLibrary.components)],
+  // Same heterogeneous-component widen as shared-library.ts — createLibrary's C param can't unify
+  // SetupCard + nine shared prop shapes without an assertion.
+  components: [
+    ...Object.values(campaignLibrary.components),
+    ...Object.values(sharedLibrary.components),
+  ] as DefinedComponent[],
 });
