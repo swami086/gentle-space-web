@@ -48,13 +48,17 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | Listing privacy (read boundary) | `lib/listings/public.ts` — `PublicListing`, `toPublicListing()` strips exact coords/address/pricing/sourceUrl; redacts prose via `redact.ts`; approx circle center = `approximateCoords` + 3-decimal round, `approxRadiusM = 500` |
 | RBAC auth-service | `auth-service/` (port 3040, Postgres 5435) — Google SSO, RS256 JWT + JWKS, `/bridge`, `/internal/org-members`; `ads-agent/lib/auth/{dal,middleware,internal-client}.ts`, `/users`, admin/operator guards; runbook `docs/superpowers/specs/2026-08-04-rbac-auth-service-runbook.md` |
 | Auth UI (login/error/pending) | `auth-service/app/{login,error}/page.tsx`, `auth-service/components/{BrandLockup.tsx,ui/{button,card}.tsx,icons/GoogleIcon.tsx}`, `ads-agent/app/(admin)/layout.tsx` pending-approval Card — see Patterns entry below |
-| OpenUI campaign SetupCard | `ads-agent/lib/openui/campaign-library.ts` — `SetupCardView`, `campaignLibrary`, `buildCampaignPromptOptions`, `parseSetupCardResponse`; schema uses `.optional().default` (not `.nullable()` — OpenUI rejects null on required fields); streaming types in `streaming-types.ts` |
+| OpenUI campaign SetupCard | `ads-agent/lib/openui/campaign-library.ts` — `SetupCardView` + `normalizeSetupCardViewProps` (null-safe for streaming Renderer), `campaignLibrary`, `buildCampaignPromptOptions`, `parseSetupCardResponse`; schema uses `.optional().default` (not `.nullable()`); streaming types in `streaming-types.ts` |
 | OpenUI named→positional | `ads-agent/lib/openui/normalize-setup-card.ts` — schema-key-order rewrite of LLM kwargs/`:` args before parse; used by `parseSetupCardResponse` + `AiSetupView` streaming `Renderer` |
 | OpenUI AiSetupView | `ads-agent/components/campaign-draft-chat/AiSetupView.tsx` — read-only AI setup: normalized stream → `Renderer`, `SetupCardView` at rest, Create Proposal button |
 | Copilot state | `ads-agent/components/copilot/copilot-state.ts` — pure reducer: `isOpen`, `messages[]`, `pendingQuestion`; actions OPEN/CLOSE/TOGGLE/SEED_AND_OPEN/CLEAR_PENDING_QUESTION/APPEND_MESSAGE |
-| CopilotProvider | `ads-agent/components/copilot/CopilotProvider.tsx` — `useReducer` + Context; `useCopilot()` exposes open/close/toggle/seedAndOpen/appendMessage/clearPendingQuestion; mount once at `(admin)/layout.tsx` (Task 13) |
-| CopilotPanel | `ads-agent/components/copilot/CopilotPanel.tsx` — floating chat UI; SSE to `POST /api/copilot/chat` with `{ content, history }`; OpenUI turns via `Renderer` + `platformLibrary` / `platformToolProvider`, plain-text acks via muted bubble (`looksLikeOpenUiLang`); drains `pendingQuestion` on open |
+| CopilotProvider | `ads-agent/components/copilot/CopilotProvider.tsx` — `useReducer` + Context; `useCopilot()` exposes open/close/toggle/seedAndOpen/appendMessage/clearPendingQuestion; mount once at `(admin)/layout.tsx` |
+| CopilotPanel | `ads-agent/components/copilot/CopilotPanel.tsx` — floating chat UI; SSE to `POST /api/copilot/chat`; OpenUI via `Renderer` + `platformLibrary` + **HTTP** `createHttpToolProvider` → `POST /api/openui/tools` (never import `platformToolProvider` into client — pg leak); plain-text acks via `looksLikeOpenUiLang` |
 | OpenUI Lang detector | `ads-agent/lib/openui/is-openui-lang.ts` — `looksLikeOpenUiLang()` shared by `parseCopilotResponse` and `CopilotPanel` bifurcation |
+| OpenUI shared structured views | `ads-agent/lib/openui/shared-structured-views.ts` — dual-mode `ComparisonCard`, `Timeline`, `RankedList`, `BatchActionConfirm` (`*View` + `defineComponent`); Zod `.optional().default`; BatchActionConfirm buttons unwired until mutation tools |
+| OpenUI parse retry | `ads-agent/lib/openui/parse-retry.ts` — generic `parseWithBoundedRetry<T>()`; `ParseAttempt`/`ParseFn`/`RetryModelFn`; exactly one retry on parse failure; exceptions from `retryModel` propagate; consumer Copilot (`copilot-chat.ts`) |
+| AI action log | `ads-agent/lib/db/ai-action-log.ts` — `logAiAction`, `countAiActionsToday`, `listRecentAiActions`; table `ai_action_log` in `schema.sql`; wired from `lib/decision-engine/cycle.ts` when proposals created (marketing domain); CRM stage-advance (crm domain) in Task 9 |
+| Twenty CRM pipeline | `ads-agent/lib/crm/twenty-pipeline.ts` — `PIPELINE_STAGES` (7 real stages), `listOpportunities`/`getOpportunity`/`updateOpportunityStage`/`getPipelineValue`, `maskPhone`; fail-soft REST client; consumed by CRM board, Home stat, crm-tools |
 
 ## Patterns
 
@@ -100,6 +104,8 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 - **Two eval-harness caveats.** (1) Google locality polygons are tight — a rooftop at "Sahakar Nagar, Hebbal" is at 13.0590 while the `Hebbal` bounds stop at 13.0428, so correct coordinates scored as violations. The harness now also counts a listing whose own address/area names the requested locality, reported separately as `matched by address`; this is the empirical argument for Phase 2's `geo_components` array. (2) Runs are **not deterministic** — two LLM calls sit in the retrieval path, so per-query counts move 1–3 between runs on identical data. Trust double-digit deltas only.
 - 2026 Google Maps research baseline for `Spaces`: prefer client-only `@vis.gl/react-google-maps` in Next.js App Router, use cloud `mapId`, render price pins with `AdvancedMarker`, and reuse map instances where practical to avoid extra map-view cost.
 
+- **`ads-agent` admin redesign concept — Pencil `.pen` moodboard (2026-08-05).** `Gentle_Space_Redesign.pen` (workspace root) is a concept-exploration (not build-ready) redesign unifying Marketing Automation, Lead Generation, and Integrated CRM behind one AI-first admin dashboard, standardized on **OpenUI** for every generative-UI chat surface (Campaign Chat, `/crm`, `/reports`) — the "AI response" pattern across screens is always an inline generative-UI result card (mirrors the real `SetupCardView`/`AiSetupView`, CRM `StageChangeConfirm`, and analytics `TrendChart`/`DataTable` component libraries from the approved specs), never a plain chat-bubble reply. Visual direction deliberately reimagines the prior "Linear-style v2" minimal/flat dashboard (see entry below) into a bolder dark, violet/magenta/cyan AI-product aesthetic with layered colored shadows — tokens: bg `#0A0A0A`, card `#141417`/`#1C1C22`, primary `#7C5CFF`, secondary `#BF40FF`, tertiary `#00F2FF`, Geist/Geist Mono. IA: one sidebar shell (Home, Marketing Automation, Leads & CRM, Reports, Users, Settings) + a persistent global "Copilot" FAB/panel overlay working across all domains. 5 screens built + exported to `design-exports/*.png`: Home/AI Command Center (KPI strip + hero command bar + cross-domain activity feed), Marketing Automation (Kanban + Campaign Chat), Leads & CRM (pipeline board with tier-badged/phone-masked Opportunity Cards + CRM Assistant chat), Reports & Analytics (chat-first, bar-chart + data-table generative cards), Settings & Users (deliberately lighter restyle, no chat surface). Reusable component library built first (buttons/badges/card/sidebar/metric card/chat bubbles/AI command bar/OpenUI generative card/campaign card/opportunity card/copilot FAB+panel). **Pencil `.pen` technical gotchas learned:** component instance descendant IDs must be read via `Get(id,{depth:N})` before overriding (guessed IDs fail silently, no error); cannot `Insert`/`Delete` into a ref instance's descendant slot — only `Update` via `descendants` map, or build a bespoke non-ref frame when the slot needs arbitrary/variable children; give the wider column of a fixed+flexible two-pane layout a fixed width and widen the parent screen frame rather than fighting `fill_container` sizing; re-check `Get(id,(n,c)=>c.problems&&...)` after structural edits since some clip warnings are transient mid-batch; use `type:"note"` nodes for motion/animation-intent annotations since `.pen` can't natively animate UI (only shader fills get a `@time` uniform); `export_nodes` writes inside the `pencil-mcp:local` Docker container's own filesystem (the launcher script has no `-v` volume mount), so exported files must be retrieved with `docker cp <container>:<path> <host-path>` — they do not appear directly on the host despite the returned path looking host-native.
+
 ## Strategy / research
 
 - **Data MOAT strategy (2026-08-03):** `docs/research/2026-08-03-data-moat-strategy.md`. Core finding: the 704-row scraped `listings` catalog is **not** a data asset — it is derived from four aggregator competitors (Coworker/myHQ/CoFynd/GoFloaters), decays, and is ToS-fragile; treat it as a lead-gen cost centre, not a moat, and do not grow it for volume. The defensible assets are the ones the workflow already generates and discards: (1) **demand ledger** — `search_queries` is already logging but records no session/click/outcome, so zero-result searches (unmet demand, the most commercially valuable row) are indistinguishable from successful ones; (2) **verification ledger** per building including failures (the stated `PRODUCT.md` differentiator, currently unrecorded and living only in the founder's head); (3) **transacted-terms comps** (rent achieved vs. asked, escalation, lock-in, CAM, rent-free, deposit). Structural advantage: Karnataka's Kaveri 2.0 offers only per-property login-gated EC/deed lookups (no bulk lease feed, unlike Maharashtra IGR which Propstack/Zapkey built on), **and** sub-11-month flex licences never reach the registry — so deal participation is the only possible collection mechanism for Bangalore flex terms. Framework basis: a16z "Empty Promise of Data Moats" (cost up / value down / freshness decay), Abraham Thomas's control-vs-loops taxonomy (catalyst data, clearinghouse, trust loop, give-to-get, implicit knowledge capture), Euclid's workflow+data primitives. Binding constraint is cold start (Moats 2–4 need n≈30 deals, so 12–24 months); manual-first, 20-row rule before building tooling.
@@ -132,6 +138,37 @@ Runtime config is **not in git** — it was copied from `~/Documents/Resume/gent
   Fixed via official `PromptOptions` examples/rules (`buildCampaignPromptOptions`),
   `.optional().default` schema, and `normalizeSetupCardLang` before parse + streaming Renderer.
   Live Bifrost smoke: positional `SetupCard(...)` parses ok.
+- **Parse-error retry fix (2026-08-05).** The 2026-08-04 fix above didn't cover every cause of
+  "trouble structuring that" — `campaign-chat.ts`'s `parseTurn()` had a proven one-shot
+  retry-with-feedback for validation errors (RSA limits) but no retry at all for parse errors
+  (missing `root = SetupCard(...)`, truncated/garbled syntax the normalizer can't rewrite, empty
+  response) — it discarded `parseSetupCardResponse`'s specific `errors` and dead-ended immediately.
+  Fixed: `ParsedTurn`'s parse-error case now carries `errors`/`rawText`; `draftCampaignChatReply`
+  gives one retry (pushes the bad output + specific errors back, asks for one corrected re-emission)
+  before falling back to the clarifying message — symmetric with the validation-error retry. Tests:
+  `campaign-chat.test.ts` (retry-then-succeed; give-up-after-one-failed-retry). Suite 239/239, lint
+  clean. Documented as a mandatory foundation-level convention (not per-surface optional) in
+  `docs/superpowers/specs/2026-08-05-openui-platform-foundation-design.md`'s "Resilience: bounded
+  retry on parse failure" — every future OpenUI surface (Specs 2/3, global Copilot) must implement
+  this same one-retry-with-specific-feedback pattern before showing any fallback message; extract
+  into a shared `lib/openui/parse-retry.ts` helper once a second surface needs it.
+- **OpenUI Platform Foundation — implemented and merged to `main` (2026-08-05, through `8c8f37f`).** Spec:
+  `docs/superpowers/specs/2026-08-05-openui-platform-foundation-design.md`. Plan:
+  `docs/superpowers/plans/2026-08-05-openui-platform-foundation.md` (14 tasks / 6 waves). Landed:
+  shared OpenUI library (9 components via `shared-{metric,narrative,structured}` + `shared-library.ts`),
+  `AskAiTrigger`, `parse-retry.ts`, empty typed `platform-tools.ts` + `platform-library.ts` (SetupCard +
+  nine shared), global Copilot (`CopilotProvider`/`Fab`/`Panel`, `copilot-chat.ts`,
+  `POST /api/copilot/chat` with `requireApiRole("operator")`), layout mount for operator/admin,
+  `looksLikeOpenUiLang` bifurcation so plain acks skip `Renderer`. Vitest 307/307. Authenticated
+  browser smoke still recommended before production rollout (Task 14 deferred — auth `:3040`).
+  Cross-domain tools and proactive `hasAlert` badge await Specs 2/3.
+- **OpenUI client tools must go through HTTP (2026-08-05).** Never import `platformToolProvider` /
+  `crm-tools` / `analytics-tools` into a `"use client"` module — they pull `pg` into the bundle.
+  Pattern: `createHttpToolProvider(names)` → `POST /api/openui/tools` (server runs
+  `platformToolProvider`). Stage advances use `StageChangeConfirm` Confirm →
+  `PATCH /api/crm/opportunities/[id]/stage` + `CrmBoardRefreshListener` (`router.refresh()`), not
+  `advance_opportunity_stage` from the Renderer. Landed on
+  `feat/ads-agent-admin-dashboard-v3-pencil` at `ed5514a`.
 
 **Docker:** the pgvector+AGE volume was created by the Resume folder, so compose must pin the original project name or a new empty volume is used instead:
 
