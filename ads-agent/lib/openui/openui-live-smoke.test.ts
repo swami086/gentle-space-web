@@ -99,13 +99,15 @@ describe.skipIf(!LIVE)("OpenUI live Bifrost smoke (all four surfaces)", () => {
   );
 
   it(
-    "crm: show me hot leads — no generic parse fail",
+    "crm: show me hot leads — no generic parse fail, no stale Query() placeholder",
     async () => {
       const reply = await drainDone(
         draftCrmChatReply({ history: [], userMessage: "show me hot leads" }),
       );
       expect(reply.length).toBeGreaterThan(0);
       expect(reply).not.toMatch(GENERIC_FAIL);
+      expect(reply).not.toContain('Query("list_opportunities"');
+      expect(reply).not.toContain('Query("get_opportunity"');
     },
     60_000,
   );
@@ -123,13 +125,15 @@ describe.skipIf(!LIVE)("OpenUI live Bifrost smoke (all four surfaces)", () => {
   );
 
   it(
-    "copilot: what's my pipeline value? — no generic parse fail",
+    "copilot: what's my pipeline value? — no generic parse fail, no stale Query() placeholder",
     async () => {
       const reply = await drainDone(
         draftCopilotReply({ history: [], userMessage: "what's my pipeline value?" }),
       );
       expect(reply.length).toBeGreaterThan(0);
       expect(reply).not.toMatch(GENERIC_FAIL);
+      expect(reply).not.toContain('Query("list_opportunities"');
+      expect(reply).not.toContain('Query("get_opportunity"');
     },
     60_000,
   );
