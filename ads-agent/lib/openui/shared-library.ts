@@ -28,5 +28,5 @@ export const sharedLibrary = createLibrary({
     Timeline,
     RankedList,
     BatchActionConfirm,
-  ] as DefinedComponent[],
+  ] as DefinedComponent<any, any>[],
 });

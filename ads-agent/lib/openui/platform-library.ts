@@ -17,5 +17,5 @@ export const platformLibrary = createLibrary({
   components: [
     ...Object.values(campaignLibrary.components),
     ...Object.values(sharedLibrary.components),
-  ] as DefinedComponent[],
+  ] as DefinedComponent<any, any>[],
 });
