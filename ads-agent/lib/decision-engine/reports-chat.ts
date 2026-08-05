@@ -1,11 +1,8 @@
-import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { analyticsLibrary } from "../openui/analytics-library";
 import { analyticsToolSpecs } from "../openui/analytics-tools";
-import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
-import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -14,46 +11,31 @@ import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 export type ReportsChatMessage = { role: "user" | "assistant"; content: string };
 export type ReportsChatTurnEvent = { type: "delta"; content: string } | { type: "done"; reply: string };
 
-const PLAIN_ACK_MAX_LENGTH = 120;
-
 function buildSystemPrompt(): string {
   return analyticsLibrary.prompt({
     preamble:
-      "You are the Gentle Space Reports assistant. Answer questions about campaign performance and proposals by rendering TrendChart or DataTable — pick whichever shape best matches the tool result, never force a chart onto tabular data or vice versa.",
+      "You are the Gentle Space Reports assistant. Answer questions about campaign performance and " +
+      "proposals by rendering TrendChart or DataTable — pick whichever shape best matches the tool " +
+      "result, never force a chart onto tabular data or vice versa.",
     tools: analyticsToolSpecs,
+    toolExamples: [
+      `trend = Query("get_spend_cpl_trend", {days: 7}, [])`,
+      `root = TrendChart("CPL Trend This Week", @Each(trend, "day", {label: day.date, value: day.cplInr}))`,
+    ],
     additionalRules: [
       "Prefer TrendChart/DataTable over plain text whenever the answer concerns metrics or tabular data.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
-      "Always emit `root = ComponentName(...)` with positional args.",
-      "Use Query() with the registered analytics tools, then render TrendChart or DataTable from the result.",
-      "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment.",
+      "Always emit `root = ComponentName(...)` with positional args — never named kwargs, and never " +
+        "wrapped in an invented Root(...) (Root is not a real component).",
+      "Use Query() with the registered analytics tools. A tool's raw row field names (e.g. " +
+        "date/spendInr/cplInr from get_spend_cpl_trend) do not match TrendChart's points shape " +
+        "({label, value}) — reshape with @Each(rows, \"day\", {label: day.date, value: day.cplInr}) " +
+        "before passing to TrendChart, exactly like the worked example above. Do not call a tool " +
+        "name as a bare function — always bind it with Query() first.",
+      "If tool data is unavailable, emit root = TrendChart(\"CPL trend\", []) or a short plain acknowledgment.",
     ],
   });
-}
-
-function parseReportsResponse(text: string): ParseAttempt<string> {
-  const normalized = normalizeOpenUiResponse(text);
-  if (!normalized) return { kind: "error", errors: ["empty response"] };
-  if (!looksLikeOpenUiLang(normalized)) {
-    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
-    return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
-  }
-  const parser = createParser(analyticsLibrary.toJSONSchema());
-  let result: ReturnType<typeof parser.parse>;
-  try {
-    result = parser.parse(normalized);
-  } catch (err) {
-    return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
-  }
-  if (!result.root) {
-    const meta = result.meta.errors.map((e) => `${e.path || "(root)"}: ${e.message}`);
-    return { kind: "error", errors: meta.length > 0 ? meta : ["no component root parsed"] };
-  }
-  if (result.meta.errors.length > 0) {
-    return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
-  }
-  return { kind: "ok", value: normalized };
 }
 
 async function* runReportsModel(
@@ -72,13 +54,6 @@ async function* runReportsModel(
     }
   }
   return full;
-}
-
-async function runReportsModelSilent(ctx: MeteringContext, messages: ChatMessage[]): Promise<string> {
-  const gen = runReportsModel(ctx, messages);
-  let result = await gen.next();
-  while (!result.done) result = await gen.next();
-  return result.value;
 }
 
 export async function* draftReportsChatReply(input: {
@@ -103,9 +78,9 @@ export async function* draftReportsChatReply(input: {
     { role: "user", content: input.userMessage },
   ];
 
-  let firstRaw: string;
+  let raw: string;
   try {
-    firstRaw = yield* runReportsModel(ctx, messages);
+    raw = yield* runReportsModel(ctx, messages);
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
@@ -115,26 +90,14 @@ export async function* draftReportsChatReply(input: {
     return;
   }
 
-  let attempt: ParseAttempt<string>;
-  try {
-    attempt = await parseWithBoundedRetry(firstRaw, parseReportsResponse, async (feedback) => {
-      messages.push({ role: "assistant", content: firstRaw });
-      messages.push({ role: "user", content: feedback });
-      return await runReportsModelSilent(ctx, messages);
-    });
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
-      return;
-    }
-    yield { type: "done", reply: "The Reports assistant is unavailable right now — try again shortly." };
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    yield { type: "done", reply: "I didn't get a response — try asking again." };
     return;
   }
 
-  if (attempt.kind === "error") {
-    yield { type: "done", reply: "I had trouble putting that together — could you rephrase, or ask something more specific?" };
-    return;
-  }
-
-  yield { type: "done", reply: attempt.value };
+  // Non-blocking hygiene only. Never rejects or retries — the client Renderer (with its
+  // toolProvider) parses and executes Query()/Mutation() for real. See
+  // docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md.
+  yield { type: "done", reply: normalizeOpenUiResponse(trimmed) };
 }

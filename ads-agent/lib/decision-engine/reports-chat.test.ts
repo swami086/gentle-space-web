@@ -12,6 +12,7 @@ vi.mock("../metering/metered-stream-client", () => ({ callMeteredStreamingChatCo
 vi.mock("../auth/dal", () => ({ getSession }));
 
 import { draftReportsChatReply } from "./reports-chat";
+import { InsufficientCreditsError } from "../metering/types";
 
 beforeEach(() => {
   isBifrostConfigured.mockReset();
@@ -25,35 +26,56 @@ async function drain(gen: AsyncGenerator<{ type: "delta"; content: string } | { 
   return events;
 }
 
+function fakeStream(...chunks: string[]) {
+  return (async function* () {
+    for (const chunk of chunks) yield { type: "delta" as const, content: chunk };
+  })();
+}
+
 describe("draftReportsChatReply", () => {
   it("tells the user Bifrost isn't configured rather than throwing", async () => {
     isBifrostConfigured.mockReturnValue(false);
     getSession.mockResolvedValue(null);
 
-    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show hot leads" }));
+    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show CPL trend" }));
 
     expect(events).toEqual([{ type: "done", reply: expect.stringContaining("not configured") }]);
   });
 
-  it("retries once on a parse failure, then returns the retried reply", async () => {
+  it("streams raw model text through, normalized but never rejected or retried", async () => {
     isBifrostConfigured.mockReturnValue(true);
     getSession.mockResolvedValue(null);
-    callMeteredStreamingChatCompletion
-      .mockImplementationOnce(async function* () {
-        yield {
-          type: "delta",
-          content:
-            "garbled not a component — way too long to count as a trivial ack because it goes on and on describing things nobody asked for in this reports conversation thread",
-        };
-      })
-      .mockImplementationOnce(async function* () {
-        yield { type: "delta", content: "Sure, here are your leads." };
-      });
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(
+      fakeStream(`TrendChart(title="CPL Trend This Week", points=[])`),
+    );
 
-    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show hot leads" }));
+    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show CPL trend this week" }));
 
-    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
-    expect(events.at(-1)).toEqual({ type: "done", reply: "Sure, here are your leads." });
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toEqual({
+      type: "done",
+      reply: 'root = TrendChart("CPL Trend This Week", [])',
+    });
+  });
+
+  it("streams a plain-text acknowledgment through unchanged", async () => {
+    isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream("No data for that range yet."));
+
+    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show spend last month" }));
+
+    expect(events.at(-1)).toEqual({ type: "done", reply: "No data for that range yet." });
+  });
+
+  it("returns a fallback message for an empty model response instead of a generic parse error", async () => {
+    isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream(""));
+
+    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show CPL trend" }));
+
+    expect(events.at(-1)).toEqual({ type: "done", reply: "I didn't get a response — try asking again." });
   });
 
   it("returns a generic unavailable message when the model throws a non-credits error", async () => {
@@ -66,5 +88,17 @@ describe("draftReportsChatReply", () => {
     const events = await drain(draftReportsChatReply({ history: [], userMessage: "show spend by corridor" }));
 
     expect(events).toEqual([{ type: "done", reply: expect.stringContaining("unavailable") }]);
+  });
+
+  it("returns the credits-exhausted message when the model call throws InsufficientCreditsError", async () => {
+    isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockImplementationOnce(() => {
+      throw new InsufficientCreditsError();
+    });
+
+    const events = await drain(draftReportsChatReply({ history: [], userMessage: "show CPL trend" }));
+
+    expect(events).toEqual([{ type: "done", reply: expect.stringContaining("run out of AI credits") }]);
   });
 });

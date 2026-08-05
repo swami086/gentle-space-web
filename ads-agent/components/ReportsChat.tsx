@@ -22,12 +22,14 @@ export function ReportsChat() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setStreamingText("");
+    setRenderError(null);
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: trimmed }]);
     setInput("");
     try {
@@ -80,7 +82,13 @@ export function ReportsChat() {
             </div>
           ) : looksLikeOpenUiLang(m.content) ? (
             <div key={m.id} className="max-w-[90%] rounded-lg bg-surface p-3">
-              <Renderer response={m.content} library={reportsLibrary} toolProvider={reportsToolProvider} isStreaming={false} />
+              <Renderer
+                response={m.content}
+                library={reportsLibrary}
+                toolProvider={reportsToolProvider}
+                isStreaming={false}
+                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+              />
             </div>
           ) : (
             <div key={m.id} className="max-w-[85%] rounded-lg bg-surface-raised px-3 py-2 text-sm text-foreground">
@@ -91,12 +99,19 @@ export function ReportsChat() {
         {sending && streamingText && (
           <div className="max-w-[90%] rounded-lg bg-surface p-3">
             {looksLikeOpenUiLang(streamingText) ? (
-              <Renderer response={streamingText} library={reportsLibrary} toolProvider={reportsToolProvider} isStreaming />
+              <Renderer
+                response={streamingText}
+                library={reportsLibrary}
+                toolProvider={reportsToolProvider}
+                isStreaming
+                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+              />
             ) : (
               <span className="text-sm text-foreground">{streamingText}</span>
             )}
           </div>
         )}
+        {renderError && <p className="text-xs text-destructive">{renderError}</p>}
       </div>
       <div className="flex gap-2">
         <input
