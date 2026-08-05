@@ -4,11 +4,13 @@
 >
 > **Parallel execution override:** this plan is explicitly structured into dependency waves (see "Parallelization Map" below) so that all tasks within a wave can be dispatched to **separate subagents concurrently, up to 8 at a time**. This supersedes subagent-driven-development's default "never dispatch implementers in parallel" rule for this plan only, per explicit user instruction. Do not start a wave until every task in the previous wave is committed and its tests pass — cross-wave dependencies are real (see each task's **Interfaces: Consumes**).
 
-**Goal:** Replace ads-agent's raw-REST Twenty CRM connector and the client-side OpenUI tool-execution hop with a two-phase, backend-only MCP integration (Bifrost's MCP Gateway → a self-hosted Twenty MCP server), for the Copilot and CRM Assistant chat surfaces — while leaving Reports Chat's analytics tools and Copilot's campaign-draft mutation on their current (unchanged, non-goal) client-Query() path.
+> **Validated 2026-08-05** against official sources (`modelcontextprotocol.io`, `docs.getbifrost.ai`, the official MCP TypeScript SDK, `supergateway`, `docs.twenty.com`) — see `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-validation.md`. Two corrections from the original plan are baked into every task below: (1) transport is Streamable HTTP, not SSE (SSE is deprecated by the MCP spec); (2) MCP connectivity uses the official `@modelcontextprotocol/client` SDK directly against the Twenty MCP server, **not** Bifrost's proprietary MCP Gateway feature — Bifrost's `config.json` is untouched by this plan. This is a strictly smaller footprint than the original draft: no Bifrost `mcp` config section, no custom allowlist header, no live-discovery step for an internal naming convention.
 
-**Architecture:** Every CRM-tool-using chat turn now runs two Bifrost calls instead of one: a non-streaming **resolve** call (model may request `twenty_list_opportunities`/`twenty_get_opportunity`; we execute those via Bifrost's `POST /v1/mcp/tool/execute` and append results as `tool` messages — no mutating tool is ever exposed to this call, enforced by an explicit allowlist header, not a denylist), then the existing streaming **generate** call, now grounded with real data. `twenty-pipeline.ts`'s three functions switch from raw `fetch()` to the same `/v1/mcp/tool/execute` endpoint, called directly (no LLM involved) for non-chat callers like the `/crm` admin page.
+**Goal:** Replace ads-agent's raw-REST Twenty CRM connector and the client-side OpenUI tool-execution hop with a two-phase, backend-only MCP integration (the official MCP SDK, talking directly to a self-hosted Twenty MCP server), for the Copilot and CRM Assistant chat surfaces — while leaving Reports Chat's analytics tools and Copilot's campaign-draft mutation on their current (unchanged, non-goal) client-Query() path.
 
-**Tech Stack:** TypeScript, Next.js (ads-agent), Vitest, Bifrost AI gateway (`maximhq/bifrost`) with its native MCP Gateway, `supergateway` (stdio→SSE bridge), community `mhenry3164/twenty-crm-mcp-server` (Node/stdio MCP server for Twenty CRM), Docker Compose.
+**Architecture:** Every CRM-tool-using chat turn now runs a non-streaming **resolve** call plus one MCP round-trip, then the existing streaming **generate** call: fetch the Twenty MCP server's live tool schemas (`list_opportunities`/`get_opportunity` only) via `listTools()`, pass them as Bifrost's plain `tools` param on a non-streaming chat completion, execute any returned tool calls via the same MCP client's `callTool()`, append results as `tool` messages, then re-run the existing streaming call now grounded with real data. No mutating tool's schema is ever built into the `tools` array, so the model cannot request it — enforced structurally, not by a denylist. `twenty-pipeline.ts`'s three functions call the same MCP client wrapper directly (no LLM, no Bifrost involved) for non-chat callers like the `/crm` admin page.
+
+**Tech Stack:** TypeScript, Next.js (ads-agent), Vitest, Bifrost AI gateway (`maximhq/bifrost`, used only for OpenAI-compatible chat completions — its MCP Gateway feature is deliberately not used), `@modelcontextprotocol/client` (official MCP TypeScript SDK, new dependency), `supergateway` (stdio→Streamable HTTP bridge), community `mhenry3164/twenty-crm-mcp-server` (Node/stdio MCP server for Twenty CRM), Docker Compose.
 
 ## Global Constraints
 
@@ -18,8 +20,8 @@
 - Reports Chat's analytics tools (`get_spend_cpl_trend`, `list_campaigns_with_cpl`, `list_pending_proposals`) query our own Postgres, not an external vendor — they are explicitly out of scope for MCP-wrapping and keep their current client-side `Query()` → `/api/openui/tools` path unchanged.
 - Copilot's `start_campaign_draft` mutation keeps its current client-side `Mutation()` → `/api/openui/tools` path unchanged (non-goal, per the design spec — `campaign-chat.ts`'s `SetupCard` flow is untouched).
 - `lib/openui/http-tool-provider.ts` and `app/api/openui/tools/route.ts` are **kept**, not removed (this corrects the design spec's Migration step 5 — analytics and the campaign-draft mutation still need them; only the three CRM read tool names are trimmed out of the two client components that no longer need them).
-- Every new/changed server-to-vendor call goes through `BIFROST_BASE_URL` — no new direct network calls to Twenty from application code.
-- Source spec: `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md`.
+- Every new/changed call to Twenty goes through the MCP server (`twenty-mcp-gateway`), never a raw REST call to Twenty's own API from application code. This is a change from the original draft: MCP tool calls (`listTools`/`callTool`) go directly to `twenty-mcp-gateway`, not through `BIFROST_BASE_URL` — only the model-decision step (Phase 1's resolve chat completion, and Phase 2's generate call) goes through Bifrost. See the validation doc for why.
+- Source spec: `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md`. Source validation: `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-validation.md`.
 
 ## Parallelization Map
 
@@ -40,7 +42,7 @@ Real max concurrency this plan's dependency graph supports is **4** (Wave 1). Wa
 | Task | Primary skill | Secondary skill | Why |
 |---|---|---|---|
 | 1. Twenty MCP infra | `senior-devops` | — | Docker Compose service wiring, container networking, env var export pattern |
-| 2. `mcp-client.ts` | `senior-backend` | `tdd-guide` | Plain Node/TS HTTP client module against a documented REST-ish endpoint |
+| 2. `mcp-client.ts` | `senior-backend` | `tdd-guide` | Thin wrapper around the official `@modelcontextprotocol/client` SDK — connection lifecycle + error mapping, not protocol implementation |
 | 3. `bifrost/client.ts` types | `senior-backend` | `tdd-guide` | Extending an existing typed HTTP client's request/response shapes |
 | 4. Meta/Google Ads docs | `senior-architect` | — | Target-state integration documentation (ADR-adjacent), no code |
 | 5. `twenty-pipeline.ts` rewrite | `senior-backend` | `tdd-guide` | Swapping a REST integration's transport while preserving exact function signatures |
@@ -61,16 +63,18 @@ Per `subagent-driven-development`'s model-selection rule (least powerful model t
 
 **Files:**
 - Modify: `ads-agent/docker-compose.yml`
-- Modify: `ads-agent/bifrost/config.json`
 - Create: `ads-agent/lib/bifrost/twenty-mcp-tools.ts`
 - Modify: `ads-agent/bifrost/README.md`
-- Test: none (infra task; verified by the manual curl steps below, consumed by Task 5/6's unit tests via the constants this task produces)
+- Modify: `ads-agent/package.json` (add `@modelcontextprotocol/client`)
+- Test: none (infra task; verified by the manual steps below, consumed by Task 2/5/6 via the constants this task produces)
 
 **Interfaces:**
 - Consumes: nothing (first task in the graph).
-- Produces: `TWENTY_MCP_CLIENT_NAME`, `TWENTY_MCP_TOOLS.{listOpportunities,getOpportunity,updateOpportunity}`, `TWENTY_MCP_READ_TOOL_NAMES: readonly string[]`, `TWENTY_MCP_INCLUDE_TOOLS_HEADER: string` — all exported from `lib/bifrost/twenty-mcp-tools.ts`. Task 2, 5, and 6 import these; do not hardcode the tool-name strings anywhere else.
+- Produces: `TWENTY_MCP_URL: string`, `TWENTY_MCP_TOOLS.{listOpportunities,getOpportunity,updateOpportunity}` — exported from `lib/bifrost/twenty-mcp-tools.ts`. Tasks 2, 5, and 6 import these; do not hardcode the tool-name strings or the gateway URL anywhere else.
 
-The community server `github.com/mhenry3164/twenty-crm-mcp-server` only speaks MCP over **stdio** (`npm start` runs a stdio server; there's no built-in HTTP/SSE mode). Bifrost's own docs are explicit that STDIO connections inside Bifrost's Docker container require `npx`/`node` to exist *inside that container*, which the official `maximhq/bifrost` image does not ship — the documented fix is "build a custom Docker image that includes the necessary dependencies, or use HTTP/SSE connections to externally hosted MCP servers." This plan uses the second option: `supercorp/supergateway` bridges the stdio server to SSE as its own sidecar container, and Bifrost connects to that sidecar over SSE.
+**This task does not touch `ads-agent/bifrost/config.json` at all** — corrected during validation (see `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-validation.md`, finding 2). The app connects to the Twenty MCP server directly with the official `@modelcontextprotocol/client` SDK; Bifrost's own MCP Gateway feature is not used, so there is no Bifrost config, no allowlist header, and no tool-naming-convention discovery step to run.
+
+The community server `github.com/mhenry3164/twenty-crm-mcp-server` only speaks MCP over **stdio** (`npm start` runs a stdio server; there's no built-in HTTP/SSE mode). `supercorp/supergateway` bridges it to **Streamable HTTP** — the current MCP standard transport (SSE was deprecated by the MCP spec's 2025-03-26 revision; see validation finding 1) — as its own sidecar container, and the app's MCP client connects to that sidecar directly.
 
 - [ ] **Step 1: Add the `twenty-mcp-gateway` service to docker-compose.yml**
 
@@ -82,10 +86,10 @@ Add this service (alongside the existing `db` and `bifrost` services — do not 
     command:
       - "--stdio"
       - "npx -y github:mhenry3164/twenty-crm-mcp-server"
+      - "--outputTransport"
+      - "streamableHttp"
       - "--port"
       - "8765"
-      - "--outputTransport"
-      - "sse"
     environment:
       TWENTY_API_KEY: ${TWENTY_API_KEY}
       TWENTY_BASE_URL: ${TWENTY_BASE_URL:-http://host.docker.internal:3020}
@@ -94,70 +98,58 @@ Add this service (alongside the existing `db` and `bifrost` services — do not 
     restart: unless-stopped
 ```
 
-`host.docker.internal` (not `localhost`) is required here because `TWENTY_BASE_URL`'s default in `.env.example` points at `localhost:3020`, which from inside this container would resolve to the container itself, not the host machine running Twenty CRM.
+`host.docker.internal` (not `localhost`) is required here because `TWENTY_BASE_URL`'s default in `.env.example` points at `localhost:3020`, which from inside this container would resolve to the container itself, not the host machine running Twenty CRM. The Streamable HTTP endpoint defaults to `/mcp` (`supergateway`'s own default path), so the full URL from inside the Docker network is `http://twenty-mcp-gateway:8765/mcp`.
 
-- [ ] **Step 2: Register the Twenty MCP client in bifrost/config.json**
+- [ ] **Step 2: Add the official MCP client SDK dependency**
 
-Add an `"mcp"` top-level key (bifrost/config.json currently has none):
-
-```json
-  "mcp": {
-    "tool_manager_config": {
-      "tool_execution_timeout": 30,
-      "disable_auto_tool_inject": true
-    },
-    "client_configs": [
-      {
-        "name": "twenty",
-        "connection_type": "sse",
-        "connection_string": "http://twenty-mcp-gateway:8765/sse",
-        "tools_to_execute": ["list_opportunities", "get_opportunity", "update_opportunity"]
-      }
-    ]
-  },
+```bash
+cd ads-agent
+npm install @modelcontextprotocol/client
 ```
 
-Insert it after the `"governance"` block and before `"routing_rules"`. `disable_auto_tool_inject: true` is load-bearing: without it, Bifrost auto-injects every configured MCP client's tools into **every** chat completion that flows through it — including Reports Chat, Campaign Chat, and Phase 2's streaming calls — none of which should ever see a `twenty_*` tool. With it set, tools are only visible to a request that explicitly sends the `x-bf-mcp-include-tools` header (which only Task 6's Phase-1 resolve call will do). `tools_to_execute` is scoped to exactly the three CRM operations this app uses (list/get/update) — not `["*"]` — so the dozens of other tools this community server exposes (people, companies, notes, tasks, batch creates) are never reachable via Bifrost at all, even if `x-bf-mcp-include-tools` were sent with a wildcard by mistake.
-
-- [ ] **Step 3: Restart the stack and verify the MCP client connected**
+- [ ] **Step 3: Start the sidecar and verify it responds**
 
 ```bash
 cd ads-agent
 export TWENTY_API_KEY="$(grep '^TWENTY_API_KEY=' .env.local | cut -d= -f2-)"
 export TWENTY_BASE_URL="$(grep '^TWENTY_BASE_URL=' .env.local | cut -d= -f2-)"
-docker compose up -d twenty-mcp-gateway bifrost
+docker compose up -d twenty-mcp-gateway
 sleep 5
-curl -s http://localhost:8080/api/mcp/client | python3 -m json.tool
+docker compose logs twenty-mcp-gateway | tail -30
 ```
 
-Expected: the response includes an entry with `"name": "twenty"` and a connected/healthy status. If it shows a connection error, run `docker compose logs twenty-mcp-gateway` — the most likely cause is `TWENTY_API_KEY` not being exported before `docker compose up`, matching this repo's existing Bifrost/Vertex setup gotcha (documented in `bifrost/README.md`).
+Expected: logs show the stdio server started (the community server's own startup banner) and `supergateway` listening on `:8765`. If it fails, check `TWENTY_API_KEY` was exported before `docker compose up` (same gotcha this repo already documents for Bifrost/Vertex in `bifrost/README.md`).
 
-- [ ] **Step 4: Discover the real function-calling tool names via a live tool call**
+- [ ] **Step 4: Verify `listTools()` against the live sidecar with a throwaway script**
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "x-bf-mcp-include-tools: twenty-list_opportunities" \
-  -d '{
-    "model": "vertex/gemini-2.5-flash-lite",
-    "messages": [{"role": "user", "content": "List every CRM opportunity."}]
-  }' | python3 -m json.tool
+cd ads-agent
+cat > /tmp/verify-twenty-mcp.mjs <<'EOF'
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+const client = new Client({ name: "verify-script", version: "1.0.0" });
+await client.connect(new StreamableHTTPClientTransport(new URL("http://localhost:8765/mcp")));
+const { tools } = await client.listTools();
+console.log(tools.map((t) => t.name));
+await client.close();
+EOF
+node /tmp/verify-twenty-mcp.mjs
 ```
 
-Expected: `choices[0].message.tool_calls[0].function.name` is `"twenty_list_opportunities"` (Bifrost prefixes MCP tool names with `<clientName>_<toolName>`, underscore-joined — this is documented behavior, being confirmed here against the live gateway rather than assumed). If the returned name differs from `twenty_list_opportunities`, use the actual observed name in Step 5 instead — do not proceed with a guessed name.
+Expected: an array of tool names including `list_opportunities`, `get_opportunity`, `update_opportunity` (exact real names — confirm these three exist and are spelled this way before Step 5; if the server names them differently, use the real names in Step 5 instead of guessing). Delete `/tmp/verify-twenty-mcp.mjs` when done.
 
-- [ ] **Step 5: Write the tool-name constants file**
+- [ ] **Step 5: Write the tool-name/URL constants file**
 
 ```typescript
 // ads-agent/lib/bifrost/twenty-mcp-tools.ts
 
-/** MCP client name registered in bifrost/config.json's mcp.client_configs. */
-export const TWENTY_MCP_CLIENT_NAME = "twenty";
+/** Streamable HTTP endpoint for the twenty-mcp-gateway sidecar (see docker-compose.yml). */
+export const TWENTY_MCP_URL =
+  process.env.TWENTY_MCP_URL || "http://twenty-mcp-gateway:8765/mcp";
 
 /**
- * Real tool names exposed by the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server).
- * These are called directly via Bifrost's POST /v1/mcp/tool/execute — server-to-server, never
- * model-triggered — by lib/crm/twenty-pipeline.ts.
+ * Real tool names exposed by the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
+ * confirmed live against the running gateway in Task 1 Step 4 of
+ * docs/superpowers/plans/2026-08-05-mcp-backend-tool-integration.md.
  */
 export const TWENTY_MCP_TOOLS = {
   listOpportunities: "list_opportunities",
@@ -166,150 +158,138 @@ export const TWENTY_MCP_TOOLS = {
 } as const;
 
 /**
- * Function-calling names the model sees (Bifrost prefixes with "<clientName>_", underscore-joined
- * — confirmed live against the running gateway, see Task 1 Step 4 of
- * docs/superpowers/plans/2026-08-05-mcp-backend-tool-integration.md). Read-only subset only:
- * updateOpportunity is deliberately excluded so the model can never request a mutation.
+ * Read-only subset the model is ever allowed to see (Task 6 fetches live schemas via listTools()
+ * and filters to exactly these two names — updateOpportunity is deliberately excluded here so the
+ * model can never be told a mutating tool exists, let alone request it).
  */
 export const TWENTY_MCP_READ_TOOL_NAMES = [
-  `${TWENTY_MCP_CLIENT_NAME}_${TWENTY_MCP_TOOLS.listOpportunities}`,
-  `${TWENTY_MCP_CLIENT_NAME}_${TWENTY_MCP_TOOLS.getOpportunity}`,
+  TWENTY_MCP_TOOLS.listOpportunities,
+  TWENTY_MCP_TOOLS.getOpportunity,
 ] as const;
-
-/**
- * x-bf-mcp-include-tools header value: a strict allowlist for Phase 1's resolve call. Bifrost's
- * filter format is "clientName-toolName" (hyphen-separated) — distinct from the underscore-joined
- * function-calling name above.
- */
-export const TWENTY_MCP_INCLUDE_TOOLS_HEADER = [
-  `${TWENTY_MCP_CLIENT_NAME}-${TWENTY_MCP_TOOLS.listOpportunities}`,
-  `${TWENTY_MCP_CLIENT_NAME}-${TWENTY_MCP_TOOLS.getOpportunity}`,
-].join(",");
 ```
 
 - [ ] **Step 6: Document the new service in bifrost/README.md**
 
-Add a new section at the end of `ads-agent/bifrost/README.md`:
+Add a new section at the end of `ads-agent/bifrost/README.md` (despite the filename, this documents an app-level MCP dependency, not a Bifrost config change — noted explicitly so a future reader doesn't go looking in `bifrost/config.json`):
 
 ```markdown
 ## Twenty MCP (self-hosted CRM tools)
 
-`twenty-mcp-gateway` bridges the community `mhenry3164/twenty-crm-mcp-server` (stdio-only) to SSE
-via `supergateway`, since Bifrost's own container has no Node/npx to spawn stdio servers directly.
+`twenty-mcp-gateway` bridges the community `mhenry3164/twenty-crm-mcp-server` (stdio-only) to
+Streamable HTTP via `supergateway`. **Bifrost's own config is not involved** — `lib/bifrost/mcp-client.ts`
+connects to this sidecar directly with the official `@modelcontextprotocol/client` SDK; Bifrost is
+only used for the actual chat completion (`lib/openui/resolve-tools-then-generate.ts` builds an
+explicit `tools` param from this server's live schema and passes it to Bifrost like any other
+OpenAI-compatible tool-calling request).
 
 1. Export the same `TWENTY_API_KEY`/`TWENTY_BASE_URL` used elsewhere (see step 1 above):
    ```bash
    export TWENTY_API_KEY="$(grep '^TWENTY_API_KEY=' .env.local | cut -d= -f2-)"
    export TWENTY_BASE_URL="$(grep '^TWENTY_BASE_URL=' .env.local | cut -d= -f2-)"
    ```
-2. `docker compose up -d twenty-mcp-gateway bifrost`
-3. Verify: `curl -s http://localhost:8080/api/mcp/client | python3 -m json.tool` shows a connected `"twenty"` client.
+2. `docker compose up -d twenty-mcp-gateway`
+3. Verify: `docker compose logs twenty-mcp-gateway` shows it listening on `:8765`.
 
-`disable_auto_tool_inject: true` in `config.json`'s `mcp.tool_manager_config` means these tools are
-invisible to every Bifrost request except ones that explicitly send
-`x-bf-mcp-include-tools: twenty-list_opportunities,twenty-get_opportunity` (see
-`lib/openui/resolve-tools-then-generate.ts`). Reports Chat, Campaign Chat, and Phase 2 of Copilot/CRM
-Assistant never send that header and never see these tools.
+Reports Chat, Campaign Chat, and Phase 2 of Copilot/CRM Assistant never call `listTools()` or pass a
+`tools` param to Bifrost, so they never see a Twenty tool — there is no allowlist/denylist to keep in
+sync, because those code paths simply never mention Twenty at all.
 ```
 
 - [ ] **Step 7: Commit**
 
 ```bash
 cd ads-agent
-git add docker-compose.yml bifrost/config.json bifrost/README.md lib/bifrost/twenty-mcp-tools.ts
-git commit -m "feat(ads-agent): add self-hosted Twenty MCP gateway to Bifrost"
+git add docker-compose.yml bifrost/README.md lib/bifrost/twenty-mcp-tools.ts package.json package-lock.json
+git commit -m "feat(ads-agent): add self-hosted Twenty MCP gateway (Streamable HTTP)"
 ```
 
 ---
 
-## Task 2: Bifrost MCP tool-execution client (Wave 1)
+## Task 2: Twenty MCP client wrapper (Wave 1)
 
 **Files:**
 - Create: `ads-agent/lib/bifrost/mcp-client.ts`
 - Test: `ads-agent/lib/bifrost/mcp-client.test.ts`
 
 **Interfaces:**
-- Consumes: `process.env.BIFROST_BASE_URL` (already used the same way by `lib/bifrost/client.ts`). Does not import Task 1's constants — this module is generic over any tool name.
-- Produces: `executeMcpTool(toolName: string, args: Record<string, unknown>): Promise<unknown>` (used by Task 5's `twenty-pipeline.ts`) and `executeMcpToolCall(call: McpToolCall): Promise<McpToolResult>` + the `McpToolCall`/`McpToolResult` types (used by Task 6's `resolve-tools-then-generate.ts`).
+- Consumes: `TWENTY_MCP_URL` from `lib/bifrost/twenty-mcp-tools.ts` (Task 1); `Client`/`StreamableHTTPClientTransport` from the official `@modelcontextprotocol/client` SDK.
+- Produces: `listTwentyTools(): Promise<McpToolSchema[]>` (used by Task 6 to build Bifrost's `tools` param) and `callTwentyTool(name: string, args: Record<string, unknown>): Promise<unknown>` (used by Task 5's `twenty-pipeline.ts` and Task 6's resolve loop) + the `McpToolSchema` type.
+
+This module is a thin wrapper around the official SDK — it owns nothing MCP-protocol-shaped itself (no hand-rolled JSON-RPC, no Bifrost-specific envelope). It connects fresh per call and closes in a `finally` block, matching the SDK's own documented per-call usage pattern (`docs/clients/connect.md`: *"in a client that can throw between connect and close, put close() in a finally block"*) — appropriate here since Next.js API routes are effectively one-shot per request.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```typescript
 // ads-agent/lib/bifrost/mcp-client.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { executeMcpTool, executeMcpToolCall } from "./mcp-client";
 
-const originalFetch = global.fetch;
-const originalEnv = { ...process.env };
+const connect = vi.fn();
+const listTools = vi.fn();
+const callTool = vi.fn();
+const close = vi.fn();
+
+vi.mock("@modelcontextprotocol/client", () => ({
+  Client: vi.fn().mockImplementation(() => ({ connect, listTools, callTool, close })),
+  StreamableHTTPClientTransport: vi.fn().mockImplementation((url: URL) => ({ url })),
+}));
+
+import { callTwentyTool, listTwentyTools } from "./mcp-client";
 
 beforeEach(() => {
-  process.env.BIFROST_BASE_URL = "http://localhost:8080";
+  connect.mockReset().mockResolvedValue(undefined);
+  listTools.mockReset();
+  callTool.mockReset();
+  close.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
-  global.fetch = originalFetch;
-  process.env = { ...originalEnv };
   vi.restoreAllMocks();
 });
 
-describe("executeMcpTool", () => {
-  it("POSTs to /v1/mcp/tool/execute and parses the JSON tool content", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ role: "tool", content: JSON.stringify({ records: [{ id: "1" }] }), tool_call_id: "x" }),
+describe("listTwentyTools", () => {
+  it("connects, lists tools, and closes the connection", async () => {
+    listTools.mockResolvedValue({
+      tools: [{ name: "list_opportunities", description: "List opportunities", inputSchema: { type: "object" } }],
     });
 
-    const result = await executeMcpTool("twenty_list_opportunities", { limit: 200 });
+    const tools = await listTwentyTools();
 
-    expect(result).toEqual({ records: [{ id: "1" }] });
-    expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:8080/v1/mcp/tool/execute",
-      expect.objectContaining({
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string);
-    expect(body.type).toBe("function");
-    expect(body.function.name).toBe("twenty_list_opportunities");
-    expect(JSON.parse(body.function.arguments)).toEqual({ limit: 200 });
+    expect(tools).toEqual([{ name: "list_opportunities", description: "List opportunities", inputSchema: { type: "object" } }]);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("returns the raw string content when it is not valid JSON", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ role: "tool", content: "plain text result", tool_call_id: "x" }),
-    });
-    expect(await executeMcpTool("some_tool", {})).toBe("plain text result");
-  });
-
-  it("throws with the response body on a non-ok response", async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
-    await expect(executeMcpTool("twenty_list_opportunities", {})).rejects.toThrow(/500.*boom/);
-  });
-
-  it("throws when BIFROST_BASE_URL is not set", async () => {
-    delete process.env.BIFROST_BASE_URL;
-    await expect(executeMcpTool("x", {})).rejects.toThrow("BIFROST_BASE_URL is not set");
+  it("still closes the connection when listTools throws", async () => {
+    listTools.mockRejectedValue(new Error("boom"));
+    await expect(listTwentyTools()).rejects.toThrow("boom");
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("executeMcpToolCall", () => {
-  it("passes the call through verbatim and returns the raw tool-message envelope", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ role: "tool", content: "[]", tool_call_id: "call_1" }),
-    });
+describe("callTwentyTool", () => {
+  it("calls callTool with name/arguments and returns the parsed text content", async () => {
+    callTool.mockResolvedValue({ content: [{ type: "text", text: JSON.stringify({ records: [{ id: "1" }] }) }] });
 
-    const result = await executeMcpToolCall({
-      id: "call_1",
-      type: "function",
-      function: { name: "twenty_get_opportunity", arguments: '{"id":"opp-1"}' },
-    });
+    const result = await callTwentyTool("list_opportunities", { limit: 200 });
 
-    expect(result).toEqual({ role: "tool", content: "[]", tool_call_id: "call_1" });
-    const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string);
-    expect(body).toEqual({ id: "call_1", type: "function", function: { name: "twenty_get_opportunity", arguments: '{"id":"opp-1"}' } });
+    expect(result).toEqual({ records: [{ id: "1" }] });
+    expect(callTool).toHaveBeenCalledWith({ name: "list_opportunities", arguments: { limit: 200 } });
+  });
+
+  it("returns the raw text when it is not valid JSON", async () => {
+    callTool.mockResolvedValue({ content: [{ type: "text", text: "plain text result" }] });
+    expect(await callTwentyTool("some_tool", {})).toBe("plain text result");
+  });
+
+  it("throws when the tool result has isError set", async () => {
+    callTool.mockResolvedValue({ isError: true, content: [{ type: "text", text: "bad stage" }] });
+    await expect(callTwentyTool("update_opportunity", {})).rejects.toThrow(/bad stage/);
+  });
+
+  it("closes the connection even when callTool throws", async () => {
+    callTool.mockRejectedValue(new Error("not found"));
+    await expect(callTwentyTool("get_opportunity", { id: "missing" })).rejects.toThrow("not found");
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });
 ```
@@ -323,62 +303,51 @@ Expected: FAIL — `Cannot find module './mcp-client'`.
 
 ```typescript
 // ads-agent/lib/bifrost/mcp-client.ts
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { TWENTY_MCP_URL } from "./twenty-mcp-tools";
 
-export type McpToolCall = {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
+export type McpToolSchema = {
+  name: string;
+  description?: string;
+  inputSchema: Record<string, unknown>;
 };
 
-export type McpToolResult = {
-  role: "tool";
-  content: string;
-  tool_call_id: string;
-};
-
-function baseUrl(): string {
-  return (process.env.BIFROST_BASE_URL || "").replace(/\/$/, "");
-}
-
-async function postToolExecute(call: McpToolCall): Promise<McpToolResult> {
-  if (!baseUrl()) throw new Error("BIFROST_BASE_URL is not set");
-
-  const res = await fetch(`${baseUrl()}/v1/mcp/tool/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(call),
-  });
-
-  if (!res.ok) {
-    throw new Error(`bifrost mcp tool execute failed: ${res.status} ${await res.text()}`);
-  }
-  return (await res.json()) as McpToolResult;
-}
-
-/**
- * Direct, server-to-server MCP tool execution (no LLM involved) — for callers like
- * twenty-pipeline.ts that need real CRM data outside of a chat turn.
- */
-export async function executeMcpTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
-  const result = await postToolExecute({
-    id: `direct-${Date.now()}`,
-    type: "function",
-    function: { name: toolName, arguments: JSON.stringify(args) },
-  });
+async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
+  const client = new Client({ name: "ads-agent", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(TWENTY_MCP_URL)));
   try {
-    return JSON.parse(result.content);
-  } catch {
-    return result.content;
+    return await fn(client);
+  } finally {
+    await client.close();
   }
 }
 
+/** Live tool schemas from the Twenty MCP server — used to build Bifrost's `tools` param. */
+export async function listTwentyTools(): Promise<McpToolSchema[]> {
+  return withClient(async (client) => {
+    const { tools } = await client.listTools();
+    return tools as McpToolSchema[];
+  });
+}
+
 /**
- * Executes a tool call exactly as returned by a chat completion's `tool_calls` array, returning
- * the raw `{role: "tool", content, tool_call_id}` envelope ready to append to conversation history.
- * Used by the chat-triggered resolve loop (resolve-tools-then-generate.ts).
+ * Calls one Twenty MCP tool directly (no LLM, no Bifrost involved) and returns its parsed content.
+ * Used both by twenty-pipeline.ts's non-chat callers and by the chat-triggered resolve loop
+ * (resolve-tools-then-generate.ts) once a tool_call has been decided by the model.
  */
-export async function executeMcpToolCall(call: McpToolCall): Promise<McpToolResult> {
-  return postToolExecute(call);
+export async function callTwentyTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  return withClient(async (client) => {
+    const result = await client.callTool({ name, arguments: args });
+    const text = result.content?.find((block: { type: string }) => block.type === "text")?.text ?? "";
+    if (result.isError) {
+      throw new Error(`twenty mcp tool "${name}" failed: ${text}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  });
 }
 ```
 
@@ -392,7 +361,7 @@ Expected: PASS (6/6).
 ```bash
 cd ads-agent
 git add lib/bifrost/mcp-client.ts lib/bifrost/mcp-client.test.ts
-git commit -m "feat(ads-agent): add Bifrost MCP tool-execution client"
+git commit -m "feat(ads-agent): add Twenty MCP client wrapper (official SDK)"
 ```
 
 ---
@@ -405,7 +374,7 @@ git commit -m "feat(ads-agent): add Bifrost MCP tool-execution client"
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `ChatMessage` gains `role: "tool"` and optional `tool_calls`/`tool_call_id` fields; `ChatCompletionOptions` gains optional `headers`; `ChatCompletionResponse`'s message gains optional `tool_calls`. Task 6 imports all of these.
+- Produces: `ChatMessage` gains `role: "tool"` and optional `tool_calls`/`tool_call_id` fields; `ChatCompletionOptions` gains optional `tools`/`tool_choice` (the standard OpenAI-compatible tool-calling params — not a Bifrost-specific header, corrected during validation from an earlier `headers`-based draft); `ChatCompletionResponse`'s message gains optional `tool_calls`. Task 6 imports all of these.
 
 - [ ] **Step 1: Read the existing test file to match its conventions**
 
@@ -417,22 +386,18 @@ Add these `describe` blocks to the existing `ads-agent/lib/bifrost/client.test.t
 
 ```typescript
 describe("chatCompletion with tool_calls", () => {
-  it("passes custom headers through to fetch", async () => {
+  it("passes a tools param through to the request body", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ choices: [{ message: { role: "assistant", content: "hi" } }] }),
     });
 
-    await chatCompletion({
-      messages: [{ role: "user", content: "hi" }],
-      headers: { "x-bf-mcp-include-tools": "twenty-list_opportunities" },
-    });
+    const tools = [{ type: "function" as const, function: { name: "list_opportunities", description: "", parameters: {} } }];
+    await chatCompletion({ messages: [{ role: "user", content: "hi" }], tools });
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(init.headers).toEqual({
-      "Content-Type": "application/json",
-      "x-bf-mcp-include-tools": "twenty-list_opportunities",
-    });
+    const body = JSON.parse(init.body as string);
+    expect(body.tools).toEqual(tools);
   });
 
   it("returns tool_calls on the response message when present", async () => {
@@ -498,6 +463,12 @@ export type ChatMessage = {
   tool_call_id?: string;
 };
 
+/** Standard OpenAI-compatible tool-calling schema — see openai.com/docs/api-reference/chat/create. */
+export type ToolDefinition = {
+  type: "function";
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
+};
+
 export type ChatCompletionOptions = {
   messages: ChatMessage[];
   model?: string;
@@ -509,8 +480,9 @@ export type ChatCompletionOptions = {
   };
   fallbacks?: string[];
   timeoutMs?: number;
-  /** Extra HTTP headers merged into the request — e.g. x-bf-mcp-include-tools. */
-  headers?: Record<string, string>;
+  /** Standard OpenAI-compatible tools param — e.g. the Twenty MCP server's read-only tool schemas. */
+  tools?: ToolDefinition[];
+  toolChoice?: "auto" | "none";
 };
 
 export type ChatCompletionResponse = {
@@ -522,7 +494,7 @@ export type ChatCompletionResponse = {
 };
 ```
 
-Then update `chatCompletion`'s fetch call to merge `options.headers` into the request headers:
+Then update `chatCompletion`'s fetch call to include `tools`/`tool_choice` in the request body when present:
 
 ```typescript
 export async function chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResponse> {
@@ -534,7 +506,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<Ch
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       messages: options.messages,
@@ -542,6 +514,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<Ch
       max_tokens: options.maxTokens ?? 600,
       ...(fallbacks.length > 0 ? { fallbacks } : {}),
       ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+      ...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto" } : {}),
     }),
     signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
   });
@@ -594,12 +567,12 @@ Add this subsection (adjust the heading level to match whatever level the surrou
 `lib/connectors/meta.ts` and `lib/connectors/google-ads.ts` are unconfigured today (no credentials
 in `.env.local`) — there is nothing live to migrate. When real ad-account credentials are added, the
 target end state (matching the Twenty CRM MCP integration — see `bifrost/README.md`'s "Twenty MCP"
-section) is:
+section) is the same shape: connect with the official `@modelcontextprotocol/client` SDK directly,
+not through Bifrost's MCP Gateway feature.
 
 - **Meta Ads**: Meta's official hosted MCP endpoint, `mcp.facebook.com/ads` (OAuth, 29 tools,
-  launched April 2026 as part of Meta's "Ads AI Connectors"). Register it in `bifrost/config.json`'s
-  `mcp.client_configs` with `"connection_type": "http"` and an OAuth `auth_type` — no self-hosting
-  needed, unlike Twenty.
+  launched April 2026 as part of Meta's "Ads AI Connectors"). Use `StreamableHTTPClientTransport`
+  with the SDK's OAuth client helpers — no self-hosting needed, unlike Twenty.
 - **Google Ads**: Google's officially published Google Ads MCP server
   (`developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server`). Self-hosted, similar
   shape to the Twenty MCP setup — check whether it speaks stdio or HTTP natively before deciding if
@@ -626,10 +599,10 @@ git commit -m "docs(ads-agent): document Meta/Google Ads MCP target integration"
 - Modify: `ads-agent/lib/crm/twenty-pipeline.test.ts`
 
 **Interfaces:**
-- Consumes: `executeMcpTool` from `lib/bifrost/mcp-client.ts` (Task 2), `TWENTY_MCP_TOOLS` from `lib/bifrost/twenty-mcp-tools.ts` (Task 1).
+- Consumes: `callTwentyTool` from `lib/bifrost/mcp-client.ts` (Task 2), `TWENTY_MCP_TOOLS` from `lib/bifrost/twenty-mcp-tools.ts` (Task 1).
 - Produces: `listOpportunities()`, `getOpportunity(id)`, `updateOpportunityStage(id, stage)`, `getPipelineValue()`, `maskPhone()`, `PIPELINE_STAGES` — **identical exported signatures and types to today** (verified by Task 5 not touching `crm-tools.ts` or `app/(admin)/crm/page.tsx` at all). `crm-tools.ts`'s existing `vi.mock("../crm/twenty-pipeline", ...)` continues to work unchanged.
 
-The Twenty MCP server's list/get tools return Twenty's native record shape (same `id`/`name`/`stage`/`amount: {amountMicros, currencyCode}`/`pointOfContact`/`source`/`listingName`/`createdAt` fields already handled by `toOpportunity()`), wrapped in `{ records: [...], pageInfo, totalCount? }` instead of today's REST envelope `{ data: { opportunities: [...] } }` — per the server's own README ("List results are returned as `{ records, pageInfo, totalCount? }`"). `get_opportunity` returns a single record directly (not wrapped in `records`). `update_opportunity` takes `{ id, ...fields }` and returns the updated record (or throws via a non-2xx MCP result on failure — surfaced by `executeMcpTool` throwing, which this task's `updateOpportunityStage` catches).
+The Twenty MCP server's list/get tools return Twenty's native record shape (same `id`/`name`/`stage`/`amount: {amountMicros, currencyCode}`/`pointOfContact`/`source`/`listingName`/`createdAt` fields already handled by `toOpportunity()`), wrapped in `{ records: [...], pageInfo, totalCount? }` instead of today's REST envelope `{ data: { opportunities: [...] } }` — per the server's own README ("List results are returned as `{ records, pageInfo, totalCount? }`"). `get_opportunity` returns a single record directly (not wrapped in `records`). `update_opportunity` takes `{ id, ...fields }` and returns the updated record (or throws via an `isError` MCP result on failure — surfaced by `callTwentyTool` throwing, which this task's `updateOpportunityStage` catches).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -639,8 +612,8 @@ Replace the entire contents of `ads-agent/lib/crm/twenty-pipeline.test.ts`:
 // ads-agent/lib/crm/twenty-pipeline.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMcpTool } = vi.hoisted(() => ({ executeMcpTool: vi.fn() }));
-vi.mock("../bifrost/mcp-client", () => ({ executeMcpTool }));
+const { callTwentyTool } = vi.hoisted(() => ({ callTwentyTool: vi.fn() }));
+vi.mock("../bifrost/mcp-client", () => ({ callTwentyTool }));
 
 import {
   PIPELINE_STAGES,
@@ -655,7 +628,7 @@ const originalEnv = { ...process.env };
 
 beforeEach(() => {
   process.env.TWENTY_API_KEY = "test-key";
-  executeMcpTool.mockReset();
+  callTwentyTool.mockReset();
 });
 
 afterEach(() => {
@@ -683,8 +656,8 @@ describe("maskPhone", () => {
 });
 
 describe("listOpportunities", () => {
-  it("calls the twenty_list_opportunities MCP tool and maps records into typed rows", async () => {
-    executeMcpTool.mockResolvedValue({
+  it("calls the list_opportunities MCP tool and maps records into typed rows", async () => {
+    callTwentyTool.mockResolvedValue({
       records: [
         {
           id: "opp-1",
@@ -703,7 +676,7 @@ describe("listOpportunities", () => {
 
     const rows = await listOpportunities();
 
-    expect(executeMcpTool).toHaveBeenCalledWith("list_opportunities", { limit: 200 });
+    expect(callTwentyTool).toHaveBeenCalledWith("list_opportunities", { limit: 200 });
     expect(rows).toEqual([
       {
         id: "opp-1", name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT",
@@ -716,18 +689,18 @@ describe("listOpportunities", () => {
   it("returns an empty list when Twenty is not configured", async () => {
     delete process.env.TWENTY_API_KEY;
     expect(await listOpportunities()).toEqual([]);
-    expect(executeMcpTool).not.toHaveBeenCalled();
+    expect(callTwentyTool).not.toHaveBeenCalled();
   });
 
   it("returns an empty list when the MCP tool call throws, rather than throwing", async () => {
-    executeMcpTool.mockRejectedValue(new Error("mcp tool execute failed: 500"));
+    callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "list_opportunities" failed: 500'));
     expect(await listOpportunities()).toEqual([]);
   });
 });
 
 describe("getOpportunity", () => {
-  it("calls twenty_get_opportunity with the id and maps the single record", async () => {
-    executeMcpTool.mockResolvedValue({
+  it("calls get_opportunity with the id and maps the single record", async () => {
+    callTwentyTool.mockResolvedValue({
       id: "opp-1", name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT",
       amount: null, pointOfContact: null, source: "WhatsApp", listingName: null,
       createdAt: "2026-08-01T00:00:00.000Z",
@@ -735,38 +708,38 @@ describe("getOpportunity", () => {
 
     const row = await getOpportunity("opp-1");
 
-    expect(executeMcpTool).toHaveBeenCalledWith("get_opportunity", { id: "opp-1" });
+    expect(callTwentyTool).toHaveBeenCalledWith("get_opportunity", { id: "opp-1" });
     expect(row?.id).toBe("opp-1");
     expect(row?.amountInr).toBeNull();
     expect(row?.contactName).toBeNull();
   });
 
   it("returns null when the MCP tool call throws", async () => {
-    executeMcpTool.mockRejectedValue(new Error("not found"));
+    callTwentyTool.mockRejectedValue(new Error("not found"));
     expect(await getOpportunity("missing")).toBeNull();
   });
 });
 
 describe("updateOpportunityStage", () => {
-  it("calls twenty_update_opportunity with id + stage and returns ok:true on success", async () => {
-    executeMcpTool.mockResolvedValue({ id: "opp-1", stage: "TOUR" });
+  it("calls update_opportunity with id + stage and returns ok:true on success", async () => {
+    callTwentyTool.mockResolvedValue({ id: "opp-1", stage: "TOUR" });
 
     const result = await updateOpportunityStage("opp-1", "TOUR");
 
     expect(result).toEqual({ ok: true });
-    expect(executeMcpTool).toHaveBeenCalledWith("update_opportunity", { id: "opp-1", stage: "TOUR" });
+    expect(callTwentyTool).toHaveBeenCalledWith("update_opportunity", { id: "opp-1", stage: "TOUR" });
   });
 
   it("returns ok:false with an error message when the MCP tool call throws", async () => {
-    executeMcpTool.mockRejectedValue(new Error("bifrost mcp tool execute failed: 400 bad stage"));
+    callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "update_opportunity" failed: bad stage'));
     const result = await updateOpportunityStage("opp-1", "TOUR");
-    expect(result).toEqual({ ok: false, error: expect.stringContaining("400 bad stage") });
+    expect(result).toEqual({ ok: false, error: expect.stringContaining("bad stage") });
   });
 });
 
 describe("getPipelineValue", () => {
   it("sums amountInr across all open opportunities", async () => {
-    executeMcpTool.mockResolvedValue({
+    callTwentyTool.mockResolvedValue({
       records: [
         { id: "1", name: "A", stage: "NEW_BRIEF", tier: "HOT", amount: { amountMicros: 10000000000 }, pointOfContact: null, source: null, listingName: null, createdAt: "" },
         { id: "2", name: "B", stage: "RENEWAL", tier: "COLD", amount: { amountMicros: 5000000000 }, pointOfContact: null, source: null, listingName: null, createdAt: "" },
@@ -781,14 +754,14 @@ describe("getPipelineValue", () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd ads-agent && npx vitest run lib/crm/twenty-pipeline.test.ts`
-Expected: FAIL — `listOpportunities`/`getOpportunity`/`updateOpportunityStage` still call `global.fetch`, not the mocked `executeMcpTool`.
+Expected: FAIL — `listOpportunities`/`getOpportunity`/`updateOpportunityStage` still call `global.fetch`, not the mocked `callTwentyTool`.
 
 - [ ] **Step 3: Implement the rewrite**
 
 In `ads-agent/lib/crm/twenty-pipeline.ts`, keep every type declaration (`PIPELINE_STAGES`, `Opportunity`, `RawOpportunity`, etc.), `maskPhone`, `toAmountInr`, `toContact`, and `toOpportunity` **exactly as they are today** — only replace `isConfigured`/`baseUrl`/`authHeaders` usage and the bodies of `listOpportunities`, `getOpportunity`, and `updateOpportunityStage`:
 
 ```typescript
-import { executeMcpTool } from "../bifrost/mcp-client";
+import { callTwentyTool } from "../bifrost/mcp-client";
 import { TWENTY_MCP_TOOLS } from "../bifrost/twenty-mcp-tools";
 
 // ... (PIPELINE_STAGES, types, maskPhone, toAmountInr, toContact, toOpportunity unchanged) ...
@@ -798,13 +771,14 @@ function isConfigured(): boolean {
 }
 
 /** List every open opportunity, via the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
- * called through Bifrost's /v1/mcp/tool/execute. Fails soft (empty array) on missing config or a
- * failed tool call — same fail-soft convention as before, so an outage degrades the board to "no
- * leads" rather than a crashed page. */
+ * called directly through lib/bifrost/mcp-client.ts (no Bifrost involved — this is a plain data read,
+ * not a model decision). Fails soft (empty array) on missing config or a failed tool call — same
+ * fail-soft convention as before, so an outage degrades the board to "no leads" rather than a
+ * crashed page. */
 export async function listOpportunities(): Promise<Opportunity[]> {
   if (!isConfigured()) return [];
   try {
-    const result = (await executeMcpTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 })) as {
+    const result = (await callTwentyTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 })) as {
       records?: RawOpportunity[];
     };
     return (result.records ?? []).map(toOpportunity);
@@ -817,7 +791,7 @@ export async function listOpportunities(): Promise<Opportunity[]> {
 export async function getOpportunity(id: string): Promise<Opportunity | null> {
   if (!isConfigured()) return null;
   try {
-    const record = (await executeMcpTool(TWENTY_MCP_TOOLS.getOpportunity, { id })) as RawOpportunity | null;
+    const record = (await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id })) as RawOpportunity | null;
     return record ? toOpportunity(record) : null;
   } catch {
     return null;
@@ -833,7 +807,7 @@ export async function updateOpportunityStage(
 ): Promise<UpdateStageResult> {
   if (!isConfigured()) return { ok: false, error: "Twenty is not configured" };
   try {
-    await executeMcpTool(TWENTY_MCP_TOOLS.updateOpportunity, { id, stage });
+    await callTwentyTool(TWENTY_MCP_TOOLS.updateOpportunity, { id, stage });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -872,10 +846,10 @@ git commit -m "feat(ads-agent): route twenty-pipeline.ts through the Twenty MCP 
 - Test: `ads-agent/lib/openui/resolve-tools-then-generate.test.ts`
 
 **Interfaces:**
-- Consumes: `ChatMessage`, `ChatCompletionResponse` types from `lib/bifrost/client.ts` (Task 3); `callMeteredChatCompletion` from `lib/metering/metered-client.ts` (already exists, unmodified); `executeMcpToolCall` from `lib/bifrost/mcp-client.ts` (Task 2); `TWENTY_MCP_INCLUDE_TOOLS_HEADER`, `TWENTY_MCP_TOOLS`, `TWENTY_MCP_CLIENT_NAME` from `lib/bifrost/twenty-mcp-tools.ts` (Task 1).
+- Consumes: `ChatMessage`, `ChatCompletionResponse`, `ToolDefinition` types from `lib/bifrost/client.ts` (Task 3); `callMeteredChatCompletion` from `lib/metering/metered-client.ts` (already exists, unmodified); `listTwentyTools`, `callTwentyTool` from `lib/bifrost/mcp-client.ts` (Task 2); `TWENTY_MCP_READ_TOOL_NAMES` from `lib/bifrost/twenty-mcp-tools.ts` (Task 1).
 - Produces: `resolveToolsThenGenerate(ctx: MeteringContext, messages: ChatMessage[]): Promise<ChatMessage[]>` — Tasks 7 and 8 call this before their existing streaming call, passing its result as the message list instead of their current plain history array.
 
-Mutation safety is enforced structurally here, not just by the allowlist header: even though `TWENTY_MCP_INCLUDE_TOOLS_HEADER` already excludes `twenty_update_opportunity` from what the model can request, this function additionally asserts no returned `tool_calls` entry ever has a function name matching the mutating tool — if Bifrost's header filtering were ever misconfigured upstream, this is the second gate, and it throws loudly (a test failure / 500, not a silent mutation) rather than executing it.
+Mutation safety is enforced structurally, not by a header allowlist (corrected during validation — see `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-validation.md`, finding 2): this function fetches the Twenty MCP server's live schemas via `listTwentyTools()`, filters to `TWENTY_MCP_READ_TOOL_NAMES` (`list_opportunities`/`get_opportunity`), and passes *only that filtered array* as Bifrost's `tools` param — `update_opportunity`'s schema is never sent, so the model cannot request it; there is nothing to misconfigure upstream because there's no separate gateway-side filter to keep in sync. A defensive check on the returned `tool_calls` still rejects any name outside the two advertised tools, as a second gate against a hallucinated tool-call name.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -883,12 +857,13 @@ Mutation safety is enforced structurally here, not just by the allowlist header:
 // ads-agent/lib/openui/resolve-tools-then-generate.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { callMeteredChatCompletion, executeMcpToolCall } = vi.hoisted(() => ({
+const { callMeteredChatCompletion, listTwentyTools, callTwentyTool } = vi.hoisted(() => ({
   callMeteredChatCompletion: vi.fn(),
-  executeMcpToolCall: vi.fn(),
+  listTwentyTools: vi.fn(),
+  callTwentyTool: vi.fn(),
 }));
 vi.mock("../metering/metered-client", () => ({ callMeteredChatCompletion }));
-vi.mock("../bifrost/mcp-client", () => ({ executeMcpToolCall }));
+vi.mock("../bifrost/mcp-client", () => ({ listTwentyTools, callTwentyTool }));
 
 import { resolveToolsThenGenerate } from "./resolve-tools-then-generate";
 import type { MeteringContext } from "../metering/types";
@@ -898,10 +873,18 @@ const baseMessages = [
   { role: "system" as const, content: "sys" },
   { role: "user" as const, content: "show me hot leads" },
 ];
+const readOnlySchemas = [
+  { name: "list_opportunities", description: "List opportunities", inputSchema: { type: "object" } },
+  { name: "get_opportunity", description: "Get one opportunity", inputSchema: { type: "object" } },
+];
 
 beforeEach(() => {
   callMeteredChatCompletion.mockReset();
-  executeMcpToolCall.mockReset();
+  listTwentyTools.mockReset().mockResolvedValue([
+    ...readOnlySchemas,
+    { name: "update_opportunity", description: "Update", inputSchema: { type: "object" } },
+  ]);
+  callTwentyTool.mockReset();
 });
 
 describe("resolveToolsThenGenerate", () => {
@@ -913,66 +896,72 @@ describe("resolveToolsThenGenerate", () => {
     const result = await resolveToolsThenGenerate(ctx, baseMessages);
 
     expect(result).toEqual(baseMessages);
-    expect(executeMcpToolCall).not.toHaveBeenCalled();
-    expect(callMeteredChatCompletion).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({ headers: { "x-bf-mcp-include-tools": "twenty-list_opportunities,twenty-get_opportunity" } }),
-    );
+    expect(callTwentyTool).not.toHaveBeenCalled();
+    const [, options] = callMeteredChatCompletion.mock.calls[0];
+    expect(options.tools.map((t: { function: { name: string } }) => t.function.name)).toEqual([
+      "list_opportunities",
+      "get_opportunity",
+    ]);
   });
 
   it("executes a read tool call and appends the assistant + tool messages", async () => {
-    const toolCall = { id: "call_1", type: "function" as const, function: { name: "twenty_list_opportunities", arguments: "{}" } };
+    const toolCall = { id: "call_1", type: "function" as const, function: { name: "list_opportunities", arguments: "{}" } };
     callMeteredChatCompletion
       .mockResolvedValueOnce({ choices: [{ message: { role: "assistant", content: null, tool_calls: [toolCall] } }] } as never)
       .mockResolvedValueOnce({ choices: [{ message: { role: "assistant", content: "done" } }] } as never);
-    executeMcpToolCall.mockResolvedValue({ role: "tool", content: "[{\"id\":\"1\"}]", tool_call_id: "call_1" });
+    callTwentyTool.mockResolvedValue([{ id: "1" }]);
 
     const result = await resolveToolsThenGenerate(ctx, baseMessages);
 
     expect(result).toEqual([
       ...baseMessages,
       { role: "assistant", content: null, tool_calls: [toolCall] },
-      { role: "tool", content: "[{\"id\":\"1\"}]", tool_call_id: "call_1" },
+      { role: "tool", content: JSON.stringify([{ id: "1" }]), tool_call_id: "call_1" },
     ]);
-    expect(executeMcpToolCall).toHaveBeenCalledWith(toolCall);
+    expect(callTwentyTool).toHaveBeenCalledWith("list_opportunities", {});
     expect(callMeteredChatCompletion).toHaveBeenCalledTimes(2);
   });
 
   it("executes multiple read tool calls from a single round in parallel", async () => {
-    const call1 = { id: "call_1", type: "function" as const, function: { name: "twenty_list_opportunities", arguments: "{}" } };
-    const call2 = { id: "call_2", type: "function" as const, function: { name: "twenty_get_opportunity", arguments: '{"id":"2"}' } };
+    const call1 = { id: "call_1", type: "function" as const, function: { name: "list_opportunities", arguments: "{}" } };
+    const call2 = { id: "call_2", type: "function" as const, function: { name: "get_opportunity", arguments: '{"id":"2"}' } };
     callMeteredChatCompletion
       .mockResolvedValueOnce({ choices: [{ message: { role: "assistant", content: null, tool_calls: [call1, call2] } }] } as never)
       .mockResolvedValueOnce({ choices: [{ message: { role: "assistant", content: "done" } }] } as never);
-    executeMcpToolCall
-      .mockResolvedValueOnce({ role: "tool", content: "[]", tool_call_id: "call_1" })
-      .mockResolvedValueOnce({ role: "tool", content: "{}", tool_call_id: "call_2" });
+    callTwentyTool.mockResolvedValueOnce([]).mockResolvedValueOnce({});
 
     const result = await resolveToolsThenGenerate(ctx, baseMessages);
 
     expect(result).toHaveLength(baseMessages.length + 3);
-    expect(executeMcpToolCall).toHaveBeenCalledTimes(2);
+    expect(callTwentyTool).toHaveBeenCalledTimes(2);
   });
 
-  it("never executes a mutating tool call even if one is returned, and stops the loop", async () => {
-    const mutatingCall = { id: "call_1", type: "function" as const, function: { name: "twenty_update_opportunity", arguments: '{"id":"1","stage":"TOUR"}' } };
+  it("rejects any tool-call name outside the two advertised read tools, and stops the loop", async () => {
+    const mutatingCall = { id: "call_1", type: "function" as const, function: { name: "update_opportunity", arguments: '{"id":"1","stage":"TOUR"}' } };
     callMeteredChatCompletion.mockResolvedValue({ choices: [{ message: { role: "assistant", content: null, tool_calls: [mutatingCall] } }] } as never);
 
     const result = await resolveToolsThenGenerate(ctx, baseMessages);
 
-    expect(executeMcpToolCall).not.toHaveBeenCalled();
+    expect(callTwentyTool).not.toHaveBeenCalled();
     expect(result).toEqual(baseMessages);
   });
 
   it("stops after 2 rounds even if the model keeps requesting tools", async () => {
-    const toolCall = { id: "call_1", type: "function" as const, function: { name: "twenty_list_opportunities", arguments: "{}" } };
+    const toolCall = { id: "call_1", type: "function" as const, function: { name: "list_opportunities", arguments: "{}" } };
     callMeteredChatCompletion.mockResolvedValue({ choices: [{ message: { role: "assistant", content: null, tool_calls: [toolCall] } }] } as never);
-    executeMcpToolCall.mockResolvedValue({ role: "tool", content: "[]", tool_call_id: "call_1" });
+    callTwentyTool.mockResolvedValue([]);
 
     await resolveToolsThenGenerate(ctx, baseMessages);
 
     expect(callMeteredChatCompletion).toHaveBeenCalledTimes(2);
-    expect(executeMcpToolCall).toHaveBeenCalledTimes(2);
+    expect(callTwentyTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the original messages unchanged when listing live tool schemas throws", async () => {
+    listTwentyTools.mockRejectedValue(new Error("twenty-mcp-gateway unreachable"));
+    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    expect(result).toEqual(baseMessages);
+    expect(callMeteredChatCompletion).not.toHaveBeenCalled();
   });
 
   it("returns the original messages unchanged when the resolve call itself throws", async () => {
@@ -993,27 +982,41 @@ Expected: FAIL — `Cannot find module './resolve-tools-then-generate'`.
 ```typescript
 // ads-agent/lib/openui/resolve-tools-then-generate.ts
 import { callMeteredChatCompletion } from "../metering/metered-client";
-import { executeMcpToolCall } from "../bifrost/mcp-client";
-import { TWENTY_MCP_CLIENT_NAME, TWENTY_MCP_INCLUDE_TOOLS_HEADER, TWENTY_MCP_TOOLS } from "../bifrost/twenty-mcp-tools";
-import type { ChatMessage } from "../bifrost/client";
+import { callTwentyTool, listTwentyTools } from "../bifrost/mcp-client";
+import { TWENTY_MCP_READ_TOOL_NAMES } from "../bifrost/twenty-mcp-tools";
+import type { ChatMessage, ToolDefinition } from "../bifrost/client";
 import type { MeteringContext } from "../metering/types";
 
-const MUTATING_TOOL_NAME = `${TWENTY_MCP_CLIENT_NAME}_${TWENTY_MCP_TOOLS.updateOpportunity}`;
 const MAX_ROUNDS = 2;
 
 /**
  * Phase 1 of the two-phase MCP tool pattern (see
- * docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md): a non-streaming
- * resolve loop that lets the model request read-only Twenty CRM tools, executes them via Bifrost's
- * MCP Gateway, and returns the conversation grounded with real results — ready for the caller's
- * existing streaming generate call. Never throws: any failure (Bifrost unreachable, tool execution
- * error) returns the input messages unchanged, so the caller's Phase 2 proceeds with whatever
- * context is available rather than failing the whole turn.
+ * docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md): fetches the Twenty MCP
+ * server's live tool schemas, filters to the read-only subset, and lets the model request them via
+ * a plain OpenAI-compatible `tools` param on a non-streaming Bifrost call — no AI-gateway-specific
+ * MCP feature involved (see the validation doc for why). Tool calls are executed directly against
+ * the Twenty MCP server via lib/bifrost/mcp-client.ts, and results are appended as `tool` messages,
+ * ready for the caller's existing streaming generate call. Never throws: any failure (MCP server
+ * unreachable, Bifrost unreachable, tool execution error) returns the input messages unchanged, so
+ * the caller's Phase 2 proceeds with whatever context is available rather than failing the turn.
  */
 export async function resolveToolsThenGenerate(
   ctx: MeteringContext,
   messages: ChatMessage[],
 ): Promise<ChatMessage[]> {
+  let readOnlyTools: ToolDefinition[];
+  try {
+    const liveSchemas = await listTwentyTools();
+    readOnlyTools = liveSchemas
+      .filter((schema) => (TWENTY_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name))
+      .map((schema) => ({
+        type: "function" as const,
+        function: { name: schema.name, description: schema.description, parameters: schema.inputSchema },
+      }));
+  } catch {
+    return messages;
+  }
+
   let history = [...messages];
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -1024,20 +1027,30 @@ export async function resolveToolsThenGenerate(
         temperature: 0.2,
         maxTokens: 1024,
         timeoutMs: 15_000,
-        headers: { "x-bf-mcp-include-tools": TWENTY_MCP_INCLUDE_TOOLS_HEADER },
+        tools: readOnlyTools,
       });
       message = response.choices?.[0]?.message;
     } catch {
       return messages;
     }
 
-    const toolCalls = (message?.tool_calls ?? []).filter((call) => call.function.name !== MUTATING_TOOL_NAME);
+    // Defense in depth: even though readOnlyTools never included a mutating schema, reject any
+    // tool_call name the model wasn't explicitly given — a hallucinated name is treated the same
+    // as no tool calls at all for this round, not executed.
+    const advertisedNames = new Set(readOnlyTools.map((t) => t.function.name));
+    const toolCalls = (message?.tool_calls ?? []).filter((call) => advertisedNames.has(call.function.name));
     if (toolCalls.length === 0) break;
 
     history = [...history, { role: "assistant", content: message?.content ?? null, tool_calls: toolCalls }];
 
     try {
-      const results = await Promise.all(toolCalls.map((call) => executeMcpToolCall(call)));
+      const results = await Promise.all(
+        toolCalls.map(async (call) => ({
+          role: "tool" as const,
+          content: JSON.stringify(await callTwentyTool(call.function.name, JSON.parse(call.function.arguments))),
+          tool_call_id: call.id,
+        })),
+      );
       history = [...history, ...results];
     } catch {
       return messages;
@@ -1048,12 +1061,12 @@ export async function resolveToolsThenGenerate(
 }
 ```
 
-Note the mutating-call filter happens before deciding whether `toolCalls.length === 0` — a response containing *only* a mutating call is treated identically to a response with no tool calls at all (the loop breaks, nothing is appended, `messages` flows through unchanged for that round). This matches the fourth test case above.
+Note the advertised-name filter happens before deciding whether `toolCalls.length === 0` — a response containing *only* an unadvertised/hallucinated call is treated identically to a response with no tool calls at all (the loop breaks, nothing is appended, `messages` flows through unchanged for that round). This matches the "rejects any tool-call name outside the two advertised read tools" test case above.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd ads-agent && npx vitest run lib/openui/resolve-tools-then-generate.test.ts`
-Expected: PASS (6/6).
+Expected: PASS (7/7).
 
 - [ ] **Step 5: Commit**
 
@@ -1428,7 +1441,7 @@ Expected: all 4 tests PASS, including the two strengthened ones. If the CRM or C
 
 - [ ] **Step 3: Manually verify the two unchanged surfaces still work (regression guard)**
 
-This is the check for the plan's most important invariant: Reports Chat and Campaign Chat/Copilot's campaign-draft mutation must be completely unaffected by everything in Waves 1–3, since `disable_auto_tool_inject: true` (Task 1) should make Twenty's MCP tools invisible to any call that doesn't send the allowlist header.
+This is the check for the plan's most important invariant: Reports Chat and Campaign Chat/Copilot's campaign-draft mutation must be completely unaffected by everything in Waves 1–3. Unlike the original plan's `disable_auto_tool_inject` gateway-side gate, this now holds for the simplest possible reason: `reports-chat.ts` and `campaign-chat.ts` never import `lib/bifrost/mcp-client.ts` or `resolve-tools-then-generate.ts` at all, so they have no code path that could reach the Twenty MCP server even by mistake.
 
 ```bash
 cd ads-agent
@@ -1439,7 +1452,7 @@ curl -s -X POST http://localhost:3000/api/reports/chat \
   -d '{"content": "show CPL trend this week", "history": []}' | head -c 500
 ```
 
-Expected: a streamed OpenUI-lang response referencing `TrendChart`, with no error about missing tools or unexpected `twenty_*` tool calls in the server logs (`docker compose logs bifrost` should show no `twenty` MCP activity for this request).
+Expected: a streamed OpenUI-lang response referencing `TrendChart`, with no error about missing tools and no connection attempt to `twenty-mcp-gateway` in `docker compose logs twenty-mcp-gateway` for this request.
 
 - [ ] **Step 4: Commit**
 
@@ -1454,5 +1467,6 @@ git commit -m "test(ads-agent): strengthen live smoke to catch stale CRM Query()
 ## Self-Review Notes (completed during planning, not a task)
 
 - **Spec coverage:** Every "Goals" item in the design spec has a task — Twenty MCP reads/mutations (Tasks 1, 5), OpenUI tool-execution hop replaced for CRM (Tasks 6, 7, 8), Meta/Google Ads documented (Task 4), mutation safety preserved (Task 6's structural filter + Task 9's regression check). The design spec's Migration step 5 ("remove http-tool-provider.ts") was found inaccurate during planning — corrected in this plan's Global Constraints, since Reports Chat and Copilot's campaign-draft mutation still need it; no task removes those files.
-- **Type consistency:** `ChatMessage`/`ToolCall` (Task 3) → consumed identically by `mcp-client.ts` (Task 2, defines its own compatible `McpToolCall`/`McpToolResult`) and `resolve-tools-then-generate.ts` (Task 6). `TWENTY_MCP_TOOLS`/`TWENTY_MCP_INCLUDE_TOOLS_HEADER` (Task 1) are the single source of truth for tool-name strings — Tasks 5 and 6 import them, never re-declare them.
+- **Type consistency:** `ChatMessage`/`ToolCall`/`ToolDefinition` (Task 3) → consumed identically by `resolve-tools-then-generate.ts` (Task 6), which builds `ToolDefinition[]` from `mcp-client.ts`'s (Task 2) `McpToolSchema` results. `TWENTY_MCP_TOOLS`/`TWENTY_MCP_READ_TOOL_NAMES`/`TWENTY_MCP_URL` (Task 1) are the single source of truth for tool-name strings and the gateway address — Tasks 2, 5, and 6 import them, never re-declare them.
+- **Validation pass (2026-08-05):** researched against official sources and applied two corrections — Streamable HTTP instead of the deprecated SSE transport, and the official `@modelcontextprotocol/client` SDK called directly instead of Bifrost's proprietary MCP Gateway feature (removes a config section, a custom header, and a live tool-naming-discovery step from Task 1, net negative code). Full findings: `docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-validation.md`.
 - **No placeholders:** the one genuinely unverifiable detail (Bifrost's exact function-calling name format for MCP tools) is resolved by a live curl check with a concrete expected value in Task 1 Step 4, not left as a guess.
