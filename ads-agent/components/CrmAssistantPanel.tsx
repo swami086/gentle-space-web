@@ -11,7 +11,7 @@ const crmChatLibrary = crmLibrary as Library;
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
 
-export function CrmAssistantPanel({ onStageAdvanced }: { onStageAdvanced?: () => void }) {
+export function CrmAssistantPanel() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);

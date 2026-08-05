@@ -2,7 +2,7 @@
 "use client";
 
 import { Reorder } from "framer-motion";
-import { createElement, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { KanbanColumn } from "./KanbanColumn";
 
 export type KanbanBoardColumn = {
@@ -23,26 +23,24 @@ export function KanbanBoard({
   columns: KanbanBoardColumn[];
   onReorderColumn?: (columnKey: string, orderedIds: string[]) => void;
 }) {
-  return createElement(
-    "div",
-    { className: "flex gap-4 overflow-x-auto pb-2" },
-    columns.map((column) =>
-      createElement(
-        KanbanColumn,
-        { key: column.key, label: column.label, count: column.cards.length },
-        createElement(
-          Reorder.Group,
-          {
-            axis: "y",
-            values: column.cards.map((c) => c.id),
-            onReorder: (orderedIds: string[]) => onReorderColumn?.(column.key, orderedIds),
-            className: "flex flex-col gap-2",
-          },
-          column.cards.map((card) =>
-            createElement(Reorder.Item, { key: card.id, value: card.id }, card.node),
-          ),
-        ),
-      ),
-    ),
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-2">
+      {columns.map((column) => (
+        <KanbanColumn key={column.key} label={column.label} count={column.cards.length}>
+          <Reorder.Group
+            axis="y"
+            values={column.cards.map((c) => c.id)}
+            onReorder={(orderedIds: string[]) => onReorderColumn?.(column.key, orderedIds)}
+            className="flex flex-col gap-2"
+          >
+            {column.cards.map((card) => (
+              <Reorder.Item key={card.id} value={card.id}>
+                {card.node}
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
+        </KanbanColumn>
+      ))}
+    </div>
   );
 }

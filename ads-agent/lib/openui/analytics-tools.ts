@@ -16,20 +16,23 @@ export const analyticsToolSpecs: ToolSpec[] = [
   {
     name: "get_spend_cpl_trend",
     description: "Get the daily spend/CPL trend for the last N days (default 7).",
-    parameters: {
+    inputSchema: {
       type: "object",
       properties: { days: { type: "number", description: "Number of days back, default 7" } },
       required: [],
     },
+    outputSchema: { type: "object" },
   },
   {
     name: "list_campaigns_with_cpl",
     description: "List every campaign with its platform, status, daily budget, corridor, and latest CPL.",
-    parameters: { type: "object", properties: {}, required: [] },
+    inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: { type: "array" },
   },
   {
     name: "list_pending_proposals",
     description: "List every proposal currently awaiting human approval.",
-    parameters: { type: "object", properties: {}, required: [] },
+    inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: { type: "array" },
   },
 ];

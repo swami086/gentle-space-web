@@ -33,28 +33,31 @@ export const crmToolSpecs: ToolSpec[] = [
   {
     name: "list_opportunities",
     description: "List every open CRM opportunity/lead across all pipeline stages.",
-    parameters: { type: "object", properties: {}, required: [] },
+    inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: { type: "array" },
   },
   {
     name: "search_opportunities",
     description: "Search CRM opportunities/leads by a case-insensitive name substring.",
-    parameters: {
+    inputSchema: {
       type: "object",
       properties: { query: { type: "string", description: "Name substring to search for" } },
       required: ["query"],
     },
+    outputSchema: { type: "array" },
   },
   {
     name: "get_opportunity",
     description: "Get one CRM opportunity/lead by its exact id.",
-    parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    outputSchema: { type: "object" },
   },
   {
     name: "advance_opportunity_stage",
     description:
       `Move an opportunity to a new pipeline stage. Valid toStage values: ${PIPELINE_STAGES.map((s) => s.value).join(", ")}. ` +
       "ALWAYS render StageChangeConfirm first and wait for the user's explicit confirmation before calling this.",
-    parameters: {
+    inputSchema: {
       type: "object",
       properties: {
         id: { type: "string" },
@@ -63,5 +66,6 @@ export const crmToolSpecs: ToolSpec[] = [
       },
       required: ["id", "opportunityName", "toStage"],
     },
+    outputSchema: { type: "object" },
   },
 ];
