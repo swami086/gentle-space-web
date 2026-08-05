@@ -1,6 +1,16 @@
+export type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
+
 export type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+};
+
+/** Standard OpenAI-compatible tool-calling schema — see openai.com/docs/api-reference/chat/create. */
+export type ToolDefinition = {
+  type: "function";
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
 };
 
 export type ChatCompletionOptions = {
@@ -14,12 +24,15 @@ export type ChatCompletionOptions = {
   };
   fallbacks?: string[];
   timeoutMs?: number;
+  /** Standard OpenAI-compatible tools param — e.g. the Twenty MCP server's read-only tool schemas. */
+  tools?: ToolDefinition[];
+  toolChoice?: "auto" | "none";
 };
 
 export type ChatCompletionResponse = {
   id?: string;
   model?: string;
-  choices?: { message?: { role?: string; content?: string | null } }[];
+  choices?: { message?: { role?: string; content?: string | null; tool_calls?: ToolCall[] } }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   extra_fields?: { provider?: string };
 };
@@ -73,6 +86,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<Ch
       max_tokens: options.maxTokens ?? 600,
       ...(fallbacks.length > 0 ? { fallbacks } : {}),
       ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+      ...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto" } : {}),
     }),
     signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
   });

@@ -128,4 +128,74 @@ describe("bifrost client", () => {
       /bifrost chatCompletion failed: 502/,
     );
   });
+
+  describe("chatCompletion with tool_calls", () => {
+    it("passes a tools param through to the request body", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ choices: [{ message: { role: "assistant", content: "hi" } }] }),
+          { status: 200 },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { chatCompletion } = await import("./client");
+      const tools = [{ type: "function" as const, function: { name: "list_opportunities", description: "", parameters: {} } }];
+      await chatCompletion({ messages: [{ role: "user", content: "hi" }], tools });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const body = JSON.parse(init.body as string);
+      expect(body.tools).toEqual(tools);
+    });
+
+    it("returns tool_calls on the response message when present", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [{ id: "call_1", type: "function", function: { name: "twenty_list_opportunities", arguments: "{}" } }],
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { chatCompletion } = await import("./client");
+      const response = await chatCompletion({ messages: [{ role: "user", content: "show leads" }] });
+
+      expect(response.choices?.[0]?.message?.tool_calls).toEqual([
+        { id: "call_1", type: "function", function: { name: "twenty_list_opportunities", arguments: "{}" } },
+      ]);
+    });
+
+    it("accepts a tool-role message with tool_call_id in the request", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ choices: [{ message: { role: "assistant", content: "done" } }] }),
+          { status: 200 },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { chatCompletion } = await import("./client");
+      await chatCompletion({
+        messages: [
+          { role: "user", content: "show leads" },
+          { role: "assistant", content: "", tool_calls: [{ id: "call_1", type: "function", function: { name: "twenty_list_opportunities", arguments: "{}" } }] },
+          { role: "tool", content: "[]", tool_call_id: "call_1" },
+        ],
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const body = JSON.parse(init.body as string);
+      expect(body.messages[2]).toEqual({ role: "tool", content: "[]", tool_call_id: "call_1" });
+    });
+  });
 });
