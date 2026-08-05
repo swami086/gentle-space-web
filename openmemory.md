@@ -48,15 +48,16 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | Listing privacy (read boundary) | `lib/listings/public.ts` — `PublicListing`, `toPublicListing()` strips exact coords/address/pricing/sourceUrl; redacts prose via `redact.ts`; approx circle center = `approximateCoords` + 3-decimal round, `approxRadiusM = 500` |
 | RBAC auth-service | `auth-service/` (port 3040, Postgres 5435) — Google SSO, RS256 JWT + JWKS, `/bridge`, `/internal/org-members`; `ads-agent/lib/auth/{dal,middleware,internal-client}.ts`, `/users`, admin/operator guards; runbook `docs/superpowers/specs/2026-08-04-rbac-auth-service-runbook.md` |
 | Auth UI (login/error/pending) | `auth-service/app/{login,error}/page.tsx`, `auth-service/components/{BrandLockup.tsx,ui/{button,card}.tsx,icons/GoogleIcon.tsx}`, `ads-agent/app/(admin)/layout.tsx` pending-approval Card — see Patterns entry below |
-| OpenUI campaign SetupCard | `ads-agent/lib/openui/campaign-library.ts` — `SetupCardView` + `normalizeSetupCardViewProps` (null-safe for streaming Renderer), `campaignLibrary`, `buildCampaignPromptOptions`, `parseSetupCardResponse`; schema uses `.optional().default` (not `.nullable()`); streaming types in `streaming-types.ts` |
-| OpenUI named→positional | `ads-agent/lib/openui/normalize-setup-card.ts` — schema-key-order rewrite of LLM kwargs/`:` args before parse; used by `parseSetupCardResponse` + `AiSetupView` streaming `Renderer` |
+| OpenUI campaign SetupCard | `ads-agent/lib/openui/campaign-library.ts` — `SetupCardView` + `normalizeSetupCardViewProps` (null-safe for streaming Renderer), `campaignLibrary`, `buildCampaignPromptOptions`, `parseSetupCardResponse` (via `normalizeOpenUiResponse`); schema uses `.optional().default` (not `.nullable()`); streaming types in `streaming-types.ts` |
+| OpenUI named→positional | `ads-agent/lib/openui/normalize-named-kwargs.ts` + `normalize-openui-response.ts` — registry of all OpenUI components; root=`/preamble extract + named/mixed kwargs → positional applied as a **non-blocking hygiene pass**, never a server-side reject. Campaign draft chat (`parseSetupCardResponse`) is the only surface that still hard-parses server-side (DB persistence); CRM/Reports/Copilot (`crm-chat.ts`/`reports-chat.ts`/`copilot-chat.ts`) stream normalized-but-unvalidated text straight to the client `Renderer` + `toolProvider`, which executes `Query()`/`Mutation()` for real — see `docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md`. |
 | OpenUI AiSetupView | `ads-agent/components/campaign-draft-chat/AiSetupView.tsx` — read-only AI setup: normalized stream → `Renderer`, `SetupCardView` at rest, Create Proposal button |
 | Copilot state | `ads-agent/components/copilot/copilot-state.ts` — pure reducer: `isOpen`, `messages[]`, `pendingQuestion`; actions OPEN/CLOSE/TOGGLE/SEED_AND_OPEN/CLEAR_PENDING_QUESTION/APPEND_MESSAGE |
 | CopilotProvider | `ads-agent/components/copilot/CopilotProvider.tsx` — `useReducer` + Context; `useCopilot()` exposes open/close/toggle/seedAndOpen/appendMessage/clearPendingQuestion; mount once at `(admin)/layout.tsx` |
 | CopilotPanel | `ads-agent/components/copilot/CopilotPanel.tsx` — floating chat UI; SSE to `POST /api/copilot/chat`; OpenUI via `Renderer` + `platformLibrary` + **HTTP** `createHttpToolProvider` → `POST /api/openui/tools` (never import `platformToolProvider` into client — pg leak); plain-text acks via `looksLikeOpenUiLang` |
-| OpenUI Lang detector | `ads-agent/lib/openui/is-openui-lang.ts` — `looksLikeOpenUiLang()` shared by `parseCopilotResponse` and `CopilotPanel` bifurcation |
+| OpenUI Lang detector | `ads-agent/lib/openui/is-openui-lang.ts` — `looksLikeOpenUiLang()` used by client panels (CRM/Reports/Copilot/Campaign) to bifurcate `Renderer` vs plain-text bubbles |
 | OpenUI shared structured views | `ads-agent/lib/openui/shared-structured-views.ts` — dual-mode `ComparisonCard`, `Timeline`, `RankedList`, `BatchActionConfirm` (`*View` + `defineComponent`); Zod `.optional().default`; BatchActionConfirm buttons unwired until mutation tools |
-| OpenUI parse retry | `ads-agent/lib/openui/parse-retry.ts` — generic `parseWithBoundedRetry<T>()`; `ParseAttempt`/`ParseFn`/`RetryModelFn`; exactly one retry on parse failure; exceptions from `retryModel` propagate; consumer Copilot (`copilot-chat.ts`) |
+| OpenUI parse retry | `ads-agent/lib/openui/parse-retry.ts` — generic `parseWithBoundedRetry<T>()` helper + unit tests; **no production chat surface imports it after 2026-08-05 generate/execute alignment** (CRM/Reports/Copilot stream-through; Campaign uses its own inline validation-retry in `campaign-chat.ts` / `parseSetupCardResponse`) |
+| Reports chat (OpenUI) | `ads-agent/lib/decision-engine/reports-chat.ts` — `draftReportsChatReply()` streams raw text through `normalizeOpenUiResponse()` only (no server `createParser`/retry); client `ReportsChat.tsx` `Renderer` + `onError` |
 | AI action log | `ads-agent/lib/db/ai-action-log.ts` — `logAiAction`, `countAiActionsToday`, `listRecentAiActions`; table `ai_action_log` in `schema.sql`; wired from `lib/decision-engine/cycle.ts` when proposals created (marketing domain); CRM stage-advance (crm domain) in Task 9 |
 | Twenty CRM pipeline | `ads-agent/lib/crm/twenty-pipeline.ts` — `PIPELINE_STAGES` (7 real stages), `listOpportunities`/`getOpportunity`/`updateOpportunityStage`/`getPipelineValue`, `maskPhone`; fail-soft REST client; consumed by CRM board, Home stat, crm-tools |
 
@@ -169,6 +170,40 @@ Runtime config is **not in git** — it was copied from `~/Documents/Resume/gent
   `PATCH /api/crm/opportunities/[id]/stage` + `CrmBoardRefreshListener` (`router.refresh()`), not
   `advance_opportunity_stage` from the Renderer. Landed on
   `feat/ads-agent-admin-dashboard-v3-pencil` at `ed5514a`.
+- **Copilot parse: bare `SetupCard(named kwargs)` (2026-08-05).** Bifrost often omits `root =` and
+  uses named kwargs; `looksLikeOpenUiLang` rejected → generic “trouble putting that together”.
+  Fix: `normalizeOpenUiResponse` (`ensureOpenUiRootAssignment` + `normalizeSetupCardLang`) in
+  Copilot/CRM/Reports parsers; `start_campaign_draft` tool for create intents. Commit on `main`.
+- **Campaign chat “propose headlines and descriptions” parse gap (2026-08-05).** Same Bifrost
+  habits (`SetupCard(...)` without `root =`, prose preamble, mixed positional+named kwargs for
+  headlines/descriptions) hit `parseSetupCardResponse`, which still only ran
+  `normalizeSetupCardLang` → “I had trouble structuring that”. Fix: route campaign parse +
+  `AiSetupView` through `normalizeOpenUiResponse` (`extractOpenUiStatement` + root= + mixed-args
+  rewrite).
+- **CRM Assistant named-kwargs parse gap (2026-08-05).** `crm-chat` already called
+  `normalizeOpenUiResponse`, but that only rewrote SetupCard — Bifrost
+  `OpportunityCard(name=…)` / `StageChangeConfirm(…)` / `OpportunityList(opportunities=…)` still
+  failed → “trouble putting that together”. Fix: shared `normalize-named-kwargs.ts` registry for
+  all OpenUI components; `normalizeOpenUiResponse` rewrites every registered call.
+- **OpenUI live-smoke + regression matrix (2026-08-05).** Exhaustive fixture matrix
+  `lib/openui/openui-parse-regression.test.ts` (all components × bare/named/colon/mixed/preamble/fence)
+  guards the retained named→positional hygiene. Live gate:
+  `OPENUI_LIVE_SMOKE=1 npx vitest run lib/openui/openui-live-smoke.test.ts` (Campaign/CRM/Reports/Copilot)
+  asserts non-empty replies and absence of the old generic-failure copy — not component render quality.
+- **Stopped server-side OpenUI parse gatekeeping for CRM/Reports/Copilot (2026-08-05).** Three
+  rounds of ad-hoc coercion functions (`coerceJsonStyleOpenUi`, `unwrapSpuriousRootWrapper`,
+  `coerceMacroTrendChart`) were symptom-patches for a self-inflicted hard gate: `crm-chat.ts` /
+  `reports-chat.ts` / `copilot-chat.ts` used to `createParser` + `parseWithBoundedRetry` server-side
+  and discard the whole turn (`"I had trouble putting/structuring that together"`) on any
+  imperfect model output, even though each surface's client panel already has a working
+  `<Renderer toolProvider={...}>` that executes `Query()`/`Mutation()` for real (the officially
+  documented OpenUI Generate→Execute split). Fix: those three generators now stream raw
+  (root=/fence-strip/named→positional normalized) text straight through unconditionally; the three
+  invented-shape coercions were deleted in Task 5; only Campaign draft chat still hard-parses
+  server-side, because it persists parsed fields to the `campaign_drafts` DB row. See
+  `docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md` and its
+  addendum on why the named-kwargs rewrite itself (unlike the invented-shape coercions) had to be
+  *kept* for every component, not just `SetupCard`.
 
 **Docker:** the pgvector+AGE volume was created by the Resume folder, so compose must pin the original project name or a new empty volume is used instead:
 
