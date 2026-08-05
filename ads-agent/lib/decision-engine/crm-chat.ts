@@ -1,8 +1,8 @@
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { crmLibrary } from "../openui/crm-library";
-import { crmToolSpecs } from "../openui/crm-tools";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
+import { resolveToolsThenGenerate } from "../openui/resolve-tools-then-generate";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -18,10 +18,9 @@ function buildSystemPrompt(): string {
       "asked to move a lead's stage, ALWAYS render StageChangeConfirm and wait for the user's explicit " +
       "confirmation before the stage is actually changed (the confirm button calls a separate API " +
       "route, not you — you only need to render the confirmation).",
-    tools: crmToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
+    tools: [],
     toolExamples: [
-      `leads = Query("list_opportunities", {}, [])`,
-      `root = OpportunityList(@Each(leads, "lead", {name: lead.name, stage: lead.stage, tier: lead.tier, amountLabel: "" + lead.amountInr, maskedPhone: lead.maskedPhone, source: lead.source}))`,
+      `root = OpportunityList([{name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT", amountLabel: "15000", maskedPhone: "+91 8XXXXX-1234", source: "WhatsApp"}])`,
     ],
     additionalRules: [
       "Prefer OpportunityCard/OpportunityList/StageChangeConfirm over plain text whenever the answer " +
@@ -30,11 +29,11 @@ function buildSystemPrompt(): string {
         "under 120 characters, with no \"root = ...\" statement.",
       "Always emit `root = ComponentName(...)` with positional args (Zod key order) — never named " +
         "kwargs like OpportunityCard(name: \"...\").",
-      "Use Query() for list/search/get opportunity tools; reshape each tool row into the exact " +
-        "OpportunityCard field names via @Each(rows, \"lead\", {name: ..., stage: ..., tier: ..., " +
-        "amountLabel: ..., maskedPhone: ..., source: ...}) — the tool's own field names (e.g. " +
-        "amountInr) do not match the component's props, so passing rows through unreshaped will " +
-        "fail to render. For stage moves, render StageChangeConfirm with opportunityId, " +
+      "Opportunity/lead data is already provided to you above as a tool result — reshape each row " +
+        "into the exact OpportunityCard/OpportunityList prop names (see the worked example); the " +
+        "tool's own field names (e.g. amountInr) do not match the component's props, so passing rows " +
+        "through unreshaped will fail to render. Do not call Query() for opportunity data; it is not " +
+        "fetched that way anymore. For stage moves, render StageChangeConfirm with opportunityId, " +
         "opportunityName, fromStage, toStage — never call advance_opportunity_stage yourself; the " +
         "Confirm button PATCHes the stage route.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
@@ -78,11 +77,12 @@ export async function* draftCrmChatReply(input: {
     feature: "ads-agent:crm-chat",
   };
 
-  const messages: ChatMessage[] = [
+  const baseMessages: ChatMessage[] = [
     { role: "system", content: buildSystemPrompt() },
     ...input.history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: input.userMessage },
   ];
+  const messages = await resolveToolsThenGenerate(ctx, baseMessages);
 
   let raw: string;
   try {
