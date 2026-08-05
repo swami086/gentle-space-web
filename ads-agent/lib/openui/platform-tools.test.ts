@@ -41,9 +41,11 @@ describe("composeToolSpecs", () => {
 describe("platformToolProvider / platformToolSpecs", () => {
   it("includes every CRM and analytics tool", () => {
     const names = platformToolSpecs.map((s) => s.name);
+    expect(names).toContain("start_campaign_draft");
     expect(names).toContain("list_opportunities");
     expect(names).toContain("advance_opportunity_stage");
     expect(names).toContain("get_spend_cpl_trend");
+    expect(platformToolProvider.start_campaign_draft).toBeDefined();
     expect(platformToolProvider.list_opportunities).toBeDefined();
     expect(platformToolProvider.get_spend_cpl_trend).toBeDefined();
   });

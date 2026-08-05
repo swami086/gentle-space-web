@@ -14,6 +14,7 @@ import { useCopilot } from "./CopilotProvider";
 const copilotLibrary = platformLibrary as Library;
 /** Names only — do not import platform-tools here (pulls pg into the client bundle). */
 const copilotToolProvider = createHttpToolProvider([
+  "start_campaign_draft",
   "list_opportunities",
   "search_opportunities",
   "get_opportunity",

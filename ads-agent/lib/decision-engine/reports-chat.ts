@@ -4,6 +4,7 @@ import { streamChatCompletion } from "../openui/bifrost-stream";
 import { analyticsLibrary } from "../openui/analytics-library";
 import { analyticsToolSpecs } from "../openui/analytics-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
+import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
@@ -24,6 +25,7 @@ function buildSystemPrompt(): string {
       "Prefer TrendChart/DataTable over plain text whenever the answer concerns metrics or tabular data.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
+      "Always emit `root = ComponentName(...)` with positional args.",
       "Use Query() with the registered analytics tools, then render TrendChart or DataTable from the result.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment.",
     ],
@@ -31,16 +33,16 @@ function buildSystemPrompt(): string {
 }
 
 function parseReportsResponse(text: string): ParseAttempt<string> {
-  const trimmed = text.trim();
-  if (!trimmed) return { kind: "error", errors: ["empty response"] };
-  if (!looksLikeOpenUiLang(trimmed)) {
-    if (trimmed.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: trimmed };
+  const normalized = normalizeOpenUiResponse(text);
+  if (!normalized) return { kind: "error", errors: ["empty response"] };
+  if (!looksLikeOpenUiLang(normalized)) {
+    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
     return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
   }
   const parser = createParser(analyticsLibrary.toJSONSchema());
   let result: ReturnType<typeof parser.parse>;
   try {
-    result = parser.parse(trimmed);
+    result = parser.parse(normalized);
   } catch (err) {
     return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
   }
@@ -51,7 +53,7 @@ function parseReportsResponse(text: string): ParseAttempt<string> {
   if (result.meta.errors.length > 0) {
     return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
   }
-  return { kind: "ok", value: trimmed };
+  return { kind: "ok", value: normalized };
 }
 
 async function* runReportsModel(

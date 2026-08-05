@@ -10,6 +10,10 @@ describe("looksLikeOpenUiLang", () => {
     expect(looksLikeOpenUiLang('  root = CampaignList([])  ')).toBe(true);
   });
 
+  it("returns true for bare ComponentName( calls without root =", () => {
+    expect(looksLikeOpenUiLang('SetupCard("hi", "chatting")')).toBe(true);
+  });
+
   it("returns false for short plain-text acknowledgments", () => {
     expect(looksLikeOpenUiLang("Done — paused that campaign.")).toBe(false);
   });

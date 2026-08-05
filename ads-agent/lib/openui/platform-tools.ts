@@ -1,4 +1,5 @@
 import type { ToolSpec } from "@openuidev/lang-core";
+import { campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
 import { crmToolProvider, crmToolSpecs } from "./crm-tools";
 import { analyticsToolProvider, analyticsToolSpecs } from "./analytics-tools";
 
@@ -29,10 +30,12 @@ export function composeToolSpecs(...specLists: ToolSpec[][]): ToolSpec[] {
 }
 
 /**
- * The global Copilot's composed tool registry. Now merges crmToolProvider/crmToolSpecs (Spec 3,
- * Task 9) and analyticsToolProvider/analyticsToolSpecs (Spec 2, Task 10) — Spec 1's Campaign Chat
- * still has no ToolSpec/ToolProvider (unchanged finding from the foundation plan), so no campaign
- * entry exists here yet; add one the same way if/when Campaign Chat gets live tool calls.
+ * The global Copilot's composed tool registry — campaign (start draft), CRM, and analytics.
+ * Embedded Campaign Chat still owns rich SetupCard editing; Copilot only starts a draft + deep-link.
  */
-export const platformToolProvider: ToolProviderMap = composeToolProviders(crmToolProvider, analyticsToolProvider);
-export const platformToolSpecs: ToolSpec[] = composeToolSpecs(crmToolSpecs, analyticsToolSpecs);
+export const platformToolProvider: ToolProviderMap = composeToolProviders(
+  campaignToolProvider,
+  crmToolProvider,
+  analyticsToolProvider,
+);
+export const platformToolSpecs: ToolSpec[] = composeToolSpecs(campaignToolSpecs, crmToolSpecs, analyticsToolSpecs);

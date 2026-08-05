@@ -4,6 +4,7 @@ import { streamChatCompletion } from "../openui/bifrost-stream";
 import { crmLibrary } from "../openui/crm-library";
 import { crmToolSpecs } from "../openui/crm-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
+import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
@@ -28,6 +29,7 @@ function buildSystemPrompt(): string {
         "concerns specific leads.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
+      "Always emit `root = ComponentName(...)` with positional args.",
       "Use Query() for list/search/get opportunity tools. For stage moves, render StageChangeConfirm " +
         "with opportunityId, opportunityName, fromStage, toStage — never call advance_opportunity_stage " +
         "yourself; the Confirm button PATCHes the stage route.",
@@ -37,16 +39,16 @@ function buildSystemPrompt(): string {
 }
 
 function parseCrmResponse(text: string): ParseAttempt<string> {
-  const trimmed = text.trim();
-  if (!trimmed) return { kind: "error", errors: ["empty response"] };
-  if (!looksLikeOpenUiLang(trimmed)) {
-    if (trimmed.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: trimmed };
+  const normalized = normalizeOpenUiResponse(text);
+  if (!normalized) return { kind: "error", errors: ["empty response"] };
+  if (!looksLikeOpenUiLang(normalized)) {
+    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
     return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
   }
   const parser = createParser(crmLibrary.toJSONSchema());
   let result: ReturnType<typeof parser.parse>;
   try {
-    result = parser.parse(trimmed);
+    result = parser.parse(normalized);
   } catch (err) {
     return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
   }
@@ -57,7 +59,7 @@ function parseCrmResponse(text: string): ParseAttempt<string> {
   if (result.meta.errors.length > 0) {
     return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
   }
-  return { kind: "ok", value: trimmed };
+  return { kind: "ok", value: normalized };
 }
 
 async function* runCrmModel(

@@ -4,6 +4,7 @@ import { streamChatCompletion } from "../openui/bifrost-stream";
 import { platformLibrary } from "../openui/platform-library";
 import { platformToolSpecs } from "../openui/platform-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
+import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
@@ -26,12 +27,21 @@ function buildSystemPrompt(): string {
       "You are the Gentle Space admin dashboard's AI Copilot. Answer questions about campaigns, " +
       "leads, and performance by rendering the most specific matching component rather than prose.",
     tools: platformToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
+    toolExamples: [
+      `root = SetupCard("Here's a Whitefield draft at ₹500/day.", "ready", "Whitefield", 500, "HSR seekers", [], ["Headline 1", "Headline 2", "Headline 3"], ["Description one."], "https://www.gentlespacesolutions.com/spaces")`,
+    ],
     additionalRules: [
       "Prefer rendering the most specific matching component over plain text — component > prose, " +
         "always, unless the response carries no information at all.",
       "A response with no informational content (a one-word acknowledgment like \"Done\" or " +
         "\"Cancelled\" after a confirmed action) may stay plain text, under 120 characters, with no " +
         "\"root = ...\" statement at all — do not force a trivial ack into a component.",
+      "Always emit openui-lang as `root = ComponentName(...)` with POSITIONAL args (Zod key order). " +
+        "Never use named kwargs like SetupCard(status: \"ready\").",
+      "When the user asks to create, start, or sample a campaign: call Mutation(\"start_campaign_draft\", {}) " +
+        "and reply with a short plain acknowledgment under 120 characters that includes the returned path " +
+        "(e.g. Draft ready — open /campaigns/drafts/<id>). Do not invent a full SetupCard for creation; " +
+        "Campaign Chat on that draft page owns setup.",
       "Use Query() only with the registered tools. For stage moves, ALWAYS render StageChangeConfirm " +
         "(include opportunityId) and wait for the user to click Confirm — the Confirm button PATCHes " +
         "the stage route; do not call advance_opportunity_stage yourself.",
@@ -42,18 +52,18 @@ function buildSystemPrompt(): string {
 }
 
 function parseCopilotResponse(text: string): ParseAttempt<string> {
-  const trimmed = text.trim();
-  if (!trimmed) return { kind: "error", errors: ["empty response"] };
+  const normalized = normalizeOpenUiResponse(text);
+  if (!normalized) return { kind: "error", errors: ["empty response"] };
 
-  if (!looksLikeOpenUiLang(trimmed)) {
-    if (trimmed.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: trimmed };
+  if (!looksLikeOpenUiLang(normalized)) {
+    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
     return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
   }
 
   const parser = createParser(platformLibrary.toJSONSchema());
   let result: ReturnType<typeof parser.parse>;
   try {
-    result = parser.parse(trimmed);
+    result = parser.parse(normalized);
   } catch (err) {
     return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
   }
@@ -65,7 +75,7 @@ function parseCopilotResponse(text: string): ParseAttempt<string> {
   if (result.meta.errors.length > 0) {
     return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
   }
-  return { kind: "ok", value: trimmed };
+  return { kind: "ok", value: normalized };
 }
 
 async function* runCopilotModel(
