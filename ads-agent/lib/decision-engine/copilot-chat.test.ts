@@ -14,6 +14,10 @@ vi.mock("../openui/bifrost-stream", () => ({ streamChatCompletion: vi.fn() }));
 import { draftCopilotReply } from "./copilot-chat";
 import { InsufficientCreditsError } from "../metering/types";
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 async function drain(gen: AsyncGenerator<{ type: "delta"; content: string } | { type: "done"; reply: string }>) {
   const events = [];
   for await (const event of gen) events.push(event);
@@ -27,23 +31,32 @@ function fakeStream(...chunks: string[]) {
 }
 
 describe("draftCopilotReply", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("returns a fixed message when Bifrost is not configured", async () => {
     isBifrostConfigured.mockReturnValue(false);
     const events = await drain(draftCopilotReply({ history: [], userMessage: "hi" }));
     expect(events).toEqual([{ type: "done", reply: expect.stringContaining("Bifrost is not configured") }]);
   });
 
-  it("streams deltas then yields the parsed root component's raw text on success", async () => {
+  it("streams deltas then yields the raw (normalized) text on success", async () => {
     isBifrostConfigured.mockReturnValue(true);
     getSession.mockResolvedValue(null);
     callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream(`root = StatCard`, `("Leads", "42")`));
     const events = await drain(draftCopilotReply({ history: [], userMessage: "how many leads?" }));
     expect(events[0]).toEqual({ type: "delta", content: "root = StatCard" });
     expect(events[events.length - 1]).toEqual({ type: "done", reply: 'root = StatCard("Leads", "42")' });
+  });
+
+  it("streams a named-kwargs component through, normalized to positional (no server rejection)", async () => {
+    isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(
+      fakeStream(`StatCard(label="Pipeline", value="₹12L")`),
+    );
+    const events = await drain(draftCopilotReply({ history: [], userMessage: "what's my pipeline?" }));
+    expect(events[events.length - 1]).toEqual({
+      type: "done",
+      reply: 'root = StatCard("Pipeline", "₹12L", "", "flat")',
+    });
   });
 
   it("accepts a short plain-text acknowledgment with no component statement", async () => {
@@ -54,25 +67,12 @@ describe("draftCopilotReply", () => {
     expect(events[events.length - 1]).toEqual({ type: "done", reply: "Done — paused that campaign." });
   });
 
-  it("retries once on a parse failure and succeeds if the retry parses", async () => {
+  it("returns a fallback message for an empty model response instead of a generic parse error", async () => {
     isBifrostConfigured.mockReturnValue(true);
     getSession.mockResolvedValue(null);
-    callMeteredStreamingChatCompletion
-      .mockReturnValueOnce(fakeStream("not valid openui lang at all, way too long to count as a trivial ack because it goes on and on describing things nobody asked for"))
-      .mockReturnValueOnce(fakeStream(`root = StatCard("Leads", "42")`));
-    const events = await drain(draftCopilotReply({ history: [], userMessage: "how many leads?" }));
-    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
-    expect(events[events.length - 1]).toEqual({ type: "done", reply: 'root = StatCard("Leads", "42")' });
-  });
-
-  it("gives up gracefully after one failed retry — no silent hang, no third attempt", async () => {
-    isBifrostConfigured.mockReturnValue(true);
-    getSession.mockResolvedValue(null);
-    const garbled = "not valid openui lang at all, way too long to count as a trivial ack because it goes on and on describing things nobody asked for";
-    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream(garbled)).mockReturnValueOnce(fakeStream(garbled));
-    const events = await drain(draftCopilotReply({ history: [], userMessage: "how many leads?" }));
-    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
-    expect(events[events.length - 1]).toEqual({ type: "done", reply: expect.stringContaining("trouble putting that together") });
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream(""));
+    const events = await drain(draftCopilotReply({ history: [], userMessage: "hi" }));
+    expect(events[events.length - 1]).toEqual({ type: "done", reply: "I didn't get a response — try asking again." });
   });
 
   it("returns the credits-exhausted message when the first model call throws InsufficientCreditsError", async () => {
@@ -83,5 +83,15 @@ describe("draftCopilotReply", () => {
     });
     const events = await drain(draftCopilotReply({ history: [], userMessage: "hi" }));
     expect(events).toEqual([{ type: "done", reply: expect.stringContaining("run out of AI credits") }]);
+  });
+
+  it("returns a generic unavailable message when the model throws a non-credits error", async () => {
+    isBifrostConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockImplementationOnce(() => {
+      throw new Error("upstream timeout");
+    });
+    const events = await drain(draftCopilotReply({ history: [], userMessage: "hi" }));
+    expect(events).toEqual([{ type: "done", reply: expect.stringContaining("unavailable") }]);
   });
 });

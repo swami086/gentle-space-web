@@ -31,12 +31,14 @@ export function CopilotPanel() {
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setError(null);
+    setRenderError(null);
     setStreamingText("");
     appendMessage({ id: `local-${Date.now()}`, role: "user", content: trimmed });
     setInput("");
@@ -121,7 +123,13 @@ export function CopilotPanel() {
               </div>
             ) : looksLikeOpenUiLang(message.content) ? (
               <div key={message.id} className="max-w-[95%]">
-                <Renderer response={message.content} library={copilotLibrary} toolProvider={copilotToolProvider} isStreaming={false} />
+                <Renderer
+                  response={message.content}
+                  library={copilotLibrary}
+                  toolProvider={copilotToolProvider}
+                  isStreaming={false}
+                  onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+                />
               </div>
             ) : (
               <div key={message.id} className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
@@ -131,7 +139,13 @@ export function CopilotPanel() {
           )}
           {sending && streamingText && looksLikeOpenUiLang(streamingText) && (
             <div className="max-w-[95%]">
-              <Renderer response={streamingText} library={copilotLibrary} toolProvider={copilotToolProvider} isStreaming />
+              <Renderer
+                response={streamingText}
+                library={copilotLibrary}
+                toolProvider={copilotToolProvider}
+                isStreaming
+                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+              />
             </div>
           )}
           {sending && streamingText && !looksLikeOpenUiLang(streamingText) && (
@@ -141,7 +155,7 @@ export function CopilotPanel() {
             <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Thinking…</div>
           )}
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {(error ?? renderError) && <p className="text-sm text-destructive">{error ?? renderError}</p>}
         <div className="flex gap-2">
           <input
             className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"

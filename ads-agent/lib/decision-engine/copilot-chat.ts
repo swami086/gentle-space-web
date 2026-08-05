@@ -1,11 +1,8 @@
-import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { platformLibrary } from "../openui/platform-library";
 import { platformToolSpecs } from "../openui/platform-tools";
-import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
-import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -15,12 +12,6 @@ export type CopilotMessage = { role: "user" | "assistant"; content: string };
 
 export type CopilotTurnEvent = { type: "delta"; content: string } | { type: "done"; reply: string };
 
-/** A response with no informational content (a one-word acknowledgment) stays plain text — the
- * foundation spec's Response composition rule 4. Only attempt component parsing when the text
- * looks like it's trying to emit one (a "root = Name(" statement); otherwise, treat short plain
- * text as a valid trivial acknowledgment rather than a parse failure. */
-const PLAIN_ACK_MAX_LENGTH = 120;
-
 function buildSystemPrompt(): string {
   return platformLibrary.prompt({
     preamble:
@@ -29,6 +20,8 @@ function buildSystemPrompt(): string {
     tools: platformToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
     toolExamples: [
       `root = SetupCard("Here's a Whitefield draft at ₹500/day.", "ready", "Whitefield", 500, "HSR seekers", [], ["Headline 1", "Headline 2", "Headline 3"], ["Description one."], "https://www.gentlespacesolutions.com/spaces")`,
+      `leads = Query("list_opportunities", {}, [])`,
+      `root = OpportunityList(@Each(leads, "lead", {name: lead.name, stage: lead.stage, tier: lead.tier, amountLabel: "" + lead.amountInr, maskedPhone: lead.maskedPhone, source: lead.source}))`,
     ],
     additionalRules: [
       "Prefer rendering the most specific matching component over plain text — component > prose, " +
@@ -46,36 +39,9 @@ function buildSystemPrompt(): string {
         "(include opportunityId) and wait for the user to click Confirm — the Confirm button PATCHes " +
         "the stage route; do not call advance_opportunity_stage yourself.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
-        "markdown fences, no prose outside a component statement.",
+        "markdown fences, no JSON, no invented Root() wrapper or macros, no prose outside a component statement.",
     ],
   });
-}
-
-function parseCopilotResponse(text: string): ParseAttempt<string> {
-  const normalized = normalizeOpenUiResponse(text);
-  if (!normalized) return { kind: "error", errors: ["empty response"] };
-
-  if (!looksLikeOpenUiLang(normalized)) {
-    if (normalized.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: normalized };
-    return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
-  }
-
-  const parser = createParser(platformLibrary.toJSONSchema());
-  let result: ReturnType<typeof parser.parse>;
-  try {
-    result = parser.parse(normalized);
-  } catch (err) {
-    return { kind: "error", errors: [err instanceof Error ? err.message : "parse exception"] };
-  }
-
-  if (!result.root) {
-    const meta = result.meta.errors.map((e) => `${e.path || "(root)"}: ${e.message}`);
-    return { kind: "error", errors: meta.length > 0 ? meta : ["no component root parsed"] };
-  }
-  if (result.meta.errors.length > 0) {
-    return { kind: "error", errors: result.meta.errors.map((e) => `${e.path}: ${e.message}`) };
-  }
-  return { kind: "ok", value: normalized };
 }
 
 async function* runCopilotModel(
@@ -94,13 +60,6 @@ async function* runCopilotModel(
     }
   }
   return full;
-}
-
-async function runCopilotModelSilent(ctx: MeteringContext, messages: ChatMessage[]): Promise<string> {
-  const gen = runCopilotModel(ctx, messages);
-  let result = await gen.next();
-  while (!result.done) result = await gen.next();
-  return result.value;
 }
 
 export async function* draftCopilotReply(input: {
@@ -125,9 +84,9 @@ export async function* draftCopilotReply(input: {
     { role: "user", content: input.userMessage },
   ];
 
-  let firstRaw: string;
+  let raw: string;
   try {
-    firstRaw = yield* runCopilotModel(ctx, messages);
+    raw = yield* runCopilotModel(ctx, messages);
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
@@ -137,26 +96,14 @@ export async function* draftCopilotReply(input: {
     return;
   }
 
-  let attempt: ParseAttempt<string>;
-  try {
-    attempt = await parseWithBoundedRetry(firstRaw, parseCopilotResponse, async (feedback) => {
-      messages.push({ role: "assistant", content: firstRaw });
-      messages.push({ role: "user", content: feedback });
-      return await runCopilotModelSilent(ctx, messages);
-    });
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      yield { type: "done", reply: "This organization has run out of AI credits — ask an admin to allocate more from Usage & Credits." };
-      return;
-    }
-    yield { type: "done", reply: "The Copilot is unavailable right now — try again shortly." };
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    yield { type: "done", reply: "I didn't get a response — try asking again." };
     return;
   }
 
-  if (attempt.kind === "error") {
-    yield { type: "done", reply: "I had trouble putting that together — could you rephrase, or ask something more specific?" };
-    return;
-  }
-
-  yield { type: "done", reply: attempt.value };
+  // Non-blocking hygiene only. Never rejects or retries — the client Renderer (with its
+  // toolProvider) parses and executes Query()/Mutation() for real. See
+  // docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md.
+  yield { type: "done", reply: normalizeOpenUiResponse(trimmed) };
 }
