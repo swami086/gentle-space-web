@@ -1,6 +1,8 @@
-/** Streamable HTTP endpoint for the twenty-mcp-gateway sidecar (see docker-compose.yml). */
+/** Streamable HTTP endpoint for the twenty-mcp-gateway sidecar (see docker-compose.yml).
+ * Default is localhost because the Next.js app runs on the host; override to
+ * http://twenty-mcp-gateway:8765/mcp only when the caller is inside the Compose network. */
 export const TWENTY_MCP_URL =
-  process.env.TWENTY_MCP_URL || "http://twenty-mcp-gateway:8765/mcp";
+  process.env.TWENTY_MCP_URL || "http://localhost:8765/mcp";
 
 /**
  * Real tool names exposed by the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
