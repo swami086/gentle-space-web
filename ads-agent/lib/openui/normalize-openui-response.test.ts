@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "@openuidev/lang-core";
 import { platformLibrary } from "./platform-library";
-import { ensureOpenUiRootAssignment, normalizeOpenUiResponse } from "./normalize-openui-response";
+import {
+  ensureOpenUiRootAssignment,
+  extractOpenUiStatement,
+  isLikelyTruncatedOpenUi,
+  normalizeOpenUiResponse,
+} from "./normalize-openui-response";
 import { looksLikeOpenUiLang } from "./is-openui-lang";
 
 describe("ensureOpenUiRootAssignment", () => {
@@ -11,6 +16,28 @@ describe("ensureOpenUiRootAssignment", () => {
 
   it("leaves existing root = statements alone", () => {
     expect(ensureOpenUiRootAssignment('root = StatCard("Leads", "42")')).toBe('root = StatCard("Leads", "42")');
+  });
+});
+
+describe("extractOpenUiStatement", () => {
+  it("slices past a prose preamble to the component call", () => {
+    expect(extractOpenUiStatement('Sure!\nSetupCard("hi", "chatting")')).toBe('SetupCard("hi", "chatting")');
+  });
+
+  it("slices past a prose preamble to a non-SetupCard component call", () => {
+    expect(extractOpenUiStatement('Sure!\nOpportunityCard("Priya", "NEW_BRIEF", "HOT")')).toBe(
+      'OpportunityCard("Priya", "NEW_BRIEF", "HOT")',
+    );
+  });
+});
+
+describe("isLikelyTruncatedOpenUi", () => {
+  it("detects unbalanced parentheses from a maxTokens cutoff", () => {
+    expect(isLikelyTruncatedOpenUi('root = SetupCard("hi", "chatting", [{"text": "a"')).toBe(true);
+  });
+
+  it("returns false for a well-formed statement", () => {
+    expect(isLikelyTruncatedOpenUi('root = SetupCard("hi", "chatting")')).toBe(false);
   });
 });
 
@@ -24,5 +51,68 @@ describe("normalizeOpenUiResponse", () => {
     expect(result.root).toBeTruthy();
     expect((result.root as { typeName: string }).typeName).toBe("SetupCard");
     expect(result.meta.errors).toEqual([]);
+  });
+
+  it("coerces preamble + mixed kwargs into a parseable SetupCard", () => {
+    const raw =
+      'Here you go:\nSetupCard("Proposed copy.", "chatting", headlines=["H1","H2","H3"], descriptions=["D1 under ninety chars.","D2 under ninety chars."])';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized.startsWith("root = SetupCard(")).toBe(true);
+    expect(normalized).not.toContain("headlines=");
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect(result.root).toBeTruthy();
+    expect(result.meta.errors).toEqual([]);
+  });
+
+  it("coerces CRM OpportunityCard named kwargs into positional OpenUI Lang", () => {
+    const raw =
+      'OpportunityCard(name="Priya Sharma", stage="NEW_BRIEF", tier="HOT", amountLabel="₹50k", maskedPhone="+91 ****1234", source="Google Ads")';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized).toBe(
+      'root = OpportunityCard("Priya Sharma", "NEW_BRIEF", "HOT", "₹50k", "+91 ****1234", "Google Ads")',
+    );
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect((result.root as { typeName: string }).typeName).toBe("OpportunityCard");
+    expect(result.meta.errors).toEqual([]);
+  });
+
+  it("coerces StageChangeConfirm named kwargs (any key order)", () => {
+    const raw =
+      'root = StageChangeConfirm(opportunityName="Priya", fromStage="NEW_BRIEF", toStage="TOUR_SCHEDULED", opportunityId="abc")';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized).toBe('root = StageChangeConfirm("abc", "Priya", "NEW_BRIEF", "TOUR_SCHEDULED")');
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect((result.root as { typeName: string }).typeName).toBe("StageChangeConfirm");
+    expect(result.meta.errors).toEqual([]);
+  });
+
+  it("coerces OpportunityList named opportunities kwarg", () => {
+    const raw = 'OpportunityList(opportunities=[{name: "A", stage: "NEW_BRIEF", tier: "HOT"}])';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized).toBe('root = OpportunityList([{name: "A", stage: "NEW_BRIEF", tier: "HOT"}])');
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect((result.root as { typeName: string }).typeName).toBe("OpportunityList");
+    expect(result.meta.errors).toEqual([]);
+  });
+
+  it("does NOT unwrap an invented Root() — that malformed-call rescue moved to prompts", () => {
+    // This raw text has two real bugs: an invented Root() wrapper (no such component in any
+    // library) and a malformed @Each call (get_spend_cpl_trend(7) invoked as a bare function
+    // instead of bound via Query() first). @Each itself is real, spec-supported syntax — see
+    // normalize-openui-response.ts's file comment — so this module only stops rescuing the
+    // Root() wrapper; it never coerced @Each's *syntax* and still doesn't.
+    const raw = `root = Root(
+    TrendChart(
+        "CPL Trend This Week",
+        @Each(get_spend_cpl_trend(7).spend_cpl_trend, "day", { label: day.date, value: day.cpl })
+    )
+)`;
+    const normalized = normalizeOpenUiResponse(raw);
+    // Left as-is: no Root() unwrap. The real createParser will report an unknown-component
+    // error for "Root" — that is now a client Renderer onError case (surfaced inline), not a
+    // server-side rejection. The actual fix for a model producing this shape is Task 2's
+    // toolExamples, which show the correct pattern: bind the tool via Query() first, then
+    // reshape with a syntactically valid @Each, with no Root() wrapper at all.
+    expect(normalized).toContain("root = Root(");
   });
 });
