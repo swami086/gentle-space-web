@@ -134,6 +134,13 @@ CREATE TABLE IF NOT EXISTS usage_ledger (
   occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ai_action_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain TEXT NOT NULL CHECK (domain IN ('marketing','crm')),
+  summary TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Dev seed: no auth system exists yet, so every metered call runs as this one fixed org/user
 -- until a real login flow is built (see design spec Non-goals). Fixed literal ids everywhere so
 -- re-running this file (npm run migrate) never duplicates a row.

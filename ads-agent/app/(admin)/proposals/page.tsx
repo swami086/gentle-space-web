@@ -3,9 +3,15 @@ import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
 import type { ProposalStatus } from "@/lib/types";
 import { listProposals } from "@/lib/db/proposals";
+import { TabStrip } from "@/components/pencil/TabStrip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const MARKETING_TABS = [
+  { href: "/campaigns", label: "Board" },
+  { href: "/proposals", label: "Proposals" },
+];
 
 const STATUS_TABS: { value: ProposalStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -33,6 +39,7 @@ export default async function ProposalsPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <TabStrip tabs={MARKETING_TABS} />
       <div className="flex flex-wrap gap-1 border-b border-border pb-4">
         {STATUS_TABS.map((tab) => (
           <Button key={tab.value} asChild size="sm" variant={tab.value === status ? "default" : "ghost"}>

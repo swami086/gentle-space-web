@@ -7,11 +7,17 @@ import {
 } from "@/lib/db/credits";
 import { requireRole } from "@/lib/auth/dal";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
+import { TabStrip } from "@/components/pencil/TabStrip";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AllocateCreditsForm } from "./AllocateCreditsForm";
 import { UsagePoller } from "./UsagePoller";
+
+const SETTINGS_TABS = [
+  { href: "/settings", label: "Workspace Settings" },
+  { href: "/credits", label: "Usage & Credits" },
+];
 
 function formatCredits(value: number): string {
   return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -34,6 +40,7 @@ export default async function CreditsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <TabStrip tabs={SETTINGS_TABS} />
       <UsagePoller />
 
       {orgBalances.length === 0 ? (

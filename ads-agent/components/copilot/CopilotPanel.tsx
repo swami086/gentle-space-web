@@ -7,11 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { platformLibrary } from "@/lib/openui/platform-library";
-import { platformToolProvider } from "@/lib/openui/platform-tools";
+import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { useCopilot } from "./CopilotProvider";
 
 // createLibrary (lang-core) can't unify heterogeneous component C params; Renderer wants react-lang Library.
 const copilotLibrary = platformLibrary as Library;
+/** Names only — do not import platform-tools here (pulls pg into the client bundle). */
+const copilotToolProvider = createHttpToolProvider([
+  "list_opportunities",
+  "search_opportunities",
+  "get_opportunity",
+  "get_spend_cpl_trend",
+  "list_campaigns_with_cpl",
+  "list_pending_proposals",
+]);
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 
@@ -111,7 +120,7 @@ export function CopilotPanel() {
               </div>
             ) : looksLikeOpenUiLang(message.content) ? (
               <div key={message.id} className="max-w-[95%]">
-                <Renderer response={message.content} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming={false} />
+                <Renderer response={message.content} library={copilotLibrary} toolProvider={copilotToolProvider} isStreaming={false} />
               </div>
             ) : (
               <div key={message.id} className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
@@ -121,7 +130,7 @@ export function CopilotPanel() {
           )}
           {sending && streamingText && looksLikeOpenUiLang(streamingText) && (
             <div className="max-w-[95%]">
-              <Renderer response={streamingText} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming />
+              <Renderer response={streamingText} library={copilotLibrary} toolProvider={copilotToolProvider} isStreaming />
             </div>
           )}
           {sending && streamingText && !looksLikeOpenUiLang(streamingText) && (

@@ -1,24 +1,21 @@
 import { createLibrary } from "@openuidev/lang-core";
 import { campaignLibrary } from "./campaign-library";
+import { crmLibrary } from "./crm-library";
+import { analyticsLibrary } from "./analytics-library";
 import { sharedLibrary } from "./shared-library";
 
-/** Widen heterogeneous DefinedComponent props for createLibrary's single C parameter. */
 type LibraryComponents = NonNullable<Parameters<typeof createLibrary>[0]["components"]>;
 
-/**
- * The global Copilot's composed component registry: every domain library's components plus the
- * nine shared ones, merged into one Library with no fixed root (the model chooses which
- * registered component fits each turn). Today this merges campaignLibrary (Spec 1, shipped) and
- * sharedLibrary (Task 8) — crmLibrary/analyticsLibrary (Specs 2/3) are unbuilt and are added here
- * unchanged, one line each, once they exist (foundation spec's Migration path). Embedded per-page
- * chats (Campaign Chat today) keep using their own narrower domain-only library, unaffected by
- * this composition.
- */
+/** The global Copilot's composed component registry — every domain library's components plus the
+ * shared ones. Now includes crmLibrary (Spec 3, Task 9) and analyticsLibrary (Spec 2, Task 10), added
+ * per the foundation spec's own documented migration path (one line each, unchanged composition
+ * shape from before). Embedded per-page chats (Campaign Chat, CRM Assistant, Reports) keep using
+ * their own narrower domain-only library, unaffected by this composition. */
 export const platformLibrary = createLibrary({
-  // Same heterogeneous-component widen as shared-library.ts — createLibrary's C param can't unify
-  // SetupCard + nine shared prop shapes without an assertion.
   components: [
     ...Object.values(campaignLibrary.components),
+    ...Object.values(crmLibrary.components),
+    ...Object.values(analyticsLibrary.components),
     ...Object.values(sharedLibrary.components),
   ] as LibraryComponents,
 });
