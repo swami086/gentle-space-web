@@ -13,6 +13,7 @@ const {
   fetchLeadSignal,
   evaluateRules,
   draftRationale,
+  logAiAction,
 } = vi.hoisted(() => ({
   listCampaigns: vi.fn(),
   recordPerformanceSnapshot: vi.fn(),
@@ -25,6 +26,7 @@ const {
   fetchLeadSignal: vi.fn(),
   evaluateRules: vi.fn(),
   draftRationale: vi.fn(),
+  logAiAction: vi.fn(),
 }));
 
 vi.mock("../db/campaigns", () => ({ listCampaigns }));
@@ -39,6 +41,7 @@ vi.mock("../connectors/google-ads", () => ({ fetchGoogleAdsPerformance, fetchGoo
 vi.mock("../connectors/twenty", () => ({ fetchLeadSignal }));
 vi.mock("./rules", () => ({ evaluateRules }));
 vi.mock("./rationale", () => ({ draftRationale }));
+vi.mock("../db/ai-action-log", () => ({ logAiAction }));
 
 import { runDecisionCycle } from "./cycle";
 
@@ -141,5 +144,35 @@ describe("runDecisionCycle", () => {
     expect(recordPerformanceSnapshot).not.toHaveBeenCalledWith(
       expect.objectContaining({ spend: 999 }),
     );
+  });
+
+  it("logs one ai_action_log row summarizing the count when proposals are created", async () => {
+    listCampaigns.mockResolvedValue([]);
+    fetchGoogleAdsPerformance.mockResolvedValue([]);
+    fetchMetaPerformance.mockResolvedValue([]);
+    fetchGoogleSearchTerms.mockResolvedValue([]);
+    fetchLeadSignal.mockResolvedValue({ hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 });
+    recentPerformanceSnapshots.mockResolvedValue([]);
+    evaluateRules.mockReturnValue([{ kind: "pause", campaignId: "c1", payload: {}, triggeredRule: "r1" }]);
+    draftRationale.mockResolvedValue("rationale");
+    createProposal.mockResolvedValue({});
+
+    await runDecisionCycle();
+
+    expect(logAiAction).toHaveBeenCalledWith({ domain: "marketing", summary: "Created 1 proposal" });
+  });
+
+  it("does not log when no proposals are created", async () => {
+    listCampaigns.mockResolvedValue([]);
+    fetchGoogleAdsPerformance.mockResolvedValue([]);
+    fetchMetaPerformance.mockResolvedValue([]);
+    fetchGoogleSearchTerms.mockResolvedValue([]);
+    fetchLeadSignal.mockResolvedValue({ hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 });
+    recentPerformanceSnapshots.mockResolvedValue([]);
+    evaluateRules.mockReturnValue([]);
+
+    await runDecisionCycle();
+
+    expect(logAiAction).not.toHaveBeenCalled();
   });
 });

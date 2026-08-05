@@ -1,6 +1,7 @@
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
+import { logAiAction } from "../db/ai-action-log";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
 import { fetchMetaPerformance } from "../connectors/meta";
 import { fetchLeadSignal } from "../connectors/twenty";
@@ -62,6 +63,13 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
     const rationale = await draftRationale(proposal);
     await createProposal({ ...proposal, rationale });
     proposalsCreated++;
+  }
+
+  if (proposalsCreated > 0) {
+    await logAiAction({
+      domain: "marketing",
+      summary: `Created ${proposalsCreated} proposal${proposalsCreated === 1 ? "" : "s"}`,
+    });
   }
 
   return { proposalsCreated };
