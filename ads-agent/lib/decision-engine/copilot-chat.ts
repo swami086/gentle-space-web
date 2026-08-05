@@ -2,6 +2,7 @@ import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { platformLibrary } from "../openui/platform-library";
+import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
@@ -41,8 +42,7 @@ function parseCopilotResponse(text: string): ParseAttempt<string> {
   const trimmed = text.trim();
   if (!trimmed) return { kind: "error", errors: ["empty response"] };
 
-  const looksLikeComponentStatement = /root\s*=\s*[A-Z]\w*\s*\(/.test(trimmed);
-  if (!looksLikeComponentStatement) {
+  if (!looksLikeOpenUiLang(trimmed)) {
     if (trimmed.length <= PLAIN_ACK_MAX_LENGTH) return { kind: "ok", value: trimmed };
     return { kind: "error", errors: ["response has no component statement and is too long to treat as a plain acknowledgment"] };
   }

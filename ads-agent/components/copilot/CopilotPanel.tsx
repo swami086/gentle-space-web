@@ -5,6 +5,7 @@ import { Renderer, type Library } from "@openuidev/react-lang";
 import { Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { platformLibrary } from "@/lib/openui/platform-library";
 import { platformToolProvider } from "@/lib/openui/platform-tools";
 import { useCopilot } from "./CopilotProvider";
@@ -108,16 +109,23 @@ export function CopilotPanel() {
               <div key={message.id} className="ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
                 {message.content}
               </div>
-            ) : (
+            ) : looksLikeOpenUiLang(message.content) ? (
               <div key={message.id} className="max-w-[95%]">
                 <Renderer response={message.content} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming={false} />
               </div>
+            ) : (
+              <div key={message.id} className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+                {message.content}
+              </div>
             ),
           )}
-          {sending && streamingText && (
+          {sending && streamingText && looksLikeOpenUiLang(streamingText) && (
             <div className="max-w-[95%]">
               <Renderer response={streamingText} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming />
             </div>
+          )}
+          {sending && streamingText && !looksLikeOpenUiLang(streamingText) && (
+            <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">{streamingText}</div>
           )}
           {sending && !streamingText && (
             <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Thinking…</div>

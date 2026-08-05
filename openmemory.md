@@ -51,6 +51,10 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | OpenUI campaign SetupCard | `ads-agent/lib/openui/campaign-library.ts` — `SetupCardView`, `campaignLibrary`, `buildCampaignPromptOptions`, `parseSetupCardResponse`; schema uses `.optional().default` (not `.nullable()` — OpenUI rejects null on required fields); streaming types in `streaming-types.ts` |
 | OpenUI named→positional | `ads-agent/lib/openui/normalize-setup-card.ts` — schema-key-order rewrite of LLM kwargs/`:` args before parse; used by `parseSetupCardResponse` + `AiSetupView` streaming `Renderer` |
 | OpenUI AiSetupView | `ads-agent/components/campaign-draft-chat/AiSetupView.tsx` — read-only AI setup: normalized stream → `Renderer`, `SetupCardView` at rest, Create Proposal button |
+| Copilot state | `ads-agent/components/copilot/copilot-state.ts` — pure reducer: `isOpen`, `messages[]`, `pendingQuestion`; actions OPEN/CLOSE/TOGGLE/SEED_AND_OPEN/CLEAR_PENDING_QUESTION/APPEND_MESSAGE |
+| CopilotProvider | `ads-agent/components/copilot/CopilotProvider.tsx` — `useReducer` + Context; `useCopilot()` exposes open/close/toggle/seedAndOpen/appendMessage/clearPendingQuestion; mount once at `(admin)/layout.tsx` (Task 13) |
+| CopilotPanel | `ads-agent/components/copilot/CopilotPanel.tsx` — floating chat UI; SSE to `POST /api/copilot/chat` with `{ content, history }`; OpenUI turns via `Renderer` + `platformLibrary` / `platformToolProvider`, plain-text acks via muted bubble (`looksLikeOpenUiLang`); drains `pendingQuestion` on open |
+| OpenUI Lang detector | `ads-agent/lib/openui/is-openui-lang.ts` — `looksLikeOpenUiLang()` shared by `parseCopilotResponse` and `CopilotPanel` bifurcation |
 
 ## Patterns
 
