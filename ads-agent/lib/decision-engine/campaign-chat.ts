@@ -121,7 +121,7 @@ async function* runDraftModel(
   let full = "";
   for await (const chunk of callMeteredStreamingChatCompletion(
     ctx,
-    { messages, temperature: 0.3, maxTokens: 2048, timeoutMs: 20_000 },
+    { messages, temperature: 0.3, maxTokens: 4096, timeoutMs: 30_000 },
     streamChatCompletion,
   )) {
     if (chunk.type === "delta") {

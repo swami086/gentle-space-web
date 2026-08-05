@@ -37,6 +37,15 @@ describe("normalizeSetupCardLang", () => {
     expect(out).toContain('SetupCard("hi", "chatting"');
     expect(out).not.toContain("assistantReply:");
   });
+
+  it("rewrites leading positionals + trailing named kwargs (headlines turn)", () => {
+    const input =
+      'root = SetupCard("Here are headlines and descriptions.", "chatting", headlines=["Office Space Whitefield","Find Office Near You","Bangalore CRE Experts"], descriptions=["Find verified office space in Whitefield.","Trusted CRE consultancy for Bangalore teams."])';
+    const out = normalizeSetupCardLang(input);
+    expect(out).not.toContain("headlines=");
+    expect(out).toContain('["Office Space Whitefield"');
+    expect(out).toContain('["Find verified office space');
+  });
 });
 
 describe("parseSetupCardResponse named + partial", () => {
@@ -60,6 +69,42 @@ describe("parseSetupCardResponse named + partial", () => {
       expect(result.props.corridor).toBe("");
       expect(result.props.dailyBudgetInr).toBe(0);
       expect(result.props.finalUrl).toBe(DEFAULT_FINAL_URL);
+    }
+  });
+
+  it("parses bare SetupCard without root = (propose headlines path)", () => {
+    const text =
+      'SetupCard("Proposed copy.", "chatting", "", 0, "", [], ["Office Space Whitefield","Find Office Near You","Bangalore CRE Experts"], ["Find verified office space in Whitefield.","Trusted CRE for Bangalore teams."])';
+    const result = parseSetupCardResponse(text);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.props.headlines).toHaveLength(3);
+      expect(result.props.descriptions).toHaveLength(2);
+    }
+  });
+
+  it("parses mixed positional + named headlines/descriptions", () => {
+    const text =
+      'root = SetupCard("Here are headlines and descriptions.", "chatting", headlines=["Office Space Whitefield","Find Office Near You","Bangalore CRE Experts"], descriptions=["Find verified office space in Whitefield.","Trusted CRE consultancy for Bangalore teams."])';
+    const result = parseSetupCardResponse(text);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.props.headlines).toEqual([
+        "Office Space Whitefield",
+        "Find Office Near You",
+        "Bangalore CRE Experts",
+      ]);
+      expect(result.props.descriptions).toHaveLength(2);
+    }
+  });
+
+  it("parses SetupCard after a short prose preamble", () => {
+    const text =
+      'Sure — here you go!\nSetupCard("Proposed copy.", "chatting", "", 0, "", [], ["H1","H2","H3"], ["D1 is under ninety characters for RSA.","D2 keeps the corridor clear."])';
+    const result = parseSetupCardResponse(text);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.props.headlines).toEqual(["H1", "H2", "H3"]);
     }
   });
 });

@@ -2,12 +2,11 @@ import { defineComponent, createLibrary, createParser } from "@openuidev/lang-co
 import React from "react";
 import { z } from "zod";
 import type { CampaignDraftKeyword } from "../types";
-import {
-  DEFAULT_FINAL_URL,
-  normalizeSetupCardLang,
-} from "./normalize-setup-card";
+import { DEFAULT_FINAL_URL } from "./normalize-setup-card";
+import { isLikelyTruncatedOpenUi, normalizeOpenUiResponse } from "./normalize-openui-response";
 
 export { DEFAULT_FINAL_URL, SETUP_CARD_PROP_KEYS, normalizeSetupCardLang } from "./normalize-setup-card";
+export { normalizeOpenUiResponse } from "./normalize-openui-response";
 
 const KeywordSchema = z.object({
   text: z.string(),
@@ -178,10 +177,13 @@ export function buildCampaignPromptOptions(preamble: string) {
       'Unset fields: use "" for strings, 0 for dailyBudgetInr, [] for lists. Never emit null.',
       `Omit trailing optional args when unset is fine; otherwise default finalUrl to ${DEFAULT_FINAL_URL}.`,
       "Output only openui-lang (root = SetupCard(...)). No markdown fences, no prose outside the statement.",
+      "When proposing ad copy: 3-5 headlines (each ≤30 chars), 2-4 descriptions (each ≤90 chars), at most 5 keywords — keep the SetupCard short so it is not truncated.",
+      "Product is Gentle Space CRE (office/retail/warehouse space search in Bangalore) — never invent residential/luxury apartment campaigns.",
     ],
     examples: [
       `root = SetupCard("Got Whitefield at ₹500/day. What ad group name should we use?", "chatting", "Whitefield", 500)`,
       `root = SetupCard("Sure — which Bangalore corridor should this campaign target?", "chatting")`,
+      `root = SetupCard("Here are headlines and descriptions.", "chatting", "Whitefield", 500, "Whitefield seekers", [{"text": "office space whitefield", "matchType": "phrase"}, {"text": "coworking whitefield", "matchType": "broad"}], ["Office Space Whitefield", "Find Office Near You", "Bangalore CRE Experts"], ["Find verified office space in Whitefield corridors.", "Trusted CRE consultancy for Bangalore teams."])`,
     ],
   };
 }
@@ -194,7 +196,14 @@ export type ParsedSetupCard =
 export function parseSetupCardResponse(text: string): ParsedSetupCard {
   if (!text.trim()) return { kind: "parse_error", errors: ["empty response"] };
 
-  const normalized = normalizeSetupCardLang(text);
+  // Same coercion as Copilot/CRM/Reports: bare SetupCard, preamble prose, named/mixed kwargs
+  const normalized = normalizeOpenUiResponse(text);
+  if (isLikelyTruncatedOpenUi(normalized)) {
+    return {
+      kind: "parse_error",
+      errors: ["truncated SetupCard (unbalanced parentheses) — re-emit a shorter card with ≤5 keywords"],
+    };
+  }
   const parser = createParser(campaignLibrary.toJSONSchema());
   let result: ReturnType<typeof parser.parse>;
   try {

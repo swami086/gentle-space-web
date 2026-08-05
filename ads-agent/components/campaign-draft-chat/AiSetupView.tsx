@@ -4,7 +4,7 @@ import { Renderer } from "@openuidev/react-lang";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CampaignDraft } from "@/lib/types";
-import { campaignLibrary, SetupCardView, normalizeSetupCardLang } from "@/lib/openui/campaign-library";
+import { campaignLibrary, SetupCardView, normalizeOpenUiResponse } from "@/lib/openui/campaign-library";
 
 type Props = {
   draft: CampaignDraft;
@@ -15,7 +15,7 @@ type Props = {
 };
 
 export function AiSetupView({ draft, streamingText, isStreaming, onCreateProposal, creating }: Props) {
-  const normalizedStream = normalizeSetupCardLang(streamingText);
+  const normalizedStream = normalizeOpenUiResponse(streamingText);
 
   return (
     <div className="flex flex-col gap-4">
