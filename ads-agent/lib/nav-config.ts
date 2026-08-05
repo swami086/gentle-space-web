@@ -1,10 +1,10 @@
 import {
-  ClipboardList,
-  CreditCard,
   LayoutDashboard,
+  LineChart,
   Megaphone,
   Settings as SettingsIcon,
   Users,
+  Users2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,16 +20,16 @@ export const NAV_GROUPS: NavGroup[] = [
     key: "workspace",
     label: "Workspace",
     items: [
-      { href: "/", label: "Overview", icon: LayoutDashboard, minRole: "viewer" },
-      { href: "/campaigns", label: "Campaigns", icon: Megaphone, minRole: "operator" },
-      { href: "/proposals", label: "Proposals", icon: ClipboardList, minRole: "operator" },
+      { href: "/", label: "Home", icon: LayoutDashboard, minRole: "viewer" },
+      { href: "/campaigns", label: "Marketing Automation", icon: Megaphone, minRole: "operator" },
+      { href: "/crm", label: "Leads & CRM", icon: Users2, minRole: "operator" },
+      { href: "/reports", label: "Reports", icon: LineChart, minRole: "operator" },
     ],
   },
   {
     key: "admin",
     label: "Admin",
     items: [
-      { href: "/credits", label: "Usage & Credits", icon: CreditCard, minRole: "admin" },
       { href: "/users", label: "Users", icon: Users, minRole: "admin" },
       { href: "/settings", label: "Settings", icon: SettingsIcon, minRole: "admin" },
     ],
