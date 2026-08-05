@@ -39,8 +39,21 @@ describe("composeToolSpecs", () => {
 });
 
 describe("platformToolProvider / platformToolSpecs", () => {
-  it("compose zero domain tool sets today — no domain has authored a ToolSpec/ToolProvider yet (see this plan's Global Constraints)", () => {
-    expect(platformToolProvider).toEqual({});
-    expect(platformToolSpecs).toEqual([]);
+  it("includes every CRM and analytics tool", () => {
+    const names = platformToolSpecs.map((s) => s.name);
+    expect(names).toContain("list_opportunities");
+    expect(names).toContain("advance_opportunity_stage");
+    expect(names).toContain("get_spend_cpl_trend");
+    expect(platformToolProvider.list_opportunities).toBeDefined();
+    expect(platformToolProvider.get_spend_cpl_trend).toBeDefined();
+  });
+
+  it("throws on a tool name collision across domains", () => {
+    expect(() =>
+      composeToolSpecs(
+        [{ name: "dup", description: "a", parameters: { type: "object", properties: {}, required: [] } }],
+        [{ name: "dup", description: "b", parameters: { type: "object", properties: {}, required: [] } }],
+      ),
+    ).toThrow(/duplicate/);
   });
 });
