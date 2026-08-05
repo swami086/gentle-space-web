@@ -162,6 +162,48 @@ describe("draftCampaignChatReply", () => {
     });
   });
 
+  it("retries once when the first response fails to parse, then accepts a corrected response", async () => {
+    callMeteredStreamingChatCompletion
+      .mockReturnValueOnce(fakeMeteredStream("Sure, let me help you with that."))
+      .mockReturnValueOnce(
+        fakeMeteredStream(setupCardText({ assistantReply: "Got it.", corridor: "whitefield" })),
+      );
+
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const events = await collect(
+      draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Whitefield" }),
+    );
+
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
+    const done = events[events.length - 1];
+    expect(done).toEqual({
+      type: "done",
+      reply: "Got it.",
+      fieldUpdates: expect.objectContaining({ corridor: "whitefield" }),
+      validationErrors: [],
+    });
+  });
+
+  it("gives up after one failed retry and returns the clarifying message, not a silent hang", async () => {
+    callMeteredStreamingChatCompletion
+      .mockReturnValueOnce(fakeMeteredStream("Sure, let me help you with that."))
+      .mockReturnValueOnce(fakeMeteredStream("Still not a SetupCard call."));
+
+    const { draftCampaignChatReply } = await import("./campaign-chat");
+    const events = await collect(
+      draftCampaignChatReply({ draft: draft(), history: [], userMessage: "Whitefield" }),
+    );
+
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(2);
+    const done = events[events.length - 1];
+    expect(done).toEqual({
+      type: "done",
+      reply: "I had trouble structuring that — could you rephrase?",
+      fieldUpdates: null,
+      validationErrors: [],
+    });
+  });
+
   it("returns the credits-exhausted reply without streaming deltas when balance is zero", async () => {
     const { InsufficientCreditsError } = await import("../metering/types");
     callMeteredStreamingChatCompletion.mockImplementation(async function* () {

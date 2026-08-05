@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { campaignLibrary, parseSetupCardResponse, buildCampaignPromptOptions } from "./campaign-library";
+import { campaignLibrary, parseSetupCardResponse, buildCampaignPromptOptions, SetupCardView, DEFAULT_FINAL_URL } from "./campaign-library";
 
 describe("campaignLibrary", () => {
   it("has SetupCard as its root component", () => {
@@ -11,6 +11,34 @@ describe("campaignLibrary", () => {
     const prompt = campaignLibrary.prompt({ preamble: "test preamble" });
     expect(prompt).toContain("SetupCard");
     expect(prompt).toContain("test preamble");
+  });
+});
+
+describe("SetupCardView", () => {
+  it("does not throw when OpenUI streaming passes null array props", () => {
+    expect(() =>
+      SetupCardView({
+        assistantReply: "Got Whitefield",
+        status: "chatting",
+        corridor: "Whitefield",
+        dailyBudgetInr: 500,
+        adGroupName: null,
+        keywords: null,
+        headlines: null,
+        descriptions: null,
+        finalUrl: null,
+      }),
+    ).not.toThrow();
+
+    const tree = SetupCardView({
+      assistantReply: "hi",
+      status: "chatting",
+      headlines: null,
+      keywords: null,
+      descriptions: null,
+    });
+    expect(tree).toBeTruthy();
+    expect(DEFAULT_FINAL_URL).toContain("gentlespacesolutions");
   });
 });
 

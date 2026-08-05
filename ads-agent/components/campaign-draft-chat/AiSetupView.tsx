@@ -28,9 +28,9 @@ export function AiSetupView({ draft, streamingText, isStreaming, onCreateProposa
           corridor={draft.corridor ?? ""}
           dailyBudgetInr={draft.dailyBudgetInr ?? 0}
           adGroupName={draft.adGroupName ?? ""}
-          keywords={draft.keywords}
-          headlines={draft.headlines}
-          descriptions={draft.descriptions}
+          keywords={draft.keywords ?? []}
+          headlines={draft.headlines ?? []}
+          descriptions={draft.descriptions ?? []}
           finalUrl={draft.finalUrl}
         />
       )}

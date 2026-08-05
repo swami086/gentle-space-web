@@ -80,7 +80,7 @@ function sanitizeReply(reply: string, props: SetupCardProps): string {
 }
 
 type ParsedTurn =
-  | { kind: "parse_error"; reply: string }
+  | { kind: "parse_error"; reply: string; errors: string[]; rawText: string }
   | { kind: "ok"; reply: string; props: SetupCardProps; rawText: string };
 
 function toFieldUpdates(props: SetupCardProps): CampaignDraftFields {
@@ -99,7 +99,12 @@ function toFieldUpdates(props: SetupCardProps): CampaignDraftFields {
 function parseTurn(fullText: string): ParsedTurn {
   const parsed = parseSetupCardResponse(fullText);
   if (parsed.kind === "parse_error") {
-    return { kind: "parse_error", reply: "I had trouble structuring that — could you rephrase?" };
+    return {
+      kind: "parse_error",
+      reply: "I had trouble structuring that — could you rephrase?",
+      errors: parsed.errors,
+      rawText: fullText,
+    };
   }
   const reply = sanitizeReply(
     parsed.props.assistantReply.trim() || "Updated the draft — take a look at the setup card.",
@@ -273,8 +278,37 @@ export async function* draftCampaignChatReply(input: {
   }
 
   if (first.kind !== "ok") {
-    yield { type: "done", reply: first.reply, fieldUpdates: null, validationErrors: [] };
-    return;
+    // One retry, mirroring the validation-error retry below: give the model its own
+    // unparseable output plus the specific parser errors and one chance to self-correct,
+    // instead of dead-ending on the first structurally-bad response.
+    messages.push({ role: "assistant", content: first.rawText });
+    messages.push({
+      role: "user",
+      content: `That could not be parsed as valid OpenUI Lang (${first.errors.join("; ") || "unknown parse error"}). Re-emit exactly one "root = SetupCard(...)" statement with POSITIONAL args only — no markdown fences, no prose outside the statement.`,
+    });
+
+    let retried: ParsedTurn;
+    try {
+      retried = await runDraftModelSilent(ctx, messages);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) {
+        yield creditsExhaustedReply();
+        return;
+      }
+      yield {
+        type: "done",
+        reply: "The campaign assistant is unavailable right now — try again shortly.",
+        fieldUpdates: null,
+        validationErrors: [],
+      };
+      return;
+    }
+
+    if (retried.kind !== "ok") {
+      yield { type: "done", reply: retried.reply, fieldUpdates: null, validationErrors: [] };
+      return;
+    }
+    first = retried;
   }
 
   const firstFieldUpdates = toFieldUpdates(first.props);

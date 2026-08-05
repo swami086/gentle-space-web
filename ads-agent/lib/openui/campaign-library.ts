@@ -33,6 +33,26 @@ const SetupCardSchema = z.object({
 
 export type SetupCardProps = z.infer<typeof SetupCardSchema>;
 
+/** Props OpenUI's streaming Renderer may hand us before Zod defaults apply (nulls included). */
+export type SetupCardViewInput = {
+  [K in keyof SetupCardProps]?: SetupCardProps[K] | null;
+};
+
+/** OpenUI streaming may pass null for optional props before defaults apply — normalize once. */
+function normalizeSetupCardViewProps(raw: SetupCardViewInput): SetupCardProps {
+  return {
+    assistantReply: raw.assistantReply ?? "",
+    status: raw.status ?? "chatting",
+    corridor: raw.corridor ?? "",
+    dailyBudgetInr: raw.dailyBudgetInr ?? 0,
+    adGroupName: raw.adGroupName ?? "",
+    keywords: raw.keywords ?? [],
+    headlines: raw.headlines ?? [],
+    descriptions: raw.descriptions ?? [],
+    finalUrl: raw.finalUrl ?? DEFAULT_FINAL_URL,
+  };
+}
+
 function formatInr(value: number): string {
   return value === 0 ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
@@ -40,11 +60,12 @@ function formatInr(value: number): string {
 /** Pure, read-only presentation of a campaign draft's setup fields. No inputs/onChange — editing
  * happens exclusively through ManualEditForm; this view is used both as OpenUI's rendered output
  * (via SetupCard below) and directly, driven by real draft state, for the "AI view, at rest" case. */
-export function SetupCardView(props: SetupCardProps) {
+export function SetupCardView(raw: SetupCardViewInput) {
   // ponytail: plain span instead of Badge — keeps this module free of client-only UI imports so
   // campaign-chat (server) can import campaignLibrary.prompt()/parseSetupCardResponse without
   // pulling shadcn into the API route bundle. Ceiling: no Badge variant styling; upgrade by
   // splitting SetupCardView into a .tsx client module if visual parity with ManualEditForm is needed.
+  const props = normalizeSetupCardViewProps(raw);
   const statusClass =
     props.status === "ready"
       ? "inline-flex rounded-md bg-primary px-2 py-0.5 text-xs text-primary-foreground"
@@ -140,7 +161,7 @@ const SetupCard = defineComponent({
     "each <=30 chars), descriptions (2-4, each <=90 chars), and the final URL. " +
     "Args are POSITIONAL in that key order. Unset strings use \"\"; unset budget uses 0; unset lists use []. Never null.",
   props: SetupCardSchema,
-  component: ({ props }: { props: SetupCardProps }) => React.createElement(SetupCardView, props),
+  component: ({ props }: { props: SetupCardViewInput }) => React.createElement(SetupCardView, props),
 });
 
 export const campaignLibrary = createLibrary({ root: "SetupCard", components: [SetupCard] });
