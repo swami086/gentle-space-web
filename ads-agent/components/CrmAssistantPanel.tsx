@@ -3,10 +3,17 @@
 import { useState } from "react";
 import { Renderer, type Library } from "@openuidev/react-lang";
 import { crmLibrary } from "@/lib/openui/crm-library";
+import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { SideAssistantPanel, type SideAssistantMessage } from "@/components/pencil/SideAssistantPanel";
 
 const crmChatLibrary = crmLibrary as Library;
+/** Names only — do not import crm-tools (pulls Twenty/pg into the client bundle). */
+const crmChatToolProvider = createHttpToolProvider([
+  "list_opportunities",
+  "search_opportunities",
+  "get_opportunity",
+]);
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
@@ -70,7 +77,7 @@ export function CrmAssistantPanel() {
         <Renderer
           response={m.content}
           library={crmChatLibrary}
-          toolProvider={{}}
+          toolProvider={crmChatToolProvider}
           isStreaming={false}
         />
       ) : (
@@ -83,7 +90,7 @@ export function CrmAssistantPanel() {
       id: "streaming",
       role: "assistant",
       content: looksLikeOpenUiLang(streamingText) ? (
-        <Renderer response={streamingText} library={crmChatLibrary} toolProvider={{}} isStreaming />
+        <Renderer response={streamingText} library={crmChatLibrary} toolProvider={crmChatToolProvider} isStreaming />
       ) : (
         streamingText
       ),

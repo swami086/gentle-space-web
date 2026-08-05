@@ -5,6 +5,7 @@ import { KanbanBoard } from "@/components/pencil/KanbanBoard";
 import { KanbanCard } from "@/components/pencil/KanbanCard";
 import { StatusPill, type StatusTone } from "@/components/pencil/StatusPill";
 import { CrmAssistantPanel } from "@/components/CrmAssistantPanel";
+import { CrmBoardRefreshListener } from "@/components/CrmBoardRefreshListener";
 import type { Opportunity } from "@/lib/crm/twenty-pipeline";
 
 const TIER_TONE: Record<string, StatusTone> = { HOT: "hot", WARM: "warm", COLD: "cold", UNSCORED: "unscored" };
@@ -37,6 +38,7 @@ export default async function CrmPage() {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+      <CrmBoardRefreshListener />
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Leads & CRM</h1>

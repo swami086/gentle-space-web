@@ -79,6 +79,7 @@ const OpportunityList = defineComponent({
 });
 
 const StageChangeConfirmSchema = z.object({
+  opportunityId: z.string().optional().default(""),
   opportunityName: z.string(),
   fromStage: z.string(),
   toStage: z.string(),
@@ -86,24 +87,77 @@ const StageChangeConfirmSchema = z.object({
 export type StageChangeConfirmProps = z.infer<typeof StageChangeConfirmSchema>;
 export type StageChangeConfirmViewInput = { [K in keyof StageChangeConfirmProps]?: StageChangeConfirmProps[K] | null };
 
+/** Dispatched after a successful Confirm so the CRM board can `router.refresh()`. */
+export const CRM_STAGE_ADVANCED_EVENT = "ads-agent:crm-stage-advanced";
+
 export function StageChangeConfirmView(raw: StageChangeConfirmViewInput) {
+  const opportunityId = raw.opportunityId ?? "";
+  const opportunityName = raw.opportunityName ?? "";
+  const fromStage = raw.fromStage ?? "";
+  const toStage = raw.toStage ?? "";
+
+  // ponytail: imperative button updates avoid useState so this stays callable from Vitest without a React root
+  async function onConfirm(e: React.MouseEvent<HTMLButtonElement>) {
+    if (!opportunityId) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = "Updating…";
+    try {
+      const res = await fetch(`/api/crm/opportunities/${encodeURIComponent(opportunityId)}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toStage, opportunityName }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      btn.textContent = "Done";
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(CRM_STAGE_ADVANCED_EVENT, { detail: { opportunityId, toStage } }));
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = prev ?? "Confirm";
+    }
+  }
+
   return React.createElement(
     "div",
-    { className: "flex flex-col gap-1 text-sm" },
+    { className: "flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-sm" },
     React.createElement("span", { className: "font-medium" }, "Confirm action"),
     React.createElement(
       "span",
       { className: "text-muted-foreground" },
-      `Move ${raw.opportunityName ?? ""} from ${raw.fromStage ?? ""} → ${raw.toStage ?? ""}`,
+      `Move ${opportunityName} from ${fromStage} → ${toStage}`,
     ),
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        className:
+          "w-fit rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50",
+        disabled: !opportunityId,
+        onClick: (e: React.MouseEvent<HTMLButtonElement>) => void onConfirm(e),
+      },
+      "Confirm",
+    ),
+    !opportunityId &&
+      React.createElement(
+        "span",
+        { className: "text-xs text-muted-foreground" },
+        "Missing opportunityId — ask the assistant to include the lead id.",
+      ),
   );
 }
 
 const StageChangeConfirm = defineComponent({
   name: "StageChangeConfirm",
   description:
-    "Confirms an about-to-happen pipeline stage change before advance_opportunity_stage is called: " +
-    "opportunityName, fromStage, toStage. Render this BEFORE calling the mutation, not after.",
+    "Confirms an about-to-happen pipeline stage change before it is applied: opportunityId (required " +
+    "for the Confirm button), opportunityName, fromStage, toStage. Render this BEFORE any stage " +
+    "mutation; the Confirm button PATCHes /api/crm/opportunities/[id]/stage.",
   props: StageChangeConfirmSchema,
   component: ({ props }: { props: StageChangeConfirmViewInput }) =>
     React.createElement(StageChangeConfirmView, props),

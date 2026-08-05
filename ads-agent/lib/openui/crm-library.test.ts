@@ -37,10 +37,16 @@ describe("OpportunityListView", () => {
 
 describe("StageChangeConfirmView", () => {
   it("renders the from/to stage labels", () => {
-    const tree = StageChangeConfirmView({ opportunityName: "Priya Sharma", fromStage: "Qualified", toStage: "Tour" });
+    const tree = StageChangeConfirmView({
+      opportunityId: "opp-1",
+      opportunityName: "Priya Sharma",
+      fromStage: "Qualified",
+      toStage: "Tour",
+    });
     const json = JSON.stringify(tree);
     expect(json).toContain("Priya Sharma");
     expect(json).toContain("Qualified");
     expect(json).toContain("Tour");
+    expect(json).toContain("Confirm");
   });
 });

@@ -2,6 +2,7 @@ import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { platformLibrary } from "../openui/platform-library";
+import { platformToolSpecs } from "../openui/platform-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
@@ -24,14 +25,16 @@ function buildSystemPrompt(): string {
     preamble:
       "You are the Gentle Space admin dashboard's AI Copilot. Answer questions about campaigns, " +
       "leads, and performance by rendering the most specific matching component rather than prose.",
+    tools: platformToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
     additionalRules: [
       "Prefer rendering the most specific matching component over plain text — component > prose, " +
         "always, unless the response carries no information at all.",
       "A response with no informational content (a one-word acknowledgment like \"Done\" or " +
         "\"Cancelled\" after a confirmed action) may stay plain text, under 120 characters, with no " +
         "\"root = ...\" statement at all — do not force a trivial ack into a component.",
-      "No tools are registered yet — do not use Query() or Mutation(); render components using " +
-        "literal prop values drawn only from this conversation.",
+      "Use Query() only with the registered tools. For stage moves, ALWAYS render StageChangeConfirm " +
+        "(include opportunityId) and wait for the user to click Confirm — the Confirm button PATCHes " +
+        "the stage route; do not call advance_opportunity_stage yourself.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
         "markdown fences, no prose outside a component statement.",
     ],

@@ -2,6 +2,7 @@ import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { crmLibrary } from "../openui/crm-library";
+import { crmToolSpecs } from "../openui/crm-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
@@ -21,13 +22,15 @@ function buildSystemPrompt(): string {
       "asked to move a lead's stage, ALWAYS render StageChangeConfirm and wait for the user's explicit " +
       "confirmation before the stage is actually changed (the confirm button calls a separate API " +
       "route, not you — you only need to render the confirmation).",
+    tools: crmToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
     additionalRules: [
       "Prefer OpportunityCard/OpportunityList/StageChangeConfirm over plain text whenever the answer " +
         "concerns specific leads.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
-      "No tools are registered on this route — do not use Query()/Mutation(); render components using " +
-        "literal prop values drawn only from this conversation.",
+      "Use Query() for list/search/get opportunity tools. For stage moves, render StageChangeConfirm " +
+        "with opportunityId, opportunityName, fromStage, toStage — never call advance_opportunity_stage " +
+        "yourself; the Confirm button PATCHes the stage route.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment.",
     ],
   });

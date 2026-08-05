@@ -5,9 +5,15 @@ import { Renderer, type Library } from "@openuidev/react-lang";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { analyticsLibrary } from "@/lib/openui/analytics-library";
+import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 
 const reportsLibrary = analyticsLibrary as Library;
+const reportsToolProvider = createHttpToolProvider([
+  "get_spend_cpl_trend",
+  "list_campaigns_with_cpl",
+  "list_pending_proposals",
+]);
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
 
@@ -74,7 +80,7 @@ export function ReportsChat() {
             </div>
           ) : looksLikeOpenUiLang(m.content) ? (
             <div key={m.id} className="max-w-[90%] rounded-lg bg-surface p-3">
-              <Renderer response={m.content} library={reportsLibrary} toolProvider={{}} isStreaming={false} />
+              <Renderer response={m.content} library={reportsLibrary} toolProvider={reportsToolProvider} isStreaming={false} />
             </div>
           ) : (
             <div key={m.id} className="max-w-[85%] rounded-lg bg-surface-raised px-3 py-2 text-sm text-foreground">
@@ -85,7 +91,7 @@ export function ReportsChat() {
         {sending && streamingText && (
           <div className="max-w-[90%] rounded-lg bg-surface p-3">
             {looksLikeOpenUiLang(streamingText) ? (
-              <Renderer response={streamingText} library={reportsLibrary} toolProvider={{}} isStreaming />
+              <Renderer response={streamingText} library={reportsLibrary} toolProvider={reportsToolProvider} isStreaming />
             ) : (
               <span className="text-sm text-foreground">{streamingText}</span>
             )}

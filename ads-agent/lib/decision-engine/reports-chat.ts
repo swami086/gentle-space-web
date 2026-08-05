@@ -2,6 +2,7 @@ import { createParser } from "@openuidev/lang-core";
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { analyticsLibrary } from "../openui/analytics-library";
+import { analyticsToolSpecs } from "../openui/analytics-tools";
 import { looksLikeOpenUiLang } from "../openui/is-openui-lang";
 import { parseWithBoundedRetry, type ParseAttempt } from "../openui/parse-retry";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
@@ -18,12 +19,12 @@ function buildSystemPrompt(): string {
   return analyticsLibrary.prompt({
     preamble:
       "You are the Gentle Space Reports assistant. Answer questions about campaign performance and proposals by rendering TrendChart or DataTable — pick whichever shape best matches the tool result, never force a chart onto tabular data or vice versa.",
+    tools: analyticsToolSpecs,
     additionalRules: [
       "Prefer TrendChart/DataTable over plain text whenever the answer concerns metrics or tabular data.",
       "A response with no informational content (a one-word acknowledgment) may stay plain text, " +
         "under 120 characters, with no \"root = ...\" statement.",
-      "No tools are registered on this route — do not use Query()/Mutation(); render components using " +
-        "literal prop values drawn only from this conversation.",
+      "Use Query() with the registered analytics tools, then render TrendChart or DataTable from the result.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment.",
     ],
   });
