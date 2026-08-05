@@ -42,9 +42,11 @@ services:
 
   twenty-mcp-gateway:
     image: supercorp/supergateway
+    # Use the npm package (same tool names as mhenry3164/twenty-crm-mcp-server).
+    # `npx github:...` needs git, which this image does not ship.
     command:
       - "--stdio"
-      - "npx -y github:mhenry3164/twenty-crm-mcp-server"
+      - "npx -y twenty-crm-mcp-server"
       - "--outputTransport"
       - "streamableHttp"
       - "--port"

@@ -61,7 +61,7 @@ Bifrost is **internal-only** on the VM — do not expose via Caddy.
 
 ## Twenty MCP (self-hosted CRM tools)
 
-`twenty-mcp-gateway` bridges the community `mhenry3164/twenty-crm-mcp-server` (stdio-only) to
+`twenty-mcp-gateway` bridges the community `twenty-crm-mcp-server` npm package (stdio-only; same tools as mhenry3164/twenty-crm-mcp-server) to
 Streamable HTTP via `supergateway`. **Bifrost's own config is not involved** — `lib/bifrost/mcp-client.ts`
 connects to this sidecar directly with the official `@modelcontextprotocol/client` SDK; Bifrost is
 only used for the actual chat completion (`lib/openui/resolve-tools-then-generate.ts` builds an
