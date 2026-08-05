@@ -40,6 +40,22 @@ services:
     cpus: "1.0"
     restart: unless-stopped
 
+  twenty-mcp-gateway:
+    image: supercorp/supergateway
+    command:
+      - "--stdio"
+      - "npx -y github:mhenry3164/twenty-crm-mcp-server"
+      - "--outputTransport"
+      - "streamableHttp"
+      - "--port"
+      - "8765"
+    environment:
+      TWENTY_API_KEY: ${TWENTY_API_KEY}
+      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-http://host.docker.internal:3020}
+    ports:
+      - "8765:8765"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
   bifrost-data:
