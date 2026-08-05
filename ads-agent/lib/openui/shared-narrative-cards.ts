@@ -10,10 +10,10 @@ const InsightCalloutSchema = z.object({
 export type InsightCalloutProps = z.infer<typeof InsightCalloutSchema>;
 export type InsightCalloutViewInput = { [K in keyof InsightCalloutProps]?: InsightCalloutProps[K] | null };
 
-const TONE_CLASS: Record<InsightCalloutProps["tone"], string> = {
-  neutral: "border-border bg-card",
-  positive: "border-emerald-500/30 bg-emerald-500/5",
-  negative: "border-destructive/30 bg-destructive/5",
+const TONE_ACCENT: Record<InsightCalloutProps["tone"], string> = {
+  neutral: "border-l-4 border-l-muted-foreground/40",
+  positive: "border-l-4 border-l-emerald-500",
+  negative: "border-l-4 border-l-destructive",
 };
 
 /** Pure, read-only presentation — the default fallback for any qualitative ("why") answer that
@@ -24,7 +24,7 @@ export function InsightCalloutView(raw: InsightCalloutViewInput) {
   const tone = raw.tone ?? "neutral";
   return React.createElement(
     "div",
-    { className: `flex flex-col gap-1 rounded-lg border p-4 ${TONE_CLASS[tone]}` },
+    { className: `flex flex-col gap-1 rounded-lg border border-border bg-card p-4 ${TONE_ACCENT[tone]}` },
     React.createElement("span", { className: "text-sm font-medium text-card-foreground" }, headline),
     supportingStat && React.createElement("span", { className: "text-xs text-muted-foreground" }, supportingStat),
   );
