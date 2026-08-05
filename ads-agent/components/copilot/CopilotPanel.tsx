@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Renderer } from "@openuidev/react-lang";
+import { Renderer, type Library } from "@openuidev/react-lang";
 import { Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { platformLibrary } from "@/lib/openui/platform-library";
 import { platformToolProvider } from "@/lib/openui/platform-tools";
 import { useCopilot } from "./CopilotProvider";
+
+// createLibrary (lang-core) can't unify heterogeneous component C params; Renderer wants react-lang Library.
+const copilotLibrary = platformLibrary as Library;
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 
@@ -107,13 +110,13 @@ export function CopilotPanel() {
               </div>
             ) : (
               <div key={message.id} className="max-w-[95%]">
-                <Renderer response={message.content} library={platformLibrary} toolProvider={platformToolProvider} isStreaming={false} />
+                <Renderer response={message.content} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming={false} />
               </div>
             ),
           )}
           {sending && streamingText && (
             <div className="max-w-[95%]">
-              <Renderer response={streamingText} library={platformLibrary} toolProvider={platformToolProvider} isStreaming />
+              <Renderer response={streamingText} library={copilotLibrary} toolProvider={platformToolProvider} isStreaming />
             </div>
           )}
           {sending && !streamingText && (

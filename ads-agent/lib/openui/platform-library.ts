@@ -1,6 +1,9 @@
-import { createLibrary, type DefinedComponent } from "@openuidev/lang-core";
+import { createLibrary } from "@openuidev/lang-core";
 import { campaignLibrary } from "./campaign-library";
 import { sharedLibrary } from "./shared-library";
+
+/** Widen heterogeneous DefinedComponent props for createLibrary's single C parameter. */
+type LibraryComponents = NonNullable<Parameters<typeof createLibrary>[0]["components"]>;
 
 /**
  * The global Copilot's composed component registry: every domain library's components plus the
@@ -17,5 +20,5 @@ export const platformLibrary = createLibrary({
   components: [
     ...Object.values(campaignLibrary.components),
     ...Object.values(sharedLibrary.components),
-  ] as DefinedComponent<any, any>[],
+  ] as LibraryComponents,
 });

@@ -1,4 +1,4 @@
-import { createLibrary, type DefinedComponent } from "@openuidev/lang-core";
+import { createLibrary } from "@openuidev/lang-core";
 import { StatCard, KpiGrid } from "./shared-metric-cards";
 import { InsightCallout, ChecklistCard, AlertBanner } from "./shared-narrative-cards";
 import { ComparisonCard, Timeline, RankedList, BatchActionConfirm } from "./shared-structured-views";
@@ -6,6 +6,9 @@ import { ComparisonCard, Timeline, RankedList, BatchActionConfirm } from "./shar
 export * from "./shared-metric-cards";
 export * from "./shared-narrative-cards";
 export * from "./shared-structured-views";
+
+/** Widen heterogeneous DefinedComponent props for createLibrary's single C parameter. */
+type LibraryComponents = NonNullable<Parameters<typeof createLibrary>[0]["components"]>;
 
 /**
  * The nine general-purpose, domain-agnostic OpenUI components (foundation spec's "New shared,
@@ -17,7 +20,6 @@ export * from "./shared-structured-views";
  * Migration path — StatCard specifically is owned here, not by analytics-library.ts).
  */
 export const sharedLibrary = createLibrary({
-  // Heterogeneous DefinedComponent props don't share a common C — widen for createLibrary.
   components: [
     StatCard,
     KpiGrid,
@@ -28,5 +30,5 @@ export const sharedLibrary = createLibrary({
     Timeline,
     RankedList,
     BatchActionConfirm,
-  ] as DefinedComponent<any, any>[],
+  ] as LibraryComponents,
 });
