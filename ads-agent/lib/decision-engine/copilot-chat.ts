@@ -3,6 +3,7 @@ import { streamChatCompletion } from "../openui/bifrost-stream";
 import { platformLibrary } from "../openui/platform-library";
 import { platformToolSpecs } from "../openui/platform-tools";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
+import { resolveToolsThenGenerate } from "../openui/resolve-tools-then-generate";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -17,11 +18,12 @@ function buildSystemPrompt(): string {
     preamble:
       "You are the Gentle Space admin dashboard's AI Copilot. Answer questions about campaigns, " +
       "leads, and performance by rendering the most specific matching component rather than prose.",
-    tools: platformToolSpecs.filter((t) => t.name !== "advance_opportunity_stage"),
+    tools: platformToolSpecs.filter(
+      (t) => !["advance_opportunity_stage", "list_opportunities", "get_opportunity", "search_opportunities"].includes(t.name),
+    ),
     toolExamples: [
       `root = SetupCard("Here's a Whitefield draft at ₹500/day.", "ready", "Whitefield", 500, "HSR seekers", [], ["Headline 1", "Headline 2", "Headline 3"], ["Description one."], "https://www.gentlespacesolutions.com/spaces")`,
-      `leads = Query("list_opportunities", {}, [])`,
-      `root = OpportunityList(@Each(leads, "lead", {name: lead.name, stage: lead.stage, tier: lead.tier, amountLabel: "" + lead.amountInr, maskedPhone: lead.maskedPhone, source: lead.source}))`,
+      `root = OpportunityList([{name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT", amountLabel: "15000", maskedPhone: "+91 8XXXXX-1234", source: "WhatsApp"}])`,
     ],
     additionalRules: [
       "Prefer rendering the most specific matching component over plain text — component > prose, " +
@@ -35,9 +37,14 @@ function buildSystemPrompt(): string {
         "and reply with a short plain acknowledgment under 120 characters that includes the returned path " +
         "(e.g. Draft ready — open /campaigns/drafts/<id>). Do not invent a full SetupCard for creation; " +
         "Campaign Chat on that draft page owns setup.",
-      "Use Query() only with the registered tools. For stage moves, ALWAYS render StageChangeConfirm " +
-        "(include opportunityId) and wait for the user to click Confirm — the Confirm button PATCHes " +
-        "the stage route; do not call advance_opportunity_stage yourself.",
+      "CRM opportunity/lead data (if relevant to this question) is already provided to you above as a " +
+        "tool result — build OpportunityList/OpportunityCard directly from that data, reshaping each " +
+        "row into the component's exact prop names (see the worked example). Do not call Query() for " +
+        "opportunity data; it is not fetched that way anymore.",
+      "For stage moves, ALWAYS render StageChangeConfirm (include opportunityId) and wait for the " +
+        "user to click Confirm — the Confirm button PATCHes the stage route; do not call " +
+        "advance_opportunity_stage yourself. Use Query() only for start_campaign_draft's Mutation() " +
+        "and the analytics tools (get_spend_cpl_trend, list_campaigns_with_cpl, list_pending_proposals).",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
         "markdown fences, no JSON, no invented Root() wrapper or macros, no prose outside a component statement.",
     ],
@@ -78,11 +85,12 @@ export async function* draftCopilotReply(input: {
     feature: "ads-agent:copilot-chat",
   };
 
-  const messages: ChatMessage[] = [
+  const baseMessages: ChatMessage[] = [
     { role: "system", content: buildSystemPrompt() },
     ...input.history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: input.userMessage },
   ];
+  const messages = await resolveToolsThenGenerate(ctx, baseMessages);
 
   let raw: string;
   try {
