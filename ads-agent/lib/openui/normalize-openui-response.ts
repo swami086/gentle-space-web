@@ -6,17 +6,9 @@
  * Campaign draft chat is the one exception that still hard-parses server-side (it persists
  * fields to the campaign_drafts DB row) — see campaign-library.ts's parseSetupCardResponse.
  *
- * Three coercions for non-spec/malformed shapes (JSON-wrapped tool calls, an invented Root()
- * wrapper, and a rescue for @Each called on a bare tool-function invocation instead of a
- * Query()-bound result) were removed here on 2026-08-05 — they existed only to rescue a
- * server-side hard-reject gate that no longer exists for CRM/Reports/Copilot. Note: `@Each`
- * itself is real, spec-supported OpenUI Lang (verified against the installed
- * `@openuidev/lang-core` source's `evaluateLazyBuiltin()` — its template argument is evaluated
- * as a general per-item expression, not restricted to component calls, so it correctly reshapes
- * a tool's raw row fields into a component's expected props). The correct fix for these
- * raw-output shapes is better `toolExamples` in each surface's system prompt showing @Each used
- * correctly (real `Query(...)`-bound worked examples), not further string coercion. See
- * docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md.
+ * Official Generate→Execute programs are multi-statement (`opps = Query(...)\nroot = OpportunityList(opps)`).
+ * Never strip Query/Mutation/$bindings when slicing past prose — that left CRM chat with unbound
+ * `root = OpportunityList(opps)` and empty UI. See https://www.openui.com/docs/openui-lang/how-it-works
  */
 import { knownOpenUiComponentNames, normalizeNamedKwargsLang, findMatchingParen } from "./normalize-named-kwargs";
 
@@ -27,14 +19,20 @@ export function stripOuterMarkdownFence(text: string): string {
 }
 
 /**
- * Models sometimes emit a short prose preamble before the component call
- * ("Sure!\nOpportunityCard(...)"). Slice from the first `root =` / `Name(` so
- * createParser gets a single statement.
+ * Models sometimes emit a short prose preamble before the OpenUI program
+ * ("Sure!\nSetupCard(...)" or "Sure!\nopps = Query(...)\nroot = ...").
+ * Prefer keeping full multi-statement programs (Query/Mutation/$bindings + root).
  */
 export function extractOpenUiStatement(text: string): string {
   const t = stripOuterMarkdownFence(text);
   if (!t) return t;
-  if (/^root\s*=/.test(t) || /^[A-Z]\w*\s*\(/.test(t)) return t;
+  if (/^root\s*=/.test(t) || /^[A-Z]\w*\s*\(/.test(t) || /^[a-zA-Z_$][\w$]*\s*=/.test(t)) return t;
+
+  // Multi-statement: start at first Query/Mutation/$binding/root assignment
+  const program = t.match(
+    /(?:^|[\n\r])\s*((?:[a-zA-Z_$][\w$]*\s*=\s*(?:Query|Mutation)\s*\(|\$[\w]+\s*=|root\s*=\s*[A-Z]\w*\s*\()[\s\S]*)$/,
+  );
+  if (program) return program[1]!.trim();
 
   const rootMatch = t.match(/(?:^|[\n\r])\s*(root\s*=\s*[A-Z]\w*\s*\([\s\S]*)$/);
   if (rootMatch) return rootMatch[1]!.trim();
@@ -49,13 +47,51 @@ export function extractOpenUiStatement(text: string): string {
   return t;
 }
 
-/** Prepend `root = ` when the model emits a bare `ComponentName(` call. */
+/** Prepend `root = ` when the model emits a bare `ComponentName(` call (single-statement only). */
 export function ensureOpenUiRootAssignment(text: string): string {
   const t = text.trim();
   if (!t) return t;
   if (/^root\s*=/.test(t)) return t;
+  // Multi-statement programs already have bindings; don't wrap the whole block
+  if (/^[a-zA-Z_$][\w$]*\s*=/.test(t) && /\n/.test(t)) return t;
   if (/^[A-Z]\w*\s*\(/.test(t)) return `root = ${t}`;
   return t;
+}
+
+/**
+ * OpenUI requires Query as a top-level statement. Bifrost often emits
+ * `root = OpportunityList(@Query("list_opportunities", {}, []))` which createParser
+ * rejects with `inline-reserved` and leaves `opportunities: []` — empty list +
+ * "Couldn't render that response." Hoist the Query call, then fall back to
+ * injecting list_opportunities when OpportunityList(opps) is unbound.
+ */
+export function ensureOpportunityListQueryBinding(text: string): string {
+  let t = text.trim();
+  if (!t) return t;
+
+  const inline = /((?:root\s*=\s*)?)OpportunityList\(\s*@?Query\s*\(/.exec(t);
+  if (inline && inline.index !== undefined) {
+    const assignPrefix = inline[1] ?? "";
+    const listStart = inline.index + assignPrefix.length;
+    const listOpen = t.indexOf("(", listStart);
+    const listClose = findMatchingParen(t, listOpen);
+    const queryStart = listOpen >= 0 ? t.indexOf("Query(", listOpen) : -1;
+    const queryOpen = queryStart >= 0 ? queryStart + "Query".length : -1;
+    const queryClose = queryOpen >= 0 ? findMatchingParen(t, queryOpen) : -1;
+    if (listClose >= 0 && queryClose >= 0 && queryClose < listClose) {
+      const queryCall = t.slice(queryStart, queryClose + 1);
+      const before = t.slice(0, inline.index);
+      const after = t.slice(listClose + 1);
+      // OpenUI: root first for streaming; Query binding may follow (forward refs OK).
+      t = `${before}${assignPrefix}OpportunityList(opps)\nopps = ${queryCall}${after}`.trim();
+      return t;
+    }
+  }
+
+  if (!/OpportunityList\(\s*opps\s*\)/.test(t)) return t;
+  if (/opps\s*=\s*Query\s*\(\s*["']list_opportunities["']/.test(t)) return t;
+  const root = /^root\s*=/.test(t) ? t : `root = ${t}`;
+  return `${root}\nopps = Query("list_opportunities", {}, [])`;
 }
 
 /** True when a component call's parentheses are unbalanced (likely a maxTokens cutoff mid-stream).
@@ -75,6 +111,9 @@ export function isLikelyTruncatedOpenUi(text: string): boolean {
  * component fail the real createParser the same way SetupCard's did). This is the only transform
  * applied; callers never reject or retry based on whether the result parses cleanly afterward. */
 export function normalizeOpenUiResponse(text: string): string {
-  const t = ensureOpenUiRootAssignment(extractOpenUiStatement(text));
-  return normalizeNamedKwargsLang(t);
+  // Named kwargs first: `OpportunityList(opportunities=@Query(...))` becomes
+  // `OpportunityList(@Query(...))`, which the hoist below can fix. Hoisting before
+  // named→positional left that Bifrost shape as inline-reserved.
+  const positional = normalizeNamedKwargsLang(ensureOpenUiRootAssignment(extractOpenUiStatement(text)));
+  return ensureOpportunityListQueryBinding(positional);
 }

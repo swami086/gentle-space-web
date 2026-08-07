@@ -1,24 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isBifrostConfigured, callMeteredStreamingChatCompletion, getSession, resolveToolsThenGenerate } = vi.hoisted(() => ({
+const { isBifrostConfigured, callMeteredStreamingChatCompletion, getSession } = vi.hoisted(() => ({
   isBifrostConfigured: vi.fn(),
   callMeteredStreamingChatCompletion: vi.fn(),
   getSession: vi.fn(),
-  resolveToolsThenGenerate: vi.fn(),
 }));
 
 vi.mock("../bifrost/client", () => ({ isBifrostConfigured }));
 vi.mock("../metering/metered-stream-client", () => ({ callMeteredStreamingChatCompletion }));
 vi.mock("../auth/dal", () => ({ getSession }));
 vi.mock("../openui/bifrost-stream", () => ({ streamChatCompletion: vi.fn() }));
-vi.mock("../openui/resolve-tools-then-generate", () => ({ resolveToolsThenGenerate }));
 
 import { draftCopilotReply } from "./copilot-chat";
 import { InsufficientCreditsError } from "../metering/types";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resolveToolsThenGenerate.mockImplementation(async (_ctx, messages) => messages);
 });
 
 async function drain(gen: AsyncGenerator<{ type: "delta"; content: string } | { type: "done"; reply: string }>) {
@@ -98,22 +95,17 @@ describe("draftCopilotReply", () => {
     expect(events).toEqual([{ type: "done", reply: expect.stringContaining("unavailable") }]);
   });
 
-  it("calls resolveToolsThenGenerate before streaming, and streams its result forward", async () => {
+  it("includes CRM Query tool guidance in the system prompt (Generate→Execute)", async () => {
     isBifrostConfigured.mockReturnValue(true);
     getSession.mockResolvedValue(null);
-    resolveToolsThenGenerate.mockImplementation(async (_ctx, messages) => [
-      ...messages,
-      { role: "tool", content: '[{"id":"1"}]', tool_call_id: "call_1" },
-    ]);
     callMeteredStreamingChatCompletion.mockReturnValueOnce(
-      fakeStream("root = OpportunityList([])"),
+      fakeStream('opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)'),
     );
 
     const events = await drain(draftCopilotReply({ history: [], userMessage: "show me hot leads" }));
 
-    expect(resolveToolsThenGenerate).toHaveBeenCalledTimes(1);
-    const [, messagesArg] = resolveToolsThenGenerate.mock.calls[0];
-    expect(messagesArg.at(-1)).toEqual({ role: "user", content: "show me hot leads" });
+    const [, options] = callMeteredStreamingChatCompletion.mock.calls[0];
+    expect(options.messages[0].content).toContain('Query("list_opportunities"');
     expect(events.some((e) => e.type === "done")).toBe(true);
   });
 });

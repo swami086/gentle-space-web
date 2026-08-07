@@ -175,4 +175,36 @@ describe("runDecisionCycle", () => {
 
     expect(logAiAction).not.toHaveBeenCalled();
   });
+
+  it("still records the Meta snapshot when fetchGoogleAdsPerformance rejects (MCP server unreachable)", async () => {
+    fetchGoogleAdsPerformance.mockRejectedValue(new Error("google ads mcp: connect ECONNREFUSED"));
+
+    await expect(runDecisionCycle()).resolves.toEqual({ proposalsCreated: 0 });
+
+    expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ campaignId: "camp-meta", spend: 300 }),
+    );
+    expect(recordPerformanceSnapshot).not.toHaveBeenCalledWith(
+      expect.objectContaining({ campaignId: "camp-google" }),
+    );
+  });
+
+  it("still records the Google Ads snapshot when fetchMetaPerformance rejects", async () => {
+    fetchMetaPerformance.mockRejectedValue(new Error("meta: rate limited"));
+
+    await expect(runDecisionCycle()).resolves.toEqual({ proposalsCreated: 0 });
+
+    expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ campaignId: "camp-google", spend: 400 }),
+    );
+  });
+
+  it("passes an empty search-terms list into evaluateRules when fetchGoogleSearchTerms rejects, without throwing", async () => {
+    fetchGoogleSearchTerms.mockRejectedValue(new Error("google ads mcp: connect ECONNREFUSED"));
+
+    await runDecisionCycle();
+
+    const ruleInput = evaluateRules.mock.calls[0][0];
+    expect(ruleInput.searchTerms).toEqual([]);
+  });
 });

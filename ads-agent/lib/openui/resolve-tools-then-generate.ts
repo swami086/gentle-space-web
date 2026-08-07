@@ -1,20 +1,34 @@
 // ads-agent/lib/openui/resolve-tools-then-generate.ts
 import { callMeteredChatCompletion } from "../metering/metered-client";
 import { callTwentyTool, listTwentyTools } from "../bifrost/mcp-client";
+import { callGoogleAdsTool, listGoogleAdsTools } from "../bifrost/google-ads-mcp-client";
 import { TWENTY_MCP_READ_TOOL_NAMES } from "../bifrost/twenty-mcp-tools";
+import { GOOGLE_ADS_MCP_READ_TOOL_NAMES } from "../bifrost/google-ads-mcp-tools";
+import { reshapeTwentyOpportunityToolResult } from "../crm/twenty-pipeline";
 import type { ChatMessage, ToolDefinition } from "../bifrost/client";
 import type { MeteringContext } from "../metering/types";
 
 const MAX_ROUNDS = 2;
 
+const GOOGLE_ADS_READ_TOOL_NAME_SET = new Set<string>(GOOGLE_ADS_MCP_READ_TOOL_NAMES);
+
+function callReadTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  return GOOGLE_ADS_READ_TOOL_NAME_SET.has(name) ? callGoogleAdsTool(name, args) : callTwentyTool(name, args);
+}
+
 /**
  * Phase 1 of the two-phase MCP tool pattern (see
- * docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md): fetches the Twenty MCP
- * server's live tool schemas, filters to the read-only subset, and lets the model request them via
- * a plain OpenAI-compatible `tools` param on a non-streaming Bifrost call — no AI-gateway-specific
- * MCP feature involved (see the validation doc for why). Tool calls are executed directly against
- * the Twenty MCP server via lib/bifrost/mcp-client.ts, and results are appended as `tool` messages,
- * ready for the caller's existing streaming generate call. Never throws: any failure (MCP server
+ * docs/superpowers/specs/2026-08-05-mcp-backend-tool-integration-design.md and
+ * docs/superpowers/specs/2026-08-07-google-ads-mcp-integration-design.md): fetches both the Twenty
+ * and Google Ads MCP servers' live tool schemas, filters each to its read-only subset, and lets the
+ * model request them via a plain OpenAI-compatible `tools` param on a non-streaming Bifrost call.
+ * Tool calls are executed directly against whichever MCP server owns that tool name (never through
+ * Bifrost). The two servers are listed with Promise.allSettled, not Promise.all: one MCP server
+ * being unreachable (e.g. Google Ads mid-rollout, before credentials exist) must not remove the
+ * other's tools from the conversation — this is the same soft-fail convention cycle.ts already
+ * uses per-platform. Opportunity read results are reshaped to OpenUI OpportunityCard field shape
+ * before append (Google Ads results pass through unreshaped — reshapeTwentyOpportunityToolResult
+ * returns non-Twenty tool results unchanged). Never throws: any failure (both MCP servers
  * unreachable, Bifrost unreachable, tool execution error) returns the input messages unchanged, so
  * the caller's Phase 2 proceeds with whatever context is available rather than failing the turn.
  */
@@ -22,18 +36,17 @@ export async function resolveToolsThenGenerate(
   ctx: MeteringContext,
   messages: ChatMessage[],
 ): Promise<ChatMessage[]> {
-  let readOnlyTools: ToolDefinition[];
-  try {
-    const liveSchemas = await listTwentyTools();
-    readOnlyTools = liveSchemas
-      .filter((schema) => (TWENTY_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name))
-      .map((schema) => ({
-        type: "function" as const,
-        function: { name: schema.name, description: schema.description, parameters: schema.inputSchema },
-      }));
-  } catch {
-    return messages;
-  }
+  const [twentyResult, googleAdsResult] = await Promise.allSettled([listTwentyTools(), listGoogleAdsTools()]);
+  const twentySchemas = twentyResult.status === "fulfilled" ? twentyResult.value : [];
+  const googleAdsSchemas = googleAdsResult.status === "fulfilled" ? googleAdsResult.value : [];
+
+  const readOnlyTools: ToolDefinition[] = [
+    ...twentySchemas.filter((schema) => (TWENTY_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name)),
+    ...googleAdsSchemas.filter((schema) => (GOOGLE_ADS_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name)),
+  ].map((schema) => ({
+    type: "function" as const,
+    function: { name: schema.name, description: schema.description, parameters: schema.inputSchema },
+  }));
 
   let history = [...messages];
 
@@ -63,11 +76,14 @@ export async function resolveToolsThenGenerate(
 
     try {
       const results = await Promise.all(
-        toolCalls.map(async (call) => ({
-          role: "tool" as const,
-          content: JSON.stringify(await callTwentyTool(call.function.name, JSON.parse(call.function.arguments))),
-          tool_call_id: call.id,
-        })),
+        toolCalls.map(async (call) => {
+          const raw = await callReadTool(call.function.name, JSON.parse(call.function.arguments));
+          return {
+            role: "tool" as const,
+            content: JSON.stringify(reshapeTwentyOpportunityToolResult(call.function.name, raw)),
+            tool_call_id: call.id,
+          };
+        }),
       );
       history = [...history, ...results];
     } catch {

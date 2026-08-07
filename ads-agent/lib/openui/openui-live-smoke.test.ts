@@ -99,15 +99,18 @@ describe.skipIf(!LIVE)("OpenUI live Bifrost smoke (all four surfaces)", () => {
   );
 
   it(
-    "crm: show me hot leads — no generic parse fail, no stale Query() placeholder",
+    "crm: show me hot leads — OpenUI Query execute path (not LLM-copied CRM fields)",
     async () => {
       const reply = await drainDone(
         draftCrmChatReply({ history: [], userMessage: "show me hot leads" }),
       );
       expect(reply.length).toBeGreaterThan(0);
       expect(reply).not.toMatch(GENERIC_FAIL);
-      expect(reply).not.toContain('Query("list_opportunities"');
-      expect(reply).not.toContain('Query("get_opportunity"');
+      // Official Generate→Execute: top-level Query binding (not inline OpportunityList(@Query(...)))
+      expect(reply).toMatch(/Query\(\s*"list_opportunities"/);
+      expect(reply).toMatch(/OpportunityList\(/);
+      expect(reply).not.toMatch(/OpportunityList\(\s*@?Query\s*\(/);
+      expect(reply).not.toMatch(/OpportunityCard\([^)]{200,}/);
     },
     60_000,
   );
@@ -125,15 +128,13 @@ describe.skipIf(!LIVE)("OpenUI live Bifrost smoke (all four surfaces)", () => {
   );
 
   it(
-    "copilot: what's my pipeline value? — no generic parse fail, no stale Query() placeholder",
+    "copilot: what's my pipeline value? — no generic parse fail",
     async () => {
       const reply = await drainDone(
         draftCopilotReply({ history: [], userMessage: "what's my pipeline value?" }),
       );
       expect(reply.length).toBeGreaterThan(0);
       expect(reply).not.toMatch(GENERIC_FAIL);
-      expect(reply).not.toContain('Query("list_opportunities"');
-      expect(reply).not.toContain('Query("get_opportunity"');
     },
     60_000,
   );

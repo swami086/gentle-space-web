@@ -3,10 +3,19 @@
 import { useState } from "react";
 import { Renderer, type Library } from "@openuidev/react-lang";
 import { crmLibrary } from "@/lib/openui/crm-library";
+import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
+import { normalizeOpenUiResponse } from "@/lib/openui/normalize-openui-response";
+import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { SideAssistantPanel, type SideAssistantMessage } from "@/components/pencil/SideAssistantPanel";
 
 const crmChatLibrary = crmLibrary as Library;
+/** Official OpenUI Execute: Query() → HTTP → /api/openui/tools → MCP on the server (not in browser). */
+const crmChatToolProvider = createHttpToolProvider([
+  "list_opportunities",
+  "search_opportunities",
+  "get_opportunity",
+]);
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
@@ -54,6 +63,7 @@ export function CrmAssistantPanel() {
             accumulated += event.delta;
             setStreamingText(accumulated);
           } else if (!("error" in event)) {
+            setRenderError(null);
             setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: event.reply }]);
           }
         }
@@ -64,34 +74,40 @@ export function CrmAssistantPanel() {
     }
   }
 
-  const renderedMessages: SideAssistantMessage[] = messages.map((m) => ({
-    id: m.id,
-    role: m.role,
-    content:
-      m.role === "assistant" && looksLikeOpenUiLang(m.content) ? (
-        <Renderer
-          response={m.content}
-          library={crmChatLibrary}
-          toolProvider={{}}
-          isStreaming={false}
-          onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
-        />
-      ) : (
-        m.content
-      ),
-  }));
+  const renderedMessages: SideAssistantMessage[] = messages.map((m) => {
+    const response = m.role === "assistant" ? normalizeOpenUiResponse(m.content) : m.content;
+    return {
+      id: m.id,
+      role: m.role,
+      content:
+        m.role === "assistant" && looksLikeOpenUiLang(response) ? (
+          <Renderer
+            response={response}
+            library={crmChatLibrary}
+            toolProvider={crmChatToolProvider}
+            isStreaming={false}
+            onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
+          />
+        ) : (
+          m.content
+        ),
+    };
+  });
 
   if (sending && streamingText) {
+    const streamResponse = normalizeOpenUiResponse(streamingText);
     renderedMessages.push({
       id: "streaming",
       role: "assistant",
-      content: looksLikeOpenUiLang(streamingText) ? (
+      content: looksLikeOpenUiLang(streamResponse) ? (
         <Renderer
-          response={streamingText}
+          response={streamResponse}
           library={crmChatLibrary}
-          toolProvider={{}}
+          toolProvider={crmChatToolProvider}
           isStreaming
-          onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+          onError={() => {
+            /* Mid-stream: OpenUI clears via onError([]) and drops unresolved refs — don't flash. */
+          }}
         />
       ) : (
         streamingText

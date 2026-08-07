@@ -14,6 +14,11 @@ npx tsx --env-file=.env.local lib/db/migrate.ts
 npm run dev   # http://localhost:3040
 ```
 
+`npm run dev` unsets `DATABASE_URL` / `GOOGLE_CLIENT_*` / `ADMIN_BOOTSTRAP_EMAILS` from the parent
+shell before starting Next so `.env.local` wins. Without that, an inherited ads-agent
+`DATABASE_URL` (port 5434) makes `/bridge` crash with `column "google_sub" of relation "users"
+does not exist` — that column only exists on the auth DB (port 5435).
+
 ## Tests
 
 ```bash

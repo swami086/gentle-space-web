@@ -7,13 +7,41 @@ export type McpToolSchema = {
   inputSchema: Record<string, unknown>;
 };
 
+/**
+ * Twenty MCP (and similar servers) often prefix JSON with a one-line summary, e.g.
+ * `Found 5 opportunities (more available)\n\n[{...}]`. Parse the first JSON value when
+ * the whole text is not valid JSON.
+ */
+export function parseMcpToolText(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.search(/[\[{]/);
+    if (start >= 0) {
+      try {
+        return JSON.parse(trimmed.slice(start));
+      } catch {
+        /* fall through */
+      }
+    }
+    return text;
+  }
+}
+
 async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ name: "ads-agent", version: "1.0.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL(TWENTY_MCP_URL)));
   try {
     return await fn(client);
   } finally {
-    await client.close();
+    // Streamable HTTP close can AbortError after a successful call; never let that wipe the result.
+    try {
+      await client.close();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -33,14 +61,13 @@ export async function listTwentyTools(): Promise<McpToolSchema[]> {
 export async function callTwentyTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   return withClient(async (client) => {
     const result = await client.callTool({ name, arguments: args });
-    const text = result.content?.find((block: { type: string }) => block.type === "text")?.text ?? "";
+    const textBlock = result.content?.find(
+      (block): block is { type: "text"; text: string } => block.type === "text",
+    );
+    const text = textBlock?.text ?? "";
     if (result.isError) {
       throw new Error(`twenty mcp tool "${name}" failed: ${text}`);
     }
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
+    return parseMcpToolText(text);
   });
 }

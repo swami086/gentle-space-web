@@ -243,10 +243,53 @@ function rewriteOneComponent(text: string, name: string, spec: ComponentPropSpec
   const args = splitTopLevelArgs(inner);
   if (args.length === 0) return text;
 
-  const rewritten = namedArgsToPositional(args, spec);
+  const rewritten =
+    namedArgsToPositional(args, spec) ??
+    (name === "OpportunityCard" ? remapTwentyShapedOpportunityCard(args, spec) : null) ??
+    clampExcessPositionalArgs(args, spec);
   if (rewritten === null) return text;
 
   return text.slice(0, openParen + 1) + rewritten + text.slice(closeParen);
+}
+
+/**
+ * Models dump raw Twenty MCP record fields as OpportunityCard positionals (id, name, amount,
+ * stage, …) — arity 18 vs Zod 6. When the first arg looks like a UUID id, remap by known dump
+ * order into OpportunityCard's six props.
+ */
+function remapTwentyShapedOpportunityCard(args: string[], spec: ComponentPropSpec): string | null {
+  if (args.length <= spec.keys.length || looksNamed(args)) return null;
+  const first = args[0]?.trim() ?? "";
+  if (!/^["'][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}["']$/i.test(first)) {
+    return null;
+  }
+  // Live twenty-crm-mcp-server list item order: id, name, amount, stage, …
+  const name = args[1]?.trim() || spec.defaults.name || '""';
+  const stage = args[3]?.trim() || spec.defaults.stage || '""';
+  const tier = spec.defaults.tier || '"UNSCORED"';
+  const amountLabel = amountArgToAmountLabel(args[2]) || spec.defaults.amountLabel || '""';
+  const maskedPhone = spec.defaults.maskedPhone || '""';
+  const source = spec.defaults.source || '""';
+  return [name, stage, tier, amountLabel, maskedPhone, source].join(", ");
+}
+
+function amountArgToAmountLabel(arg: string | undefined): string | null {
+  if (!arg) return null;
+  const trimmed = arg.trim();
+  // Object literal: {amountMicros: 75000000000, currencyCode: "USD"} or similar
+  const micros = trimmed.match(/amountMicros\s*:\s*(\d+)/);
+  if (micros) {
+    const inr = Math.round(Number(micros[1]) / 1_000_000);
+    return JSON.stringify(`₹${inr.toLocaleString("en-IN")}`);
+  }
+  if (/^["'].*["']$/.test(trimmed) || /^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+  return '""';
+}
+
+/** Drop excess positionals so OpenUI never reports "got N excess dropped" for known components. */
+function clampExcessPositionalArgs(args: string[], spec: ComponentPropSpec): string | null {
+  if (looksNamed(args) || args.length <= spec.keys.length) return null;
+  return args.slice(0, spec.keys.length).join(", ");
 }
 
 /** Rewrite every registered `Name(kwargs)` call in `text` to positional OpenUI Lang. */

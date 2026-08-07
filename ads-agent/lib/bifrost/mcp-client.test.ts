@@ -62,6 +62,27 @@ describe("callTwentyTool", () => {
     expect(await callTwentyTool("some_tool", {})).toBe("plain text result");
   });
 
+  it("parses JSON after a prose prefix (live Twenty MCP list_opportunities shape)", async () => {
+    callTool.mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: 'Found 2 opportunities (more available)\n\n[{"id":"1","name":"A"},{"id":"2","name":"B"}]',
+        },
+      ],
+    });
+    expect(await callTwentyTool("list_opportunities", { limit: 200 })).toEqual([
+      { id: "1", name: "A" },
+      { id: "2", name: "B" },
+    ]);
+  });
+
+  it("does not reject when client.close() aborts after a successful tool call", async () => {
+    callTool.mockResolvedValue({ content: [{ type: "text", text: '{"ok":true}' }] });
+    close.mockRejectedValue(new DOMException("This operation was aborted", "AbortError"));
+    await expect(callTwentyTool("list_opportunities", {})).resolves.toEqual({ ok: true });
+  });
+
   it("throws when the tool result has isError set", async () => {
     callTool.mockResolvedValue({ isError: true, content: [{ type: "text", text: "bad stage" }] });
     await expect(callTwentyTool("update_opportunity", {})).rejects.toThrow(/bad stage/);

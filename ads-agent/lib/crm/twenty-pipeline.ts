@@ -100,6 +100,67 @@ function toOpportunity(raw: RawOpportunity): Opportunity {
   };
 }
 
+/**
+ * OpenUI OpportunityCard / OpportunityList row — exactly the six Zod keys in
+ * ads-agent/lib/openui/crm-library.ts (positional arity). Used to reshape raw MCP tool
+ * payloads before Phase 2 generate so the model cannot dump ~18 CRM fields into
+ * OpportunityCard (official OpenUI: positional args map by Zod key order; excess dropped).
+ */
+export type OpenUiOpportunityCardRow = {
+  name: string;
+  stage: string;
+  tier: OpportunityTier;
+  amountLabel: string;
+  maskedPhone: string;
+  source: string;
+};
+
+export function formatAmountLabelInr(amountInr: number | null): string {
+  if (amountInr == null) return "";
+  return `₹${Math.round(amountInr).toLocaleString("en-IN")}`;
+}
+
+export function toOpenUiOpportunityCard(opp: Opportunity): OpenUiOpportunityCardRow {
+  return {
+    name: opp.name,
+    stage: opp.stage,
+    tier: opp.tier ?? "UNSCORED",
+    amountLabel: formatAmountLabelInr(opp.amountInr),
+    maskedPhone: opp.maskedPhone ?? "",
+    source: opp.source ?? "",
+  };
+}
+
+function isRawOpportunity(value: unknown): value is RawOpportunity {
+  return Boolean(value && typeof value === "object" && "id" in value && "name" in value && "stage" in value);
+}
+
+function extractRawOpportunities(raw: unknown): RawOpportunity[] {
+  if (Array.isArray(raw)) return raw.filter(isRawOpportunity);
+  if (raw && typeof raw === "object" && Array.isArray((raw as { records?: unknown }).records)) {
+    return ((raw as { records: unknown[] }).records).filter(isRawOpportunity);
+  }
+  if (isRawOpportunity(raw)) return [raw];
+  return [];
+}
+
+/**
+ * Host-side reshape of Twenty MCP read-tool results for chat (MCP client best practice:
+ * keep tool results focused for the model). list_opportunities → array of OpenUI card
+ * rows (all records preserved); get_opportunity → one card row or null. Unknown tools
+ * pass through unchanged.
+ */
+export function reshapeTwentyOpportunityToolResult(toolName: string, raw: unknown): unknown {
+  if (toolName === TWENTY_MCP_TOOLS.listOpportunities) {
+    return extractRawOpportunities(raw).map((r) => toOpenUiOpportunityCard(toOpportunity(r)));
+  }
+  if (toolName === TWENTY_MCP_TOOLS.getOpportunity) {
+    const [first] = extractRawOpportunities(raw);
+    return first ? toOpenUiOpportunityCard(toOpportunity(first)) : null;
+  }
+  return raw;
+}
+
 /** List every open opportunity, via the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
  * called directly through lib/bifrost/mcp-client.ts (no Bifrost involved — this is a plain data read,
  * not a model decision). Fails soft (empty array) on missing config or a failed tool call — same
@@ -108,10 +169,10 @@ function toOpportunity(raw: RawOpportunity): Opportunity {
 export async function listOpportunities(): Promise<Opportunity[]> {
   if (!isConfigured()) return [];
   try {
-    const result = (await callTwentyTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 })) as {
-      records?: RawOpportunity[];
-    };
-    return (result.records ?? []).map(toOpportunity);
+    // Live twenty-crm-mcp-server returns a bare JSON array (often after a prose prefix handled in
+    // parseMcpToolText); older fixtures used `{ records: [...] }`.
+    const result = await callTwentyTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 });
+    return extractRawOpportunities(result).map(toOpportunity);
   } catch {
     return [];
   }
@@ -121,7 +182,7 @@ export async function listOpportunities(): Promise<Opportunity[]> {
 export async function getOpportunity(id: string): Promise<Opportunity | null> {
   if (!isConfigured()) return null;
   try {
-    const record = (await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id })) as RawOpportunity | null;
+    const [record] = extractRawOpportunities(await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id }));
     return record ? toOpportunity(record) : null;
   } catch {
     return null;

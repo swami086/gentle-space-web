@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "pencil-docker": {
+      "command": "/Users/swami/.cursor/bin/pencil-mcp-docker-launcher.sh",
+      "args": [],
+      "env": {
+        "PENCIL_PROJECT_SLUG": "gentlespace_web"
+      }
+    },
     "openmemory": {
       "alwaysAllow": [
         "add_memories",

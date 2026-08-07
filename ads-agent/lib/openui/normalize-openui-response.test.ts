@@ -29,6 +29,53 @@ describe("extractOpenUiStatement", () => {
       'OpportunityCard("Priya", "NEW_BRIEF", "HOT")',
     );
   });
+
+  it("preserves Query bindings before root = (official Generate→Execute programs)", () => {
+    const raw =
+      'Here you go:\nopps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)';
+    expect(extractOpenUiStatement(raw)).toBe(
+      'opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)',
+    );
+  });
+});
+
+describe("ensureOpportunityListQueryBinding via normalizeOpenUiResponse", () => {
+  it("injects Query when OpportunityList(opps) is unbound", () => {
+    expect(normalizeOpenUiResponse("root = OpportunityList(opps)")).toBe(
+      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+    );
+  });
+
+  it("hoists inline @Query inside OpportunityList (Bifrost inline-reserved shape)", () => {
+    const raw = 'root = OpportunityList(@Query("list_opportunities", {}, []))';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized).toBe(
+      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+    );
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect(result.meta.errors).toEqual([]);
+    expect((result.root as { typeName: string; hasDynamicProps?: boolean }).typeName).toBe(
+      "OpportunityList",
+    );
+    expect((result.root as { hasDynamicProps?: boolean }).hasDynamicProps).toBe(true);
+  });
+
+  it("hoists inline Query without @ prefix", () => {
+    expect(normalizeOpenUiResponse('OpportunityList(Query("search_opportunities", {query: "Priya"}, []))')).toBe(
+      'root = OpportunityList(opps)\nopps = Query("search_opportunities", {query: "Priya"}, [])',
+    );
+  });
+
+  it("hoists after named opportunities=@Query (Bifrost kwarg → inline-reserved path)", () => {
+    const raw = 'root = OpportunityList(opportunities=@Query("list_opportunities", {}, []))';
+    const normalized = normalizeOpenUiResponse(raw);
+    expect(normalized).toBe(
+      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+    );
+    const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
+    expect(result.meta.errors).toEqual([]);
+    expect((result.root as { hasDynamicProps?: boolean }).hasDynamicProps).toBe(true);
+  });
 });
 
 describe("isLikelyTruncatedOpenUi", () => {

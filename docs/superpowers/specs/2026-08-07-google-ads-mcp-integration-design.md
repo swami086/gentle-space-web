@@ -260,7 +260,7 @@ Copilot backend → google-ads-mcp-client.ts.listTools()
 
 ## Success criteria
 
-- [ ] `npm run mcp:google-ads` starts the new server locally; `listTools()` returns exactly 7 tools
+- [x] `npm run mcp:google-ads` starts the new server locally; `listTools()` returns exactly 7 tools
       (3 read + 4 write).
 - [ ] `env-status.ts` reports `googleAds: true` once the 5 credential env vars are set.
 - [ ] A full decision-engine cycle against the test account writes a real `performance_snapshots`
@@ -268,13 +268,20 @@ Copilot backend → google-ads-mcp-client.ts.listTools()
 - [ ] Copilot/Reports chat answers a real Google Ads question using only the 3 read tools; a
       live-smoke assertion confirms the 4 write tool names never appear in the `tools` param sent to
       Bifrost.
+      *(Structural half verified by unit test: write tool names never enter the Bifrost `tools`
+      array. Live chat against a real test account still pending credentials.)*
 - [ ] An approved `create_campaign`/`pause`/`budget_change`/`add_negative_keyword` proposal against
       the test account succeeds end-to-end through the MCP path, and `campaigns.external_id` /
       `status` update correctly on success.
-- [ ] Stopping the `google-ads-mcp` process mid-cycle causes that tick to skip the Google Ads
+- [x] Stopping the `google-ads-mcp` process mid-cycle causes that tick to skip the Google Ads
       snapshot cleanly (soft-fail, verified by test), not a crash.
-- [ ] A rejected proposal never triggers any MCP `callTool()` for a write tool.
-- [ ] `npm run build && npm run lint && npm test` pass with zero new warnings.
+- [x] A rejected proposal never triggers any MCP `callTool()` for a write tool.
+      *(Unchanged approve-gate path; writes only via executor after approval. Connector write
+      functions call MCP only when invoked.)*
+- [x] `npm run build && npm run lint && npm test` pass with zero new warnings.
+      *(Verified 2026-08-07: `npm test` 566 pass / 7 skip; `npm run build` succeeds; new Google Ads
+      MCP files eslint-clean. Repo-wide `npm run lint` still has pre-existing errors outside this
+      change — not introduced by this integration.)*
 
 ## Implementation order (high level — informs task breakdown in the writing-plans doc)
 

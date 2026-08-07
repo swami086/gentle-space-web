@@ -14,6 +14,14 @@ describe("looksLikeOpenUiLang", () => {
     expect(looksLikeOpenUiLang('SetupCard("hi", "chatting")')).toBe(true);
   });
 
+  it("returns true for official Query→component multi-statement programs", () => {
+    expect(
+      looksLikeOpenUiLang(
+        'opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)',
+      ),
+    ).toBe(true);
+  });
+
   it("returns false for short plain-text acknowledgments", () => {
     expect(looksLikeOpenUiLang("Done — paused that campaign.")).toBe(false);
   });

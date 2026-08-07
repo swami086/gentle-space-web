@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isBifrostConfigured, streamChatCompletion, callMeteredStreamingChatCompletion, getSession, resolveToolsThenGenerate } =
+const { isBifrostConfigured, streamChatCompletion, callMeteredStreamingChatCompletion, getSession } =
   vi.hoisted(() => ({
     isBifrostConfigured: vi.fn(),
     streamChatCompletion: vi.fn(),
     callMeteredStreamingChatCompletion: vi.fn(),
     getSession: vi.fn(),
-    resolveToolsThenGenerate: vi.fn(),
   }));
 vi.mock("../bifrost/client", () => ({ isBifrostConfigured, fallbacksForModel: () => [] }));
 vi.mock("../openui/bifrost-stream", () => ({ streamChatCompletion }));
-vi.mock("../openui/resolve-tools-then-generate", () => ({ resolveToolsThenGenerate }));
 vi.mock("../metering/metered-stream-client", () => ({ callMeteredStreamingChatCompletion }));
 vi.mock("../auth/dal", () => ({ getSession }));
 
@@ -22,7 +20,6 @@ beforeEach(() => {
   isBifrostConfigured.mockReset();
   callMeteredStreamingChatCompletion.mockReset();
   getSession.mockReset();
-  resolveToolsThenGenerate.mockReset().mockImplementation(async (_ctx, messages) => messages);
 });
 
 async function drain(gen: AsyncGenerator<{ type: "delta"; content: string } | { type: "done"; reply: string }>) {
@@ -38,21 +35,24 @@ function fakeStream(...chunks: string[]) {
 }
 
 describe("draftCrmChatReply", () => {
-  it("calls resolveToolsThenGenerate before streaming, and streams its result forward", async () => {
+  it("streams without resolveToolsThenGenerate (OpenUI Query executes on the client)", async () => {
     isBifrostConfigured.mockReturnValue(true);
     getSession.mockResolvedValue(null);
-    resolveToolsThenGenerate.mockImplementation(async (_ctx, messages) => [
-      ...messages,
-      { role: "tool", content: '[{"id":"1"}]', tool_call_id: "call_1" },
-    ]);
-    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream("root = OpportunityList([])"));
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(
+      fakeStream('opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)'),
+    );
 
-    const events = await drain(draftCrmChatReply({ history: [], userMessage: "show me hot leads" }));
+    const events = await drain(draftCrmChatReply({ history: [], userMessage: "list opportunities" }));
 
-    expect(resolveToolsThenGenerate).toHaveBeenCalledTimes(1);
-    const [, messagesArg] = resolveToolsThenGenerate.mock.calls[0];
-    expect(messagesArg.at(-1)).toEqual({ role: "user", content: "show me hot leads" });
-    expect(events.some((e) => e.type === "done")).toBe(true);
+    expect(callMeteredStreamingChatCompletion).toHaveBeenCalledTimes(1);
+    const [, options] = callMeteredStreamingChatCompletion.mock.calls[0];
+    const system = options.messages[0].content as string;
+    expect(system).toContain("list_opportunities");
+    expect(system).toContain('Query("list_opportunities"');
+    expect(events.at(-1)).toEqual({
+      type: "done",
+      reply: expect.stringContaining("OpportunityList"),
+    });
   });
 
   it("tells the user Bifrost isn't configured rather than throwing", async () => {

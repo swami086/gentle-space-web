@@ -67,13 +67,32 @@ not through Bifrost's MCP Gateway feature.
 - **Meta Ads**: Meta's official hosted MCP endpoint, `mcp.facebook.com/ads` (OAuth, 29 tools,
   launched April 2026 as part of Meta's "Ads AI Connectors"). Use `StreamableHTTPClientTransport`
   with the SDK's OAuth client helpers — no self-hosting needed, unlike Twenty.
-- **Google Ads**: Google's officially published Google Ads MCP server
-  (`developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server`). Self-hosted, similar
-  shape to the Twenty MCP setup — check whether it speaks stdio or HTTP natively before deciding if
-  it needs a `supergateway`-style bridge like Twenty's does.
 
-Until credentials exist, `lib/connectors/meta.ts` and `lib/connectors/google-ads.ts` keep their
-current (direct API, unconfigured) code paths unchanged.
+### Google Ads MCP server
+
+`lib/connectors/google-ads.ts` calls Google Ads exclusively through an in-repo custom TypeScript
+MCP server (`mcp/google-ads-server/`) — the same "AI copilots integrate to external tools via MCP
+only on the backend" convention as the Twenty CRM integration below. See
+[`docs/superpowers/specs/2026-08-07-google-ads-mcp-integration-design.md`](../docs/superpowers/specs/2026-08-07-google-ads-mcp-integration-design.md)
+for the full design.
+
+1. Fill in the 5 Google Ads credential env vars above (start with a **test account** — see the
+   spec's rollout runbook for how to create one with zero real-spend risk)
+2. Add `GOOGLE_ADS_MCP_URL=http://localhost:8766/mcp` to `.env.local` (already in `.env.example`)
+3. `npm run mcp:google-ads` (starts the MCP server; leave running in its own terminal)
+4. `npm run dev` / `npm run worker` as usual — `cycle.ts`, `execute.ts`, and Copilot/Reports chat
+   all reach Google Ads through this server now
+
+The server exposes 3 read tools (advertised to chat) and 4 write tools (never advertised — writes
+only ever happen through the existing approve-button → executor path).
+
+Meta Ads MCP integration remains a documented, not-yet-implemented target — see Meta's official
+hosted MCP endpoint (`mcp.facebook.com/ads`) noted below.
+
+Until credentials exist, `lib/connectors/meta.ts` keeps its current (direct API, unconfigured)
+code path unchanged. `lib/connectors/google-ads.ts` is MCP-backed as of this integration (see
+above) even before real credentials are set — it will simply fail soft (cycle.ts skips the
+snapshot; the executor marks the proposal failed) until the MCP server is running and configured.
 
 ### Twenty CRM
 

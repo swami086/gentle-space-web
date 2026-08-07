@@ -1,8 +1,8 @@
 import { isBifrostConfigured, type ChatMessage } from "../bifrost/client";
 import { streamChatCompletion } from "../openui/bifrost-stream";
 import { crmLibrary } from "../openui/crm-library";
+import { crmReadToolSpecs } from "../openui/crm-tools";
 import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
-import { resolveToolsThenGenerate } from "../openui/resolve-tools-then-generate";
 import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-client";
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
@@ -11,6 +11,12 @@ import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 export type CrmChatMessage = { role: "user" | "assistant"; content: string };
 export type CrmChatTurnEvent = { type: "delta"; content: string } | { type: "done"; reply: string };
 
+/**
+ * Official OpenUI Generate phase: describe tools + Query examples so the model wires the UI;
+ * Execute happens in the client Renderer via toolProvider → /api/openui/tools → MCP on the server.
+ * @see https://www.openui.com/docs/openui-lang/how-it-works
+ * @see https://www.openui.com/docs/openui-lang/system-prompts
+ */
 function buildSystemPrompt(): string {
   return crmLibrary.prompt({
     preamble:
@@ -18,10 +24,15 @@ function buildSystemPrompt(): string {
       "asked to move a lead's stage, ALWAYS render StageChangeConfirm and wait for the user's explicit " +
       "confirmation before the stage is actually changed (the confirm button calls a separate API " +
       "route, not you — you only need to render the confirmation).",
-    tools: [],
+    tools: crmReadToolSpecs,
     toolExamples: [
-      `root = OpportunityList([{name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT", amountLabel: "15000", maskedPhone: "+91 8XXXXX-1234", source: "WhatsApp"}])`,
+      // Official OpenUI: root first (streaming), Query may follow via forward ref.
+      `root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])`,
+      `root = OpportunityList(opps)\nopps = Query("search_opportunities", {query: "Priya"}, [])`,
+      `root = OpportunityCard(lead.name, lead.stage, lead.tier, lead.amountLabel, lead.maskedPhone, lead.source)\nlead = Query("get_opportunity", {id: "00000000-0000-0000-0000-000000000001"}, null)`,
+      `root = StageChangeConfirm("00000000-0000-0000-0000-000000000001", "Office: Priya Sharma", "SHORTLIST", "TOUR")`,
     ],
+    toolCalls: true,
     additionalRules: [
       "Prefer OpportunityCard/OpportunityList/StageChangeConfirm over plain text whenever the answer " +
         "concerns specific leads.",
@@ -29,16 +40,13 @@ function buildSystemPrompt(): string {
         "under 120 characters, with no \"root = ...\" statement.",
       "Always emit `root = ComponentName(...)` with positional args (Zod key order) — never named " +
         "kwargs like OpportunityCard(name: \"...\").",
-      "Opportunity/lead data is already provided to you above as a tool result — reshape each row " +
-        "into the exact OpportunityCard/OpportunityList prop names (see the worked example); the " +
-        "tool's own field names (e.g. amountInr) do not match the component's props, so passing rows " +
-        "through unreshaped will fail to render. Do not call Query() for opportunity data; it is not " +
-        "fetched that way anymore. For stage moves, render StageChangeConfirm with opportunityId, " +
-        "opportunityName, fromStage, toStage — never call advance_opportunity_stage yourself; the " +
-        "Confirm button PATCHes the stage route.",
+      "For opportunity lists, ALWAYS use Query(\"list_opportunities\") or Query(\"search_opportunities\") " +
+        "and pass the result into OpportunityList — never invent or expand CRM record fields as " +
+        "OpportunityCard positional arguments.",
+      "For stage moves, render StageChangeConfirm with opportunityId, opportunityName, fromStage, " +
+        "toStage — never call advance_opportunity_stage yourself; the Confirm button PATCHes the stage route.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
         "markdown fences, no JSON, and no invented Root() wrapper (Root is not a real component).",
-      "If there are no matching leads, emit root = OpportunityList([]).",
     ],
   });
 }
@@ -77,12 +85,11 @@ export async function* draftCrmChatReply(input: {
     feature: "ads-agent:crm-chat",
   };
 
-  const baseMessages: ChatMessage[] = [
+  const messages: ChatMessage[] = [
     { role: "system", content: buildSystemPrompt() },
     ...input.history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: input.userMessage },
   ];
-  const messages = await resolveToolsThenGenerate(ctx, baseMessages);
 
   let raw: string;
   try {
@@ -102,8 +109,7 @@ export async function* draftCrmChatReply(input: {
     return;
   }
 
-  // Non-blocking hygiene only (root=/fence-strip/named→positional). Never rejects or retries —
-  // the client Renderer (with its toolProvider) parses and executes Query()/Mutation() for real.
+  // Non-blocking hygiene only. Client Renderer + toolProvider executes Query() for real.
   // See docs/superpowers/specs/2026-08-05-openui-generate-execute-alignment-design.md.
   yield { type: "done", reply: normalizeOpenUiResponse(trimmed) };
 }

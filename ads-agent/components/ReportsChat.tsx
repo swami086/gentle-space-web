@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { analyticsLibrary } from "@/lib/openui/analytics-library";
 import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
+import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 
 const reportsLibrary = analyticsLibrary as Library;
 const reportsToolProvider = createHttpToolProvider([
@@ -87,7 +88,7 @@ export function ReportsChat() {
                 library={reportsLibrary}
                 toolProvider={reportsToolProvider}
                 isStreaming={false}
-                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+                onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             </div>
           ) : (
@@ -104,7 +105,7 @@ export function ReportsChat() {
                 library={reportsLibrary}
                 toolProvider={reportsToolProvider}
                 isStreaming
-                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+                onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             ) : (
               <span className="text-sm text-foreground">{streamingText}</span>

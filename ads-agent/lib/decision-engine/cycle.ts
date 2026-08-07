@@ -9,6 +9,18 @@ import { evaluateRules, type SearchTermRow } from "./rules";
 import { draftRationale } from "./rationale";
 import { STRATEGY } from "./strategy-config";
 
+/** One platform's fetch failing (e.g. the Google Ads MCP server unreachable) must not abort every
+ * other platform's snapshot for this tick — matches fetchLeadSignal's existing internal soft-fail
+ * (lib/connectors/twenty.ts), applied here per-source instead of per-connector. */
+async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`ads-agent cycle: ${label} fetch failed, skipping for this tick`, err);
+    return fallback;
+  }
+}
+
 export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> {
   const campaigns = await listCampaigns();
   const byExternalId = new Map(
@@ -16,9 +28,9 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
   );
 
   const [googlePerformance, metaPerformance, googleSearchTerms, leadSignal] = await Promise.all([
-    fetchGoogleAdsPerformance(),
-    fetchMetaPerformance(),
-    fetchGoogleSearchTerms(),
+    softFail("google ads performance", fetchGoogleAdsPerformance, []),
+    softFail("meta performance", fetchMetaPerformance, []),
+    softFail("google ads search terms", fetchGoogleSearchTerms, []),
     fetchLeadSignal(),
   ]);
 

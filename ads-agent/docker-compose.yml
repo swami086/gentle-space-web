@@ -53,7 +53,11 @@ services:
       - "8765"
     environment:
       TWENTY_API_KEY: ${TWENTY_API_KEY}
-      TWENTY_BASE_URL: ${TWENTY_BASE_URL:-http://host.docker.internal:3020}
+      # Host Next uses TWENTY_BASE_URL=http://localhost:3020; inside Docker that is wrong.
+      # Always reach Twenty on the host via host.docker.internal (override with TWENTY_DOCKER_BASE_URL).
+      TWENTY_BASE_URL: ${TWENTY_DOCKER_BASE_URL:-http://host.docker.internal:3020}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8765:8765"
     restart: unless-stopped

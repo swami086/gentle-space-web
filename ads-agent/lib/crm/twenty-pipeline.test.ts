@@ -6,10 +6,13 @@ vi.mock("../bifrost/mcp-client", () => ({ callTwentyTool }));
 
 import {
   PIPELINE_STAGES,
+  formatAmountLabelInr,
   getOpportunity,
   getPipelineValue,
   listOpportunities,
   maskPhone,
+  reshapeTwentyOpportunityToolResult,
+  toOpenUiOpportunityCard,
   updateOpportunityStage,
 } from "./twenty-pipeline";
 
@@ -75,6 +78,23 @@ describe("listOpportunities", () => {
     ]);
   });
 
+  it("maps a bare array payload (live Twenty MCP shape) into typed rows", async () => {
+    callTwentyTool.mockResolvedValue([
+      {
+        id: "opp-1",
+        name: "API Integration Deal",
+        stage: "NEW_BRIEF",
+        amount: { amountMicros: 75000000000, currencyCode: "USD" },
+        pointOfContact: { name: { firstName: "Patrick", lastName: "Collison" } },
+        createdAt: "2026-01-25T16:26:00.000Z",
+      },
+    ]);
+    const rows = await listOpportunities();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("API Integration Deal");
+    expect(rows[0].amountInr).toBe(75000);
+  });
+
   it("returns an empty list when Twenty is not configured", async () => {
     delete process.env.TWENTY_API_KEY;
     expect(await listOpportunities()).toEqual([]);
@@ -136,5 +156,91 @@ describe("getPipelineValue", () => {
       ],
     });
     expect(await getPipelineValue()).toBe(15000);
+  });
+});
+
+describe("reshapeTwentyOpportunityToolResult", () => {
+  const fatRecord = {
+    id: "opp-1",
+    name: "Office: Priya Sharma",
+    stage: "SHORTLIST",
+    tier: "HOT",
+    amount: { amountMicros: 15000000000, currencyCode: "INR" },
+    pointOfContact: {
+      name: { firstName: "Priya", lastName: "Sharma" },
+      phones: { primaryPhoneNumber: "8800001234", primaryPhoneCallingCode: "+91" },
+    },
+    source: "WhatsApp",
+    listingName: "Koramangala",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    // Extra CRM fields that must never reach OpportunityCard positional arity
+    companyId: "co-1",
+    ownerId: "user-1",
+    probability: 0.4,
+    closeDate: "2026-09-01",
+  };
+
+  const openUiCard = {
+    name: "Office: Priya Sharma",
+    stage: "SHORTLIST",
+    tier: "HOT",
+    amountLabel: "₹15,000",
+    maskedPhone: "+91 8XXXXX-1234",
+    source: "WhatsApp",
+  };
+
+  it("maps list_opportunities {records} to OpenUI card rows only (preserves all records)", () => {
+    const reshaped = reshapeTwentyOpportunityToolResult("list_opportunities", {
+      records: [fatRecord, { ...fatRecord, id: "opp-2", name: "Office: Rohan", tier: null }],
+      pageInfo: { hasNextPage: false },
+    });
+    expect(reshaped).toEqual([
+      openUiCard,
+      { ...openUiCard, name: "Office: Rohan", tier: "UNSCORED" },
+    ]);
+    expect(Object.keys((reshaped as object[])[0])).toEqual([
+      "name", "stage", "tier", "amountLabel", "maskedPhone", "source",
+    ]);
+  });
+
+  it("maps get_opportunity single record to one OpenUI card row", () => {
+    expect(reshapeTwentyOpportunityToolResult("get_opportunity", fatRecord)).toEqual(openUiCard);
+  });
+
+  it("returns null for get_opportunity when the payload is empty", () => {
+    expect(reshapeTwentyOpportunityToolResult("get_opportunity", null)).toBeNull();
+  });
+
+  it("passes through unknown tool payloads unchanged", () => {
+    const raw = { ok: true };
+    expect(reshapeTwentyOpportunityToolResult("update_opportunity", raw)).toBe(raw);
+  });
+});
+
+describe("formatAmountLabelInr / toOpenUiOpportunityCard", () => {
+  it("formats INR amounts and defaults null tier to UNSCORED", () => {
+    expect(formatAmountLabelInr(15000)).toBe("₹15,000");
+    expect(formatAmountLabelInr(null)).toBe("");
+    expect(
+      toOpenUiOpportunityCard({
+        id: "1",
+        name: "A",
+        stage: "TOUR",
+        tier: null,
+        amountInr: null,
+        contactName: null,
+        maskedPhone: null,
+        source: null,
+        listingName: null,
+        createdAt: "",
+      }),
+    ).toEqual({
+      name: "A",
+      stage: "TOUR",
+      tier: "UNSCORED",
+      amountLabel: "",
+      maskedPhone: "",
+      source: "",
+    });
   });
 });

@@ -1,19 +1,42 @@
 import type { ToolSpec } from "@openuidev/lang-core";
-import { getOpportunity, listOpportunities, updateOpportunityStage, PIPELINE_STAGES } from "../crm/twenty-pipeline";
+import {
+  getOpportunity,
+  listOpportunities,
+  toOpenUiOpportunityCard,
+  updateOpportunityStage,
+  PIPELINE_STAGES,
+  type Opportunity,
+  type OpenUiOpportunityCardRow,
+} from "../crm/twenty-pipeline";
 import { logAiAction } from "../db/ai-action-log";
 import type { ToolProviderMap } from "./platform-tools";
 
 const STAGE_LABELS = new Map(PIPELINE_STAGES.map((s) => [s.value, s.label] as const));
 
+/** OpenUI OpportunityCard Zod shape — returned by read tools so Query() results plug into OpportunityList. */
+function toOpenUiRows(rows: Opportunity[]): OpenUiOpportunityCardRow[] {
+  return rows.map(toOpenUiOpportunityCard);
+}
+
+/**
+ * Server-side OpenUI toolProvider map. Client reaches these only via createHttpToolProvider →
+ * POST /api/openui/tools (MCP stays on the backend inside listOpportunities/getOpportunity).
+ * Official OpenUI Generate→Execute: the LLM emits Query("list_opportunities"); the Renderer runs
+ * the tool — data never round-trips through the model as OpportunityCard positionals.
+ * @see https://www.openui.com/docs/openui-lang/how-it-works
+ */
 export const crmToolProvider: ToolProviderMap = {
-  list_opportunities: async () => listOpportunities(),
+  list_opportunities: async () => toOpenUiRows(await listOpportunities()),
   search_opportunities: async (args: Record<string, unknown>) => {
     const query = String(args.query ?? "").toLowerCase();
     const all = await listOpportunities();
-    if (!query) return all;
-    return all.filter((o: { name: string }) => o.name.toLowerCase().includes(query));
+    const filtered = !query ? all : all.filter((o) => o.name.toLowerCase().includes(query));
+    return toOpenUiRows(filtered);
   },
-  get_opportunity: async (args: Record<string, unknown>) => getOpportunity(String(args.id ?? "")),
+  get_opportunity: async (args: Record<string, unknown>) => {
+    const row = await getOpportunity(String(args.id ?? ""));
+    return row ? toOpenUiOpportunityCard(row) : null;
+  },
   advance_opportunity_stage: async (args: Record<string, unknown>) => {
     const id = String(args.id ?? "");
     const opportunityName = String(args.opportunityName ?? "");
@@ -29,16 +52,20 @@ export const crmToolProvider: ToolProviderMap = {
   },
 };
 
-export const crmToolSpecs: ToolSpec[] = [
+/** Read-only specs for CRM Assistant / Copilot prompts (mutations stay Confirm→PATCH). */
+export const crmReadToolSpecs: ToolSpec[] = [
   {
     name: "list_opportunities",
-    description: "List every open CRM opportunity/lead across all pipeline stages.",
+    description:
+      "List every open CRM opportunity/lead. Returns an array of OpenUI OpportunityCard rows: " +
+      "{name, stage, tier, amountLabel, maskedPhone, source}.",
     inputSchema: { type: "object", properties: {}, required: [] },
     outputSchema: { type: "array" },
   },
   {
     name: "search_opportunities",
-    description: "Search CRM opportunities/leads by a case-insensitive name substring.",
+    description:
+      "Search CRM opportunities by case-insensitive name substring. Same OpenUI row shape as list_opportunities.",
     inputSchema: {
       type: "object",
       properties: { query: { type: "string", description: "Name substring to search for" } },
@@ -48,10 +75,14 @@ export const crmToolSpecs: ToolSpec[] = [
   },
   {
     name: "get_opportunity",
-    description: "Get one CRM opportunity/lead by its exact id.",
+    description: "Get one CRM opportunity by id as an OpenUI OpportunityCard row, or null.",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     outputSchema: { type: "object" },
   },
+];
+
+export const crmToolSpecs: ToolSpec[] = [
+  ...crmReadToolSpecs,
   {
     name: "advance_opportunity_stage",
     description:

@@ -6,6 +6,7 @@ import { Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
+import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { platformLibrary } from "@/lib/openui/platform-library";
 import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { useCopilot } from "./CopilotProvider";
@@ -18,6 +19,9 @@ const copilotToolProvider = createHttpToolProvider([
   "get_spend_cpl_trend",
   "list_campaigns_with_cpl",
   "list_pending_proposals",
+  "list_opportunities",
+  "search_opportunities",
+  "get_opportunity",
 ]);
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
@@ -125,7 +129,7 @@ export function CopilotPanel() {
                   library={copilotLibrary}
                   toolProvider={copilotToolProvider}
                   isStreaming={false}
-                  onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+                  onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
                 />
               </div>
             ) : (
@@ -141,7 +145,7 @@ export function CopilotPanel() {
                 library={copilotLibrary}
                 toolProvider={copilotToolProvider}
                 isStreaming
-                onError={(errors) => setRenderError(errors[0]?.message ?? "Couldn't render that response.")}
+                onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             </div>
           )}
