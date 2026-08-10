@@ -43,6 +43,16 @@ Recommended skill per subagent (announce `Using engineering-skills2 → <skill>`
 | 4 | `/api/hermes/chat` route | `engineering-skills2 → senior-backend` (Next.js API route) |
 | 5–8 | Wire toggle into each panel | `engineering-skills2 → senior-frontend` (React component wiring, 4 independent subagents) |
 
+## Execution Notes (deviations from the plan as written)
+
+All 10 tasks completed. Live deviations discovered during Waves 3–4:
+
+1. **Docker Desktop Mac + `network_mode: host` cannot expose Hermes `:8642` to the Mac host.** API server was alive inside the container (401) but unreachable from `npm run dev`. Fixed locally with `~/hermes-agent/docker-compose.mac.yml` (bridge + `8642:8642`) and MCP URLs pointed at `host.docker.internal`; ads-agent MCP Host allowlists include that hostname. **GCP VM should keep plain host networking + `localhost` MCP URLs.**
+2. **Hermes does emit real `usage` chunks** on the final SSE event (confirmed). The synthesized zero-token fallback still exists for rare empty/raced turns.
+3. **Hermes reports model id `hermes-agent`, which is unpriced in `lib/metering/pricing.ts`.** Follow-up fix maps that slug to `google/gemini-2.5-pro` for ledger pricing (optional `HERMES_API_SERVER_BILLING_MODEL` override). Before the map, ledger rows recorded tokens at `$0`.
+4. **Security lockdown:** disabled `terminal`/`file`/`browser`/`computer_use`/`code_execution` on `--platform api_server` via `hermes tools disable` (persists in Hermes config). MCP allowlists remain include-only.
+5. **E2E of the four origins** was exercised through `callMeteredStreamingChatCompletion` + `streamHermesCompletion` (same path as `draftHermesReply` after session lookup). Full browser click-through of each panel still needs an authenticated operator session; HTTP route correctly returns 401 without one. CRM e2e confirmed `mcp__app_data__list_opportunities` was called.
+
 ---
 
 ### Task 1: New read-only `app-data-mcp-server` (CRM + analytics reads)

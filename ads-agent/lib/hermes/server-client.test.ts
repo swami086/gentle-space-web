@@ -52,6 +52,29 @@ describe("streamHermesCompletion", () => {
     expect(requestInit.headers.Authorization).toBe("Bearer test-key");
   });
 
+  it("maps hermes-agent usage model to google/gemini-2.5-pro for ledger pricing", async () => {
+    const events = [
+      `data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}],"model":"hermes-agent","usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}}\n\n`,
+      `data: [DONE]\n\n`,
+    ];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(events)));
+
+    const { streamHermesCompletion } = await import("./server-client");
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of streamHermesCompletion({ messages: [{ role: "user", content: "hi" }] })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { type: "delta", content: "ok" },
+      {
+        type: "usage",
+        model: "google/gemini-2.5-pro",
+        usage: { promptTokens: 8, completionTokens: 2, totalTokens: 10 },
+      },
+    ]);
+  });
+
   it("synthesizes a zero-cost usage chunk if the stream ends without one", async () => {
     const events = [
       `data: {"choices":[{"delta":{"content":"ok"}}],"model":"google/gemini-2.5-pro"}\n\n`,

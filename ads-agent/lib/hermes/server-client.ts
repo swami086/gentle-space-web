@@ -8,6 +8,18 @@ function hermesModel(): string {
   return process.env.HERMES_API_SERVER_MODEL || "hermes-agent";
 }
 
+/** Model name written to the usage ledger for pricing. Hermes' API server reports its
+ * virtual model id (`hermes-agent`); map that to the underlying Vertex model so
+ * `computeCostUsd` can price the turn (see lib/metering/pricing.ts). */
+function billingModel(streamModel: string): string {
+  const override = process.env.HERMES_API_SERVER_BILLING_MODEL?.trim();
+  if (override) return override;
+  if (streamModel === hermesModel() || streamModel === "hermes-agent") {
+    return "google/gemini-2.5-pro";
+  }
+  return streamModel;
+}
+
 /** True when the app has both a Hermes API server URL and bearer key to call. */
 export function isHermesConfigured(): boolean {
   return Boolean(process.env.HERMES_API_SERVER_URL?.trim() && process.env.HERMES_API_SERVER_KEY?.trim());
@@ -57,12 +69,15 @@ export async function* streamHermesCompletion(
   let lastModel = hermesModel();
 
   function synthesizedUsageChunk(): StreamChunk {
-    // ponytail: Hermes' API-server usage-on-stream behavior wasn't verifiable from docs alone —
-    // synthesize a zero-cost usage chunk so callMeteredStreamingChatCompletion still records a
-    // ledger row (at $0) instead of throwing after the reply already rendered to the user.
-    // Ceiling: a real Hermes turn would be under-billed if this fires in production. Upgrade
-    // path: once the end-to-end task confirms real usage arrives, delete this fallback.
-    return { type: "usage", model: lastModel, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } };
+    // ponytail: e2e confirmed Hermes usually emits a real usage chunk on the final SSE event,
+    // but a rare empty/raced turn can still finish without one. Synthesize a zero-token usage
+    // row so callMeteredStreamingChatCompletion records the feature instead of throwing after
+    // the reply already rendered. Ceiling: that rare turn is under-billed at $0.
+    return {
+      type: "usage",
+      model: billingModel(lastModel),
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    };
   }
 
   try {
@@ -99,7 +114,7 @@ export async function* streamHermesCompletion(
           sawUsage = true;
           yield {
             type: "usage",
-            model: parsed.model || lastModel,
+            model: billingModel(parsed.model || lastModel),
             usage: {
               promptTokens: parsed.usage.prompt_tokens ?? 0,
               completionTokens: parsed.usage.completion_tokens ?? 0,

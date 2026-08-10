@@ -122,9 +122,9 @@ Same pattern as the existing four surfaces:
 
 ## Success criteria
 
-- [ ] `app-data-mcp-server` running, exposing exactly the 6 read-only tools, added to `docker-compose.yml`.
-- [ ] Hermes' `~/.hermes/config.yaml` has both `mcp_servers` entries; `hermes mcp list` shows both, tool counts matching the allowlists (4 for `ads_agent`, 6 for `app_data`) — no write tools selected on either.
-- [ ] "Ask Hermes" toggle present and functional in all 4 panels (Copilot, CRM, Reports, Campaign draft).
-- [ ] A Hermes turn from each of the 4 panels streams a plain-text reply (no OpenUI parse errors) and produces a `usage_ledger` row with `feature = ads-agent:hermes-chat:<origin>` matching the panel it was opened from.
-- [ ] A CRM-domain question asked via "Ask Hermes" from the CRM panel resolves using the new `app_data` MCP tools (verified via Hermes tool-call logs), not just the Google Ads tools.
-- [ ] No terminal/file/browser/computer_use tool is reachable through any app-facing Hermes call (verified via Hermes' `tools.include` allowlist on both MCP entries and the API-server profile's own tool config).
+- [x] `app-data-mcp-server` running, exposing exactly the 6 read-only tools, added to `docker-compose.yml`.
+- [x] Hermes' `~/.hermes/config.yaml` has both `mcp_servers` entries; `hermes mcp list` shows both, tool counts matching the allowlists (4 for `ads_agent`, 6 for `app_data`) — no write tools selected on either.
+- [x] "Ask Hermes" toggle present and functional in all 4 panels (Copilot, CRM, Reports, Campaign draft).
+- [x] A Hermes turn from each of the 4 panels streams a plain-text reply (no OpenUI parse errors) and produces a `usage_ledger` row with `feature = ads-agent:hermes-chat:<origin>` matching the panel it was opened from.
+- [x] A CRM-domain question asked via "Ask Hermes" from the CRM panel resolves using the new `app_data` MCP tools (verified via Hermes tool-call logs), not just the Google Ads tools.
+- [x] No terminal/file/browser/computer_use tool is reachable through any app-facing Hermes call (verified via Hermes' `tools.include` allowlist on both MCP entries and the API-server profile's own tool config).
