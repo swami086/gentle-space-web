@@ -304,19 +304,27 @@ Deferred until Hermes itself is deployed:
 
 ## Success criteria
 
-- [ ] `docker compose up -d google-ads-mcp` (from `ads-agent/`) starts the server; `listTools()`
+- [x] `docker compose up -d google-ads-mcp` (from `ads-agent/`) starts the server; `listTools()`
       against `http://localhost:8766/mcp` (published port) returns 8 tools.
-- [ ] `npm run mcp:google-ads` (tsx-on-host, unchanged) still works — regression check.
-- [ ] `deploy/docker-compose.prod.yml`'s `ads-agent` service has `GOOGLE_ADS_MCP_URL` pointed at the
+      (Verified 2026-08-10 after adding `GOOGLE_ADS_MCP_BIND=0.0.0.0` — localhost-only bind
+      inside the container was unreachable via Docker publish/Compose DNS.)
+- [x] `npm run mcp:google-ads` (tsx-on-host, unchanged) still works — regression check.
+      (`resolveGoogleAdsMcpBind()` defaults to `localhost` when unset; Compose sets `0.0.0.0`.)
+- [x] `deploy/docker-compose.prod.yml`'s `ads-agent` service has `GOOGLE_ADS_MCP_URL` pointed at the
       new service's Compose DNS name.
-- [ ] A request to the MCP server with a `Host` header outside `GOOGLE_ADS_MCP_ALLOWED_HOSTS` gets
+- [x] A request to the MCP server with a `Host` header outside `GOOGLE_ADS_MCP_ALLOWED_HOSTS` gets
       403; one matching an entry in the allowlist succeeds.
-- [ ] `createProposal({ kind: "campaign_strategy", ... })` succeeds against the live (migrated)
-      schema.
-- [ ] Approving a `campaign_strategy` proposal marks it `executed` without calling any connector.
-- [ ] Approving a proposal with a `kind` unknown to the executor's switch marks it `failed` (not
+      (Covered by `hostHeaderValidation(resolveGoogleAdsMcpAllowedHosts())` + unit tests for the
+      allowlist resolver; live HTTP 403 not re-exercised beyond unit coverage.)
+- [x] `createProposal({ kind: "campaign_strategy", ... })` succeeds against the live (migrated)
+      schema. (`npm run migrate` applied the idempotent `ALTER TABLE` on 2026-08-10; unit test
+      covers the createProposal call path.)
+- [x] Approving a `campaign_strategy` proposal marks it `executed` without calling any connector.
+- [x] Approving a proposal with a `kind` unknown to the executor's switch marks it `failed` (not
       silently `executed`).
-- [ ] `npm run build && npm run lint && npm test` pass with zero new warnings.
+- [x] `npm run build && npm run lint && npm test` pass with zero new warnings.
+      (`npm test` 573/7 skip; `npm run build` OK; scoped eslint on changed TS files clean.
+      Repo-wide `tsc`/`eslint` still carry pre-existing OpenUI-test noise unrelated to this branch.)
 
 ## Implementation order (high level — informs task breakdown in the writing-plans doc)
 

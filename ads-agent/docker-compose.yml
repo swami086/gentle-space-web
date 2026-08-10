@@ -75,6 +75,8 @@ services:
       # in-network Postgres service name — "localhost" inside this container is itself, not the host.
       DATABASE_URL: postgres://ads_agent:ads_agent_local_dev@db:5432/ads_agent
       GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp
+      # localhost bind inside a container is unreachable via published ports / Compose DNS
+      GOOGLE_ADS_MCP_BIND: "0.0.0.0"
     ports:
       - "8766:8766"
     restart: unless-stopped

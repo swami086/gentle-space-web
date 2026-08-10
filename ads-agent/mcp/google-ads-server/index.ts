@@ -40,6 +40,14 @@ export function resolveGoogleAdsMcpAllowedHosts(): string[] {
     .filter((host) => host.length > 0);
 }
 
+/** Listen address for the HTTP server. Defaults to localhost (tsx-on-host). Compose sets
+ * GOOGLE_ADS_MCP_BIND=0.0.0.0 so Docker port publish / Compose DNS can reach the process —
+ * Host-header allowlist remains the DNS-rebinding guard. */
+export function resolveGoogleAdsMcpBind(): string {
+  const raw = process.env.GOOGLE_ADS_MCP_BIND?.trim();
+  return raw && raw.length > 0 ? raw : "localhost";
+}
+
 /** Builds (but does not connect/serve) the Google Ads MCP server — 3 read tools + 5 write tools.
  * Exported separately from startGoogleAdsMcpServer so tests can wire it to an in-memory transport
  * instead of a real HTTP port (see index.test.ts). */
@@ -140,7 +148,11 @@ export function buildGoogleAdsMcpServer(): McpServer {
 }
 
 /**
- * Starts the Google Ads MCP server over Streamable HTTP, bound to localhost only.
+ * Starts the Google Ads MCP server over Streamable HTTP.
+ *
+ * Bind address comes from GOOGLE_ADS_MCP_BIND (default localhost). Containerized
+ * deployments set 0.0.0.0; Host-header allowlist (GOOGLE_ADS_MCP_ALLOWED_HOSTS) remains
+ * the DNS-rebinding guard.
  *
  * Uses createMcpHandler (stateless per-request factory) instead of one long-lived
  * NodeStreamableHTTPServerTransport: our bifrost client opens a fresh MCP session for
@@ -152,6 +164,7 @@ export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
   const nodeHandler = toNodeHandler(handler);
   const validateHost = hostHeaderValidation(resolveGoogleAdsMcpAllowedHosts());
   const validateOrigin = localhostOriginValidation();
+  const bind = resolveGoogleAdsMcpBind();
 
   createServer((req, res) => {
     if (!validateHost(req, res) || !validateOrigin(req, res)) return;
@@ -160,7 +173,7 @@ export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
       return;
     }
     void nodeHandler(req, res);
-  }).listen(port, "localhost", () => {
-    console.log(`google-ads-mcp listening on http://localhost:${port}/mcp`);
+  }).listen(port, bind, () => {
+    console.log(`google-ads-mcp listening on http://${bind}:${port}/mcp`);
   });
 }

@@ -120,3 +120,24 @@ describe("resolveGoogleAdsMcpAllowedHosts", () => {
     expect(resolveGoogleAdsMcpAllowedHosts()).toEqual(["google-ads-mcp", "localhost", "127.0.0.1"]);
   });
 });
+
+describe("resolveGoogleAdsMcpBind", () => {
+  const originalEnv = process.env.GOOGLE_ADS_MCP_BIND;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.GOOGLE_ADS_MCP_BIND;
+    else process.env.GOOGLE_ADS_MCP_BIND = originalEnv;
+  });
+
+  it("defaults to localhost when unset", async () => {
+    delete process.env.GOOGLE_ADS_MCP_BIND;
+    const { resolveGoogleAdsMcpBind } = await import("./index");
+    expect(resolveGoogleAdsMcpBind()).toBe("localhost");
+  });
+
+  it("returns the trimmed GOOGLE_ADS_MCP_BIND value when set", async () => {
+    process.env.GOOGLE_ADS_MCP_BIND = " 0.0.0.0 ";
+    const { resolveGoogleAdsMcpBind } = await import("./index");
+    expect(resolveGoogleAdsMcpBind()).toBe("0.0.0.0");
+  });
+});

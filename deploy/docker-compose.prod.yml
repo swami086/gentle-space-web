@@ -124,6 +124,8 @@ services:
       GOOGLE_ADS_REFRESH_TOKEN: ${GOOGLE_ADS_REFRESH_TOKEN:-}
       GOOGLE_ADS_CUSTOMER_ID: ${GOOGLE_ADS_CUSTOMER_ID:-}
       GOOGLE_ADS_MCP_ALLOWED_HOSTS: google-ads-mcp,localhost,127.0.0.1
+      # localhost bind inside a container is unreachable via Compose DNS / expose
+      GOOGLE_ADS_MCP_BIND: "0.0.0.0"
     expose:
       - "8766"
     restart: unless-stopped
