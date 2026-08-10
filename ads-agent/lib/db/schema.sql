@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS crm_signal_snapshots (
 
 CREATE TABLE IF NOT EXISTS proposals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  kind TEXT NOT NULL CHECK (kind IN ('create_campaign','pause','budget_change','add_negative_keyword')),
+  kind TEXT NOT NULL CHECK (kind IN ('create_campaign','pause','budget_change','add_negative_keyword','campaign_strategy')),
   campaign_id UUID REFERENCES campaigns(id),
   payload JSONB NOT NULL,
   triggered_rule TEXT NOT NULL,
@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS proposals (
   decided_at TIMESTAMPTZ,
   executed_at TIMESTAMPTZ
 );
+
+-- migrate.ts re-runs this entire file on every invocation; CREATE TABLE IF NOT EXISTS is a no-op
+-- against a table that already exists, so widening the CHECK constraint above never takes effect
+-- on its own for an already-provisioned database. Make the widening idempotent instead.
+ALTER TABLE proposals DROP CONSTRAINT IF EXISTS proposals_kind_check;
+ALTER TABLE proposals ADD CONSTRAINT proposals_kind_check
+  CHECK (kind IN ('create_campaign','pause','budget_change','add_negative_keyword','campaign_strategy'));
 
 CREATE TABLE IF NOT EXISTS cron_settings (
   id INT PRIMARY KEY DEFAULT 1,

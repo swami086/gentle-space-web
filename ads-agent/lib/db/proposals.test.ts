@@ -63,6 +63,17 @@ describe("createProposal", () => {
     });
     expect(query.mock.calls[0][1][4]).toBeNull();
   });
+
+  it("accepts the campaign_strategy kind", async () => {
+    query.mockResolvedValue({ rows: [{ ...row, kind: "campaign_strategy" }] });
+    await createProposal({
+      kind: "campaign_strategy",
+      campaignId: null,
+      payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
+      triggeredRule: "hermes:campaign_strategy",
+    });
+    expect(query.mock.calls[0][1][0]).toBe("campaign_strategy");
+  });
 });
 
 describe("listProposals", () => {

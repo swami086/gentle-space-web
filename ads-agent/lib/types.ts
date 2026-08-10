@@ -57,7 +57,27 @@ export type NewCrmSignalSnapshot = {
   unscoredCount: number;
 };
 
-export type ProposalKind = "create_campaign" | "pause" | "budget_change" | "add_negative_keyword";
+export type ProposalKind =
+  | "create_campaign"
+  | "pause"
+  | "budget_change"
+  | "add_negative_keyword"
+  | "campaign_strategy";
+
+/** One line item inside a campaign_strategy proposal's payload — advisory, not an atomic mutation. */
+export type CampaignStrategyRecommendation = {
+  title: string;
+  rationale: string;
+  suggestedAction?: string;
+};
+
+/** Payload shape for a campaign_strategy proposal — a narrative recommendation, not a single
+ * ad-platform mutation. executeProposal no-ops this kind (see lib/executor/execute.ts). */
+export type CampaignStrategyPayload = {
+  summary: string;
+  recommendations: CampaignStrategyRecommendation[];
+};
+
 export type ProposalStatus = "pending" | "approved" | "rejected" | "executed" | "failed";
 
 export type Proposal = {
