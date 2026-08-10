@@ -11,11 +11,11 @@ const LIVE = process.env.GOOGLE_ADS_MCP_LIVE_SMOKE === "1";
 
 describe.skipIf(!LIVE)("Google Ads MCP server (live)", () => {
   it(
-    "exposes exactly 7 tools (3 read + 4 write)",
+    "exposes exactly 8 tools (3 read + 5 write)",
     async () => {
       const tools = await listGoogleAdsTools();
       expect(tools.map((t) => t.name).sort()).toEqual(Object.values(GOOGLE_ADS_MCP_TOOLS).sort());
-      expect(tools).toHaveLength(7);
+      expect(tools).toHaveLength(8);
     },
     15_000,
   );

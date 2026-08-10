@@ -12,10 +12,13 @@ export const GOOGLE_ADS_MCP_TOOLS = {
   pauseCampaign: "pause_campaign",
   updateCampaignBudget: "update_campaign_budget",
   addNegativeKeyword: "add_negative_keyword",
+  /** External-agent write surface — inserts a pending proposal only; never mutates ad platforms. */
+  proposeChange: "propose_change",
 } as const;
 
-/** Read-only subset the model is ever allowed to see — the 4 write tools are deliberately
- * excluded here so resolve-tools-then-generate.ts can never advertise them to the LLM. */
+/** Read-only subset the model is ever allowed to see — the write tools (including
+ * propose_change) are deliberately excluded here so resolve-tools-then-generate.ts can
+ * never advertise them to the LLM. */
 export const GOOGLE_ADS_MCP_READ_TOOL_NAMES = [
   GOOGLE_ADS_MCP_TOOLS.listCampaignPerformance,
   GOOGLE_ADS_MCP_TOOLS.searchTermsReport,
