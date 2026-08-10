@@ -241,8 +241,37 @@ Runtime config is **not in git** — it was copied from `~/Documents/Resume/gent
   Verified: `npm test` 566 pass/7 skip; `npm run build` OK; live `listTools()` = 7 on
   `localhost:8766/mcp`; new files eslint-clean. Build fix during Task 8: MCP `callTool` content
   blocks need a `type === "text"` type predicate before `.text` (same pattern applied to
-  `mcp-client.ts`). Manual leftover (needs test-account creds): env-status, live cycle/chat/writes,
-  `GOOGLE_ADS_MCP_LIVE_SMOKE=1`.
+  `mcp-client.ts`). **E2E finding (2026-08-07):** one shared `NodeStreamableHTTPServerTransport`
+  rejected the second client session (`Server already initialized`) because `withClient()` opens a
+  fresh MCP session per call — fixed by `createMcpHandler(() => buildGoogleAdsMcpServer())` +
+  `toNodeHandler` (stateless per-request). Manual leftover (needs test-account creds + signed-in
+  browser): env-status, live cycle/chat/writes, `GOOGLE_ADS_MCP_LIVE_SMOKE=1`.
+- **Hermes agent bridge (ads-agent Phase 1) — design + plan written, not yet implemented (2026-08-10).**
+  Spec: `docs/superpowers/specs/2026-08-10-hermes-agent-ads-ops-design.md`. Plan (5 tasks / 2 parallel
+  waves + sequential verification): `docs/superpowers/plans/2026-08-10-hermes-agent-ads-ops.md`. Builds
+  only the ads-agent-side foundation for a future Hermes deployment (self-improving agent, skill
+  authoring, Semrush/Composio social listening — all external, not this repo's code): a new
+  `propose_change` MCP tool on the existing Google Ads MCP server that only ever calls
+  `createProposal()` (never a connector — the human-approval gate is unchanged), a new
+  `ProposalKind = "campaign_strategy"` for narrative recommendations, and containerizing the Google
+  Ads MCP server as its own Compose service (`google-ads-mcp`) reusing the existing `ads-agent` image
+  with a `command:` override (zero new Dockerfile). **3 real gaps found by reading, not hypothesized:**
+  (1) `executeProposal`'s `switch (proposal.kind)` in `lib/executor/execute.ts` has no `default` case
+  — an unrecognized kind falls through and is marked `executed` having done nothing; fixed with an
+  explicit `campaign_strategy` no-op case + `default: throw`. (2) `deploy/docker-compose.prod.yml`'s
+  `ads-agent` service sets all 5 Google Ads credential env vars but never `GOOGLE_ADS_MCP_URL` — it
+  falls back to `http://localhost:8766/mcp`, unreachable inside that container, so Google Ads MCP
+  calls in production have been silently soft-failing since the 2026-08-07 integration shipped. (3)
+  `migrate.ts` re-runs the entire `schema.sql` file on every invocation (no migration versioning), so
+  a `CREATE TABLE IF NOT EXISTS proposals (... CHECK (kind IN (...)) ...)` edit alone never widens the
+  constraint on an already-provisioned database — needs an idempotent `ALTER TABLE ... DROP
+  CONSTRAINT IF EXISTS ... ADD CONSTRAINT ...` appended after it. **Containerization detail:**
+  `@modelcontextprotocol/node`'s `localhostHostValidation()` hardcodes the `Host` header allowlist to
+  `localhost`/`127.0.0.1`/`[::1]` — a request from another container (`Host: google-ads-mcp:8766`)
+  would be rejected; the SDK ships a configurable `hostHeaderValidation(allowedHostnames)` for exactly
+  this case (confirmed in its dist source/README), driven by a new `GOOGLE_ADS_MCP_ALLOWED_HOSTS` env
+  var. Origin validation needs no change — the SDK's `originValidation` already passes requests with
+  no `Origin` header, which is what non-browser MCP clients send.
 
 **Docker:** the pgvector+AGE volume was created by the Resume folder, so compose must pin the original project name or a new empty volume is used instead:
 
