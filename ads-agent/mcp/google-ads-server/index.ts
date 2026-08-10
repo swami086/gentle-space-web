@@ -1,7 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { McpServer } from "@modelcontextprotocol/server";
-import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import {
+  localhostHostValidation,
+  localhostOriginValidation,
+  toNodeHandler,
+} from "@modelcontextprotocol/node";
 import { z } from "zod";
 import {
   addGoogleNegativeKeyword,
@@ -96,18 +99,27 @@ export function buildGoogleAdsMcpServer(): McpServer {
   return server;
 }
 
-/** Starts the Google Ads MCP server over Streamable HTTP, bound to localhost only. */
+/**
+ * Starts the Google Ads MCP server over Streamable HTTP, bound to localhost only.
+ *
+ * Uses createMcpHandler (stateless per-request factory) instead of one long-lived
+ * NodeStreamableHTTPServerTransport: our bifrost client opens a fresh MCP session for
+ * every listTools/callTool via withClient(), and a single shared transport rejects the
+ * second initialize with "Server already initialized".
+ */
 export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
-  const server = buildGoogleAdsMcpServer();
-  const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
-  await server.connect(transport);
+  const handler = createMcpHandler(() => buildGoogleAdsMcpServer());
+  const nodeHandler = toNodeHandler(handler);
+  const validateHost = localhostHostValidation();
+  const validateOrigin = localhostOriginValidation();
 
   createServer((req, res) => {
-    if (req.url !== "/mcp") {
+    if (!validateHost(req, res) || !validateOrigin(req, res)) return;
+    if (req.url !== "/mcp" && !req.url?.startsWith("/mcp?")) {
       res.writeHead(404).end();
       return;
     }
-    void transport.handleRequest(req, res);
+    void nodeHandler(req, res);
   }).listen(port, "localhost", () => {
     console.log(`google-ads-mcp listening on http://localhost:${port}/mcp`);
   });
