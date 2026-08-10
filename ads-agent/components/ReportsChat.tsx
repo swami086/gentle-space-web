@@ -8,6 +8,8 @@ import { analyticsLibrary } from "@/lib/openui/analytics-library";
 import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
+import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
+import { streamHermesChat } from "@/lib/hermes/browser-client";
 
 const reportsLibrary = analyticsLibrary as Library;
 const reportsToolProvider = createHttpToolProvider([
@@ -24,6 +26,7 @@ export function ReportsChat() {
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [hermesMode, setHermesMode] = useState(false);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -34,6 +37,23 @@ export function ReportsChat() {
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: trimmed }]);
     setInput("");
     try {
+      if (hermesMode) {
+        let accumulated = "";
+        for await (const event of streamHermesChat({
+          origin: "reports",
+          userMessage: trimmed,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+        })) {
+          if ("delta" in event) {
+            accumulated += event.delta;
+            setStreamingText(accumulated);
+          } else if (!("error" in event)) {
+            setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: event.reply }]);
+          }
+        }
+        return;
+      }
+
       const res = await fetch("/api/reports/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,6 +90,9 @@ export function ReportsChat() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
+      <div className="flex justify-end">
+        <HermesModeToggle active={hermesMode} onToggle={() => setHermesMode((v) => !v)} />
+      </div>
       <div className="flex-1 space-y-3 overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-sm text-muted-foreground">
