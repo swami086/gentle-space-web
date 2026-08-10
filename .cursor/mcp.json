@@ -7,7 +7,7 @@
         "PENCIL_PROJECT_SLUG": "gentlespace_web"
       }
     },
-    "openmemory": {
+    "openmemory-gentlespace": {
       "alwaysAllow": [
         "add_memories",
         "search_memory",
