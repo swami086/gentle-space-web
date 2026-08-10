@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CampaignDraft, CampaignDraftMessage } from "@/lib/types";
 import { ManualEditForm } from "@/components/campaign-draft-chat/ManualEditForm";
 import { AiSetupView } from "@/components/campaign-draft-chat/AiSetupView";
+import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
+import { streamHermesChat } from "@/lib/hermes/browser-client";
 
 type Props = {
   initialDraft: CampaignDraft;
@@ -30,6 +32,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [hermesMode, setHermesMode] = useState(false);
 
   async function patchDraft(fields: Record<string, unknown>) {
     setError(null);
@@ -59,6 +62,34 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
     setInput("");
 
     try {
+      if (hermesMode) {
+        let accumulated = "";
+        for await (const event of streamHermesChat({
+          origin: "campaign",
+          userMessage: content,
+          history: messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+        })) {
+          if ("delta" in event) {
+            accumulated += event.delta;
+            setStreamingText(accumulated);
+          } else if ("error" in event) {
+            setError(event.error);
+          } else {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `local-reply-${Date.now()}`,
+                draftId: draft.id,
+                role: "assistant",
+                content: event.reply,
+                createdAt: new Date().toISOString(),
+              },
+            ]);
+          }
+        }
+        return;
+      }
+
       const res = await fetch(`/api/campaign-drafts/${draft.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,8 +163,9 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="flex h-[70vh] flex-col">
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold text-foreground">Describe your campaign</CardTitle>
+          <HermesModeToggle active={hermesMode} onToggle={() => setHermesMode((v) => !v)} />
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
