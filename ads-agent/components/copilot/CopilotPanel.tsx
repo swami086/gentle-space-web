@@ -10,6 +10,8 @@ import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { platformLibrary } from "@/lib/openui/platform-library";
 import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { useCopilot } from "./CopilotProvider";
+import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
+import { streamHermesChat } from "@/lib/hermes/browser-client";
 
 // createLibrary (lang-core) can't unify heterogeneous component C params; Renderer wants react-lang Library.
 const copilotLibrary = platformLibrary as Library;
@@ -33,6 +35,7 @@ export function CopilotPanel() {
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [hermesMode, setHermesMode] = useState(false);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -45,6 +48,25 @@ export function CopilotPanel() {
     setInput("");
 
     try {
+      if (hermesMode) {
+        let accumulated = "";
+        for await (const event of streamHermesChat({
+          origin: "copilot",
+          userMessage: trimmed,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+        })) {
+          if ("delta" in event) {
+            accumulated += event.delta;
+            setStreamingText(accumulated);
+          } else if ("error" in event) {
+            setError(event.error);
+          } else {
+            appendMessage({ id: `local-reply-${Date.now()}`, role: "assistant", content: event.reply });
+          }
+        }
+        return;
+      }
+
       const res = await fetch("/api/copilot/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,9 +128,12 @@ export function CopilotPanel() {
     <Card className="fixed bottom-24 right-6 z-40 flex h-[70vh] w-[420px] max-w-[calc(100vw-3rem)] flex-col shadow-xl">
       <CardHeader className="flex-row items-center justify-between border-b border-border">
         <CardTitle className="text-base font-semibold text-foreground">AI Copilot</CardTitle>
-        <Button variant="outline" size="icon" onClick={close} aria-label="Close AI Copilot">
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <HermesModeToggle active={hermesMode} onToggle={() => setHermesMode((v) => !v)} />
+          <Button variant="outline" size="icon" onClick={close} aria-label="Close AI Copilot">
+            <X className="size-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3 overflow-hidden pt-4">
         <div className="flex-1 space-y-3 overflow-y-auto pr-1">
