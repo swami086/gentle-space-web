@@ -7,6 +7,8 @@ import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { normalizeOpenUiResponse } from "@/lib/openui/normalize-openui-response";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
+import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
+import { streamHermesChat } from "@/lib/hermes/browser-client";
 import { SideAssistantPanel, type SideAssistantMessage } from "@/components/pencil/SideAssistantPanel";
 
 const crmChatLibrary = crmLibrary as Library;
@@ -26,6 +28,7 @@ export function CrmAssistantPanel() {
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [hermesMode, setHermesMode] = useState(false);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -37,6 +40,24 @@ export function CrmAssistantPanel() {
     setInput("");
 
     try {
+      if (hermesMode) {
+        let accumulated = "";
+        for await (const event of streamHermesChat({
+          origin: "crm",
+          userMessage: trimmed,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+        })) {
+          if ("delta" in event) {
+            accumulated += event.delta;
+            setStreamingText(accumulated);
+          } else if (!("error" in event)) {
+            setRenderError(null);
+            setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: event.reply }]);
+          }
+        }
+        return;
+      }
+
       const res = await fetch("/api/crm/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,6 +138,9 @@ export function CrmAssistantPanel() {
 
   return (
     <div className="flex h-full flex-col gap-2">
+      <div className="flex justify-end">
+        <HermesModeToggle active={hermesMode} onToggle={() => setHermesMode((v) => !v)} />
+      </div>
       <SideAssistantPanel
         title="CRM Assistant"
         messages={renderedMessages}
