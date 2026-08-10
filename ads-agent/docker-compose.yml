@@ -62,6 +62,23 @@ services:
       - "8765:8765"
     restart: unless-stopped
 
+  google-ads-mcp:
+    build: .
+    command: ["npx", "tsx", "scripts/run-google-ads-mcp.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      # env_file loads the host-oriented DATABASE_URL (localhost:5434); override it for the
+      # in-network Postgres service name — "localhost" inside this container is itself, not the host.
+      DATABASE_URL: postgres://ads_agent:ads_agent_local_dev@db:5432/ads_agent
+      GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp
+    ports:
+      - "8766:8766"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
   bifrost-data:
