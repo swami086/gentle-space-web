@@ -81,6 +81,22 @@ services:
       - "8766:8766"
     restart: unless-stopped
 
+  app-data-mcp:
+    build: .
+    command: ["npx", "tsx", "scripts/run-app-data-mcp.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://ads_agent:ads_agent_local_dev@db:5432/ads_agent
+      APP_DATA_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,app-data-mcp
+      APP_DATA_MCP_BIND: "0.0.0.0"
+    ports:
+      - "8767:8767"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
   bifrost-data:

@@ -11,7 +11,8 @@
     "migrate": "tsx --env-file=.env.local lib/db/migrate.ts",
     "worker": "tsx --env-file=.env.local scripts/run-decision-cycle.ts",
     "cycle:run": "tsx --env-file=.env.local scripts/run-once.ts",
-    "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts"
+    "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts",
+    "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
