@@ -189,6 +189,36 @@ describe("executeProposal", () => {
     expect(addGoogleNegativeKeyword).toHaveBeenCalledWith("customers/1/campaigns/999", "residential");
   });
 
+  it("no-ops a campaign_strategy proposal and marks it executed without touching any connector", async () => {
+    getProposalById.mockResolvedValue(
+      approvedProposal({
+        kind: "campaign_strategy",
+        campaignId: null,
+        payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
+      }),
+    );
+
+    const result = await executeProposal("prop-1");
+
+    expect(getCampaignById).not.toHaveBeenCalled();
+    expect(pauseGoogleCampaign).not.toHaveBeenCalled();
+    expect(markProposalExecuted).toHaveBeenCalledWith("prop-1");
+    expect(result).toEqual({ status: "executed" });
+  });
+
+  it("marks an unrecognized proposal kind as failed instead of silently executing it", async () => {
+    getProposalById.mockResolvedValue(approvedProposal({ kind: "future_kind" as never }));
+
+    const result = await executeProposal("prop-1");
+
+    expect(markProposalExecuted).not.toHaveBeenCalled();
+    expect(markProposalFailed).toHaveBeenCalledWith(
+      "prop-1",
+      expect.stringContaining("future_kind"),
+    );
+    expect(result).toEqual({ status: "failed", error: expect.stringContaining("future_kind") });
+  });
+
   it("marks the proposal failed (never retried) when the connector call throws", async () => {
     getProposalById.mockResolvedValue(approvedProposal());
     getCampaignById.mockResolvedValue(googleCampaign());

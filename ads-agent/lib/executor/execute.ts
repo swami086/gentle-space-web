@@ -109,6 +109,15 @@ export async function executeProposal(
       case "add_negative_keyword":
         await executeAddNegativeKeyword(proposal.payload as unknown as NegativeKeywordPayload);
         break;
+      case "campaign_strategy":
+        // Narrative/advisory proposal (see lib/types.ts's CampaignStrategyPayload) — nothing to
+        // execute against an ad platform.
+        break;
+      default:
+        // Defense in depth: every ProposalKind literal is handled above, so this only fires for
+        // a kind the type system doesn't know about (e.g. stale data). Fail loudly instead of
+        // falling through to markProposalExecuted having done nothing.
+        throw new Error(`executeProposal: unhandled proposal kind "${proposal.kind}"`);
     }
     await markProposalExecuted(proposalId);
     return { status: "executed" };
