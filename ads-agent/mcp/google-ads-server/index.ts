@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import {
-  localhostHostValidation,
+  hostHeaderValidation,
   localhostOriginValidation,
   toNodeHandler,
 } from "@modelcontextprotocol/node";
@@ -13,12 +13,34 @@ import {
   fetchGoogleSearchTerms,
   listAccessibleCustomers,
   pauseGoogleCampaign,
+  proposeChange,
   updateGoogleCampaignBudget,
 } from "./tools";
 
 const MATCH_TYPES = ["broad", "phrase", "exact"] as const;
 
-/** Builds (but does not connect/serve) the Google Ads MCP server — 3 read tools + 4 write tools.
+const PROPOSAL_KINDS = [
+  "create_campaign",
+  "pause",
+  "budget_change",
+  "add_negative_keyword",
+  "campaign_strategy",
+] as const;
+
+/** Host-header allowlist for the DNS-rebinding guard, driven by GOOGLE_ADS_MCP_ALLOWED_HOSTS
+ * (comma-separated). Defaults to localhost-only for the tsx-on-host workflow; containerized
+ * deployments (docker-compose.yml, deploy/docker-compose.prod.yml) set it to include the Compose
+ * service name ("google-ads-mcp") so other containers can reach this server by that name. */
+export function resolveGoogleAdsMcpAllowedHosts(): string[] {
+  const raw = process.env.GOOGLE_ADS_MCP_ALLOWED_HOSTS;
+  if (!raw) return ["localhost", "127.0.0.1"];
+  return raw
+    .split(",")
+    .map((host) => host.trim())
+    .filter((host) => host.length > 0);
+}
+
+/** Builds (but does not connect/serve) the Google Ads MCP server — 3 read tools + 5 write tools.
  * Exported separately from startGoogleAdsMcpServer so tests can wire it to an in-memory transport
  * instead of a real HTTP port (see index.test.ts). */
 export function buildGoogleAdsMcpServer(): McpServer {
@@ -96,6 +118,24 @@ export function buildGoogleAdsMcpServer(): McpServer {
     },
   );
 
+  server.registerTool(
+    "propose_change",
+    {
+      description:
+        "Create a pending ads-agent proposal for human review. The only tool an external agent may call to affect ads-agent — never mutates the Google Ads or Meta APIs directly.",
+      inputSchema: z.object({
+        kind: z.enum(PROPOSAL_KINDS),
+        campaignId: z.string().nullable(),
+        payload: z.record(z.string(), z.unknown()),
+        triggeredRule: z.string(),
+        rationale: z.string().optional(),
+      }),
+    },
+    async (input) => ({
+      content: [{ type: "text", text: JSON.stringify(await proposeChange(input)) }],
+    }),
+  );
+
   return server;
 }
 
@@ -110,7 +150,7 @@ export function buildGoogleAdsMcpServer(): McpServer {
 export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
   const handler = createMcpHandler(() => buildGoogleAdsMcpServer());
   const nodeHandler = toNodeHandler(handler);
-  const validateHost = localhostHostValidation();
+  const validateHost = hostHeaderValidation(resolveGoogleAdsMcpAllowedHosts());
   const validateOrigin = localhostOriginValidation();
 
   createServer((req, res) => {

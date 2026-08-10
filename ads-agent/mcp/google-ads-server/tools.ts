@@ -7,6 +7,8 @@ import {
   toMicros,
 } from "google-ads-api";
 import { requireEnv } from "../../lib/env";
+import { createProposal } from "../../lib/db/proposals";
+import type { NewProposal } from "../../lib/types";
 
 function googleAdsClient(): GoogleAdsApi {
   return new GoogleAdsApi({
@@ -237,4 +239,15 @@ export async function addGoogleNegativeKeyword(
       },
     },
   ]);
+}
+
+/**
+ * The one write surface an external agent (e.g. a future Hermes deployment) may call — never
+ * touches the Google Ads or Meta APIs directly, only ever inserts a `pending` row via
+ * createProposal(). Approval, rejection, and execution flow through the exact same
+ * /api/proposals/[id]/approve|reject routes and executeProposal() as every other proposal.
+ */
+export async function proposeChange(input: NewProposal): Promise<{ proposalId: string }> {
+  const proposal = await createProposal(input);
+  return { proposalId: proposal.id };
 }

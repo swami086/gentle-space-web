@@ -16,6 +16,9 @@ vi.mock("google-ads-api", async () => {
   };
 });
 
+const createProposalMock = vi.hoisted(() => vi.fn());
+vi.mock("../../lib/db/proposals", () => ({ createProposal: createProposalMock }));
+
 beforeEach(() => {
   vi.resetModules();
   process.env.GOOGLE_ADS_DEVELOPER_TOKEN = "dev-token";
@@ -27,6 +30,7 @@ beforeEach(() => {
   mutateResourcesMock.mockReset();
   listAccessibleCustomersMock.mockReset();
   CustomerMock.mockClear();
+  createProposalMock.mockReset();
 });
 
 describe("fetchGoogleAdsPerformance", () => {
@@ -159,5 +163,36 @@ describe("addGoogleNegativeKeyword", () => {
         keyword: { text: "residential" },
       },
     });
+  });
+});
+
+describe("proposeChange", () => {
+  it("calls createProposal with the given input and returns the new proposal id", async () => {
+    createProposalMock.mockResolvedValue({
+      id: "prop-99",
+      kind: "campaign_strategy",
+      campaignId: null,
+      payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
+      triggeredRule: "hermes:campaign_strategy",
+      rationale: "Search volume up 30% in Whitefield this week",
+      status: "pending",
+      error: null,
+      createdAt: "2026-08-10T00:00:00.000Z",
+      decidedAt: null,
+      executedAt: null,
+    });
+    const { proposeChange } = await import("./tools");
+    const input = {
+      kind: "campaign_strategy" as const,
+      campaignId: null,
+      payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
+      triggeredRule: "hermes:campaign_strategy",
+      rationale: "Search volume up 30% in Whitefield this week",
+    };
+
+    const result = await proposeChange(input);
+
+    expect(result).toEqual({ proposalId: "prop-99" });
+    expect(createProposalMock).toHaveBeenCalledWith(input);
   });
 });
