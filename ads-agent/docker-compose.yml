@@ -74,7 +74,8 @@ services:
       # env_file loads the host-oriented DATABASE_URL (localhost:5434); override it for the
       # in-network Postgres service name — "localhost" inside this container is itself, not the host.
       DATABASE_URL: postgres://ads_agent:ads_agent_local_dev@db:5432/ads_agent
-      GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp
+      # host.docker.internal: Hermes on Docker Desktop Mac (bridge override) hits MCP via that Host
+      GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp,host.docker.internal
       # localhost bind inside a container is unreachable via published ports / Compose DNS
       GOOGLE_ADS_MCP_BIND: "0.0.0.0"
     ports:
@@ -91,7 +92,8 @@ services:
       - .env.local
     environment:
       DATABASE_URL: postgres://ads_agent:ads_agent_local_dev@db:5432/ads_agent
-      APP_DATA_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,app-data-mcp
+      # host.docker.internal: Hermes on Docker Desktop Mac (bridge override) hits MCP via that Host
+      APP_DATA_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,app-data-mcp,host.docker.internal
       APP_DATA_MCP_BIND: "0.0.0.0"
     ports:
       - "8767:8767"
