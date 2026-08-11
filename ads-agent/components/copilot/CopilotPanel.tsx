@@ -12,7 +12,7 @@ import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { useCopilot } from "./CopilotProvider";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
-import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, resolveOpenUiAction, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 
 // createLibrary (lang-core) can't unify heterogeneous component C params; Renderer wants react-lang Library.
 const copilotLibrary = platformLibrary as Library;
@@ -166,6 +166,11 @@ export function CopilotPanel() {
                   library={message.hermes ? hermesLibrary : copilotLibrary}
                   toolProvider={message.hermes ? undefined : copilotToolProvider}
                   isStreaming={false}
+                  onAction={(event) => {
+                    const action = resolveOpenUiAction(event);
+                    if (action.kind === "send") void sendMessage(action.text);
+                    else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+                  }}
                   onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
                 />
               </div>
@@ -179,9 +184,14 @@ export function CopilotPanel() {
             <div className="max-w-[95%]">
               <Renderer
                 response={streamingText}
-                library={copilotLibrary}
-                toolProvider={copilotToolProvider}
+                library={hermesMode ? hermesLibrary : copilotLibrary}
+                toolProvider={hermesMode ? undefined : copilotToolProvider}
                 isStreaming
+                onAction={(event) => {
+                  const action = resolveOpenUiAction(event);
+                  if (action.kind === "send") void sendMessage(action.text);
+                  else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+                }}
                 onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             </div>
