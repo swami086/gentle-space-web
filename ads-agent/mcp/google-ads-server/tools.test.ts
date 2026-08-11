@@ -46,6 +46,22 @@ describe("fetchGoogleAdsPerformance", () => {
     expect(result).toEqual([
       { externalCampaignId: "111", spend: 40.5, clicks: 12, impressions: 900, conversions: 1 },
     ]);
+    expect(String(queryMock.mock.calls[0][0])).toContain("segments.date DURING LAST_7_DAYS");
+  });
+
+  it("passes login_customer_id when GOOGLE_ADS_LOGIN_CUSTOMER_ID is set", async () => {
+    process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID = "5154931609";
+    queryMock.mockResolvedValue([]);
+    const { fetchGoogleAdsPerformance } = await import("./tools");
+    await fetchGoogleAdsPerformance();
+    expect(CustomerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer_id: "1234567890",
+        refresh_token: "refresh-token",
+        login_customer_id: "5154931609",
+      }),
+    );
+    delete process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
   });
 });
 

@@ -32,17 +32,17 @@ describe("extractOpenUiStatement", () => {
 
   it("preserves Query bindings before root = (official Generate→Execute programs)", () => {
     const raw =
-      'Here you go:\nopps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)';
+      'Here you go:\nlist = Query("list_opportunities", {}, {opportunities: []})\nroot = OpportunityList(list.opportunities)';
     expect(extractOpenUiStatement(raw)).toBe(
-      'opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)',
+      'list = Query("list_opportunities", {}, {opportunities: []})\nroot = OpportunityList(list.opportunities)',
     );
   });
 });
 
 describe("ensureOpportunityListQueryBinding via normalizeOpenUiResponse", () => {
-  it("injects Query when OpportunityList(opps) is unbound", () => {
+  it("injects object-shaped Query when OpportunityList(opps) is unbound", () => {
     expect(normalizeOpenUiResponse("root = OpportunityList(opps)")).toBe(
-      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+      'root = OpportunityList(list.opportunities)\nlist = Query("list_opportunities", {}, {opportunities: []})',
     );
   });
 
@@ -50,7 +50,7 @@ describe("ensureOpportunityListQueryBinding via normalizeOpenUiResponse", () => 
     const raw = 'root = OpportunityList(@Query("list_opportunities", {}, []))';
     const normalized = normalizeOpenUiResponse(raw);
     expect(normalized).toBe(
-      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+      'root = OpportunityList(list.opportunities)\nlist = Query("list_opportunities", {}, {opportunities: []})',
     );
     const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
     expect(result.meta.errors).toEqual([]);
@@ -62,7 +62,7 @@ describe("ensureOpportunityListQueryBinding via normalizeOpenUiResponse", () => 
 
   it("hoists inline Query without @ prefix", () => {
     expect(normalizeOpenUiResponse('OpportunityList(Query("search_opportunities", {query: "Priya"}, []))')).toBe(
-      'root = OpportunityList(opps)\nopps = Query("search_opportunities", {query: "Priya"}, [])',
+      'root = OpportunityList(list.opportunities)\nlist = Query("search_opportunities", {query: "Priya"}, {opportunities: []})',
     );
   });
 
@@ -70,11 +70,19 @@ describe("ensureOpportunityListQueryBinding via normalizeOpenUiResponse", () => 
     const raw = 'root = OpportunityList(opportunities=@Query("list_opportunities", {}, []))';
     const normalized = normalizeOpenUiResponse(raw);
     expect(normalized).toBe(
-      'root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])',
+      'root = OpportunityList(list.opportunities)\nlist = Query("list_opportunities", {}, {opportunities: []})',
     );
     const result = createParser(platformLibrary.toJSONSchema()).parse(normalized);
     expect(result.meta.errors).toEqual([]);
     expect((result.root as { hasDynamicProps?: boolean }).hasDynamicProps).toBe(true);
+  });
+
+  it("rewrites bare-array Query + OpportunityList(ident) into object pluck form", () => {
+    const raw =
+      'root = OpportunityList(list_opportunities.opportunities)\nlist_opportunities = Query("list_opportunities", {}, [])';
+    expect(normalizeOpenUiResponse(raw)).toBe(
+      'root = OpportunityList(list_opportunities.opportunities)\nlist_opportunities = Query("list_opportunities", {}, {opportunities: []})',
+    );
   });
 });
 

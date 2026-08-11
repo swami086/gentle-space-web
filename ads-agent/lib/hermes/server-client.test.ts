@@ -109,6 +109,29 @@ describe("streamHermesCompletion", () => {
       for await (const chunk of streamHermesCompletion({ messages: [] })) void chunk;
     }).rejects.toThrow("HERMES_API_SERVER_KEY is not set");
   });
+
+  it("yields a tool_progress chunk for a running hermes.tool.progress event, ignoring the matching completed event", async () => {
+    const events = [
+      `event: hermes.tool.progress\ndata: {"tool":"list_opportunities","emoji":"🔍","label":"Searching leads","toolCallId":"call_1","status":"running"}\n\n`,
+      `data: {"choices":[{"delta":{"content":"Found 3 leads."}}],"model":"google/gemini-2.5-pro"}\n\n`,
+      `event: hermes.tool.progress\ndata: {"tool":"list_opportunities","toolCallId":"call_1","status":"completed"}\n\n`,
+      `data: {"choices":[{"delta":{},"finish_reason":"stop"}],"model":"google/gemini-2.5-pro","usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14}}\n\n`,
+      `data: [DONE]\n\n`,
+    ];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(events)));
+
+    const { streamHermesCompletion } = await import("./server-client");
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of streamHermesCompletion({ messages: [{ role: "user", content: "hi" }] })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { type: "tool_progress", tool: "list_opportunities" },
+      { type: "delta", content: "Found 3 leads." },
+      { type: "usage", model: "google/gemini-2.5-pro", usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 } },
+    ]);
+  });
 });
 
 describe("isHermesConfigured", () => {

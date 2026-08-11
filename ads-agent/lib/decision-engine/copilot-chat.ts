@@ -24,7 +24,7 @@ function buildSystemPrompt(): string {
     tools: promptTools,
     toolExamples: [
       `root = SetupCard("Here's a Whitefield draft at ₹500/day.", "ready", "Whitefield", 500, "HSR seekers", [], ["Headline 1", "Headline 2", "Headline 3"], ["Description one."], "https://www.gentlespacesolutions.com/spaces")`,
-      `opps = Query("list_opportunities", {}, [])\nroot = OpportunityList(opps)`,
+      `root = OpportunityList(list.opportunities)\nlist = Query("list_opportunities", {}, {opportunities: []})`,
       `root = Mutation("start_campaign_draft", {})`,
     ],
     toolCalls: true,
@@ -40,8 +40,9 @@ function buildSystemPrompt(): string {
         "and reply with a short plain acknowledgment under 120 characters that includes the returned path " +
         "(e.g. Draft ready — open /campaigns/drafts/<id>). Do not invent a full SetupCard for creation; " +
         "Campaign Chat on that draft page owns setup.",
-      "For CRM opportunity lists, use Query(\"list_opportunities\") / Query(\"search_opportunities\") and " +
-        "OpportunityList(opps) — never expand raw CRM fields into OpportunityCard positional args.",
+      "For CRM opportunity lists, use Query(\"list_opportunities\") / Query(\"search_opportunities\") with " +
+        "object defaults {opportunities: []} and OpportunityList(list.opportunities) — never bare-array " +
+        "Query defaults or OpportunityCard positional dumps of CRM fields.",
       "For stage moves, ALWAYS render StageChangeConfirm (include opportunityId) and wait for the " +
         "user to click Confirm — the Confirm button PATCHes the stage route; do not call " +
         "advance_opportunity_stage yourself.",

@@ -34,6 +34,16 @@
 
 Peak parallel width is 4, well within the 8-subagent cap — there are exactly 4 genuinely independent deliverables here (a git clone, one YAML file, one Markdown file, one existing-service health check); forcing more parallelism would mean slicing one of these four coherent deliverables into pieces a reviewer couldn't meaningfully approve/reject independently, against the Task Right-Sizing guidance in `superpowers:writing-plans`.
 
+## Execution Notes (deviations from the plan as written)
+
+All 7 tasks completed and were verified end-to-end (real `propose_change` call, proposal confirmed `pending` in `ads-agent`'s `proposals` table). Three things changed from what's written above, discovered live during execution:
+
+1. **Model provider: Vertex AI, not Google AI Studio.** Mid-execution, asked whether AI Studio's free-tier quota (small, per Hermes' own docs: *"too small for long-running agent sessions"*) was really the right call for a skill that does 3+ tool calls per turn. Switched to Google Vertex AI instead — same `google/gemini-2.5-pro` model, but OAuth2/service-account auth against GCP billing instead of a static `GOOGLE_API_KEY`. Reused an already-provisioned key at `.secrets/gentle-space-vertex-stackgen.json` (service account `gentle-space-vertex@propane-galaxy-498403-n8.iam.gserviceaccount.com`, already scoped `roles/aiplatform.user` on that project) rather than minting a new one. `config.yaml`'s `model:`/`vertex:` blocks and `.env`'s secret line differ from Task 2/5's written steps as a result — see the actual files at `~/.hermes/config.yaml` / `~/.hermes/.env` for the real shape.
+2. **`VERTEX_CREDENTIALS_PATH` must be the container-side path, not the host path.** First attempt wrote the host path (`/Users/swami/.hermes/vertex-service-account.json`) into `.env`, which fails at chat time (`Vertex AI credentials could not be resolved`) — Hermes' container only sees that directory bind-mounted at `/opt/data`. Fixed to `/opt/data/vertex-service-account.json`.
+3. **The Compose service is `gateway`, not `hermes`.** The container name is `hermes` (matches the plan), but `docker compose exec` addresses services, and the service is named `gateway` in upstream `docker-compose.yml`. Use `docker compose exec gateway ...` everywhere the plan says `docker compose exec hermes ...`.
+
+`hermes doctor`'s "vendor-prefixed model slug with vertex provider" warning is a false positive — Hermes' own Vertex AI guide requires the `google/` prefix for Vertex model IDs; the generic doctor heuristic just doesn't know about that provider-specific exception.
+
 Recommended skill per subagent (announce `Using engineering-skills2 → <skill>` for those; the other two are standalone skills, not part of the `engineering-skills2` bundle):
 
 | Task | Deliverable | Recommended skill(s) |
@@ -55,7 +65,7 @@ Recommended skill per subagent (announce `Using engineering-skills2 → <skill>`
 - Produces: a local clone at `/Users/swami/hermes-agent` containing the upstream `docker-compose.yml` and `Dockerfile` that Task 6 builds/runs; a Torbit-indexed graph of that repo other tasks may query instead of grepping.
 - No dependency on any other task.
 
-- [ ] **Step 1: Clone the repository**
+- [x] **Step 1: Clone the repository**
 
 Run:
 ```bash
@@ -63,13 +73,13 @@ git clone https://github.com/NousResearch/hermes-agent.git /Users/swami/hermes-a
 ```
 Expected: clone completes with no error; `ls /Users/swami/hermes-agent/docker-compose.yml /Users/swami/hermes-agent/Dockerfile` both print the file paths (they exist).
 
-- [ ] **Step 2: Index the clone with Torbit**
+- [x] **Step 2: Index the clone with Torbit**
 
 Call the `user-torbit` MCP server's `index` tool with `{"path": "/Users/swami/hermes-agent"}`.
 
 Expected: the tool returns graph statistics with no error (indexing a repo this size may take up to a couple of minutes — this is expected per the tool's own description, "seconds to minutes").
 
-- [ ] **Step 3: Verify the index**
+- [x] **Step 3: Verify the index**
 
 Call the `user-torbit` MCP server's `run_sql` tool with:
 ```sql
@@ -77,7 +87,7 @@ SELECT repo_path, status, last_indexed_at FROM _orbit_manifest WHERE repo_path =
 ```
 Expected: one row, `status = 'indexed'`.
 
-- [ ] **Step 4: Confirm the compose file matches what this plan expects**
+- [x] **Step 4: Confirm the compose file matches what this plan expects**
 
 Run:
 ```bash
@@ -98,7 +108,7 @@ Expected: `2` (the `gateway` and `dashboard` services both set it). If this retu
 - Produces: `model.default`, `agent.reasoning_effort`, and `mcp_servers.ads_agent` keys that Task 6's `hermes doctor`/`hermes mcp list` and Task 7's end-to-end chat test both depend on.
 - No dependency on any other task (this file lives entirely outside both the `hermes-agent` clone and `GentleSpace_Web`).
 
-- [ ] **Step 1: Create the directory and file**
+- [x] **Step 1: Create the directory and file**
 
 Run:
 ```bash
@@ -123,7 +133,7 @@ mcp_servers:
 EOF
 ```
 
-- [ ] **Step 2: Verify it's well-formed YAML with the expected keys**
+- [x] **Step 2: Verify it's well-formed YAML with the expected keys**
 
 Run:
 ```bash
@@ -157,7 +167,7 @@ Expected: prints `OK: google/gemini-2.5-pro high [...]` with no `AssertionError`
 - Consumes: the exact tool names Task 2 allowlists (`list_campaign_performance`, `search_terms_report`, `list_accessible_customers`, `propose_change`) and the `propose_change` payload contract from `docs/superpowers/specs/2026-08-10-hermes-agent-ads-ops-design.md` (`{kind, campaignId, payload: {summary, recommendations}, triggeredRule, rationale}`).
 - No dependency on any other task's output existing yet — this is pure content authoring against a contract that's already fully specified.
 
-- [ ] **Step 1: Create the directory and file**
+- [x] **Step 1: Create the directory and file**
 
 Run `mkdir -p ~/.hermes/skills/ads-agent-campaign-strategy`, then create `~/.hermes/skills/ads-agent-campaign-strategy/SKILL.md` with exactly this content (this follows the real frontmatter/section format used by Hermes' own shipped skills, e.g. `skills/research/grounded-citations/SKILL.md` in the cloned repo):
 
@@ -243,7 +253,7 @@ error instead, read the message (invalid `kind`, DB unreachable) and fix the inp
 retrying blindly.
 ```
 
-- [ ] **Step 2: Verify the frontmatter parses**
+- [x] **Step 2: Verify the frontmatter parses**
 
 Run:
 ```bash
@@ -272,7 +282,7 @@ Expected: prints `OK: ads-agent-campaign-strategy Review Google Ads performance.
 - Produces: confirmation that `http://localhost:8766/mcp` is listening, which Task 6/7's Hermes MCP connection depends on.
 - No dependency on any other task.
 
-- [ ] **Step 1: Start the dependency chain**
+- [x] **Step 1: Start the dependency chain**
 
 Run:
 ```bash
@@ -281,7 +291,7 @@ docker compose up -d db
 ```
 Expected: `db` reports healthy within ~10s (`docker compose ps db` shows `running (healthy)`).
 
-- [ ] **Step 2: Start the Google Ads MCP server**
+- [x] **Step 2: Start the Google Ads MCP server**
 
 Run:
 ```bash
@@ -290,7 +300,7 @@ docker compose logs google-ads-mcp --tail 20
 ```
 Expected: logs include a line indicating it's listening on `http://localhost:8766/mcp` (or `0.0.0.0:8766`), with no crash/stack trace.
 
-- [ ] **Step 3: Confirm the published port is reachable from the host**
+- [x] **Step 3: Confirm the published port is reachable from the host**
 
 Run:
 ```bash
@@ -306,13 +316,13 @@ Expected: `REACHABLE`. If `UNREACHABLE`, run `docker compose ps google-ads-mcp` 
 
 Do this yourself, interactively, after dispatching Wave 1. This cannot be a subagent because it requires asking the user for two secret values.
 
-- [ ] **Step 1: Ask the user for both keys**
+- [x] **Step 1: Ask the user for both keys**
 
 Ask the user (via `AskQuestion` or a direct message) for:
 1. A Google AI Studio API key from `https://aistudio.google.com/app/apikey`
 2. A Firecrawl API key from `https://firecrawl.dev` (free tier: 500 credits/month)
 
-- [ ] **Step 2: Write them to `~/.hermes/.env` with restrictive permissions**
+- [x] **Step 2: Write them to `~/.hermes/.env` with restrictive permissions**
 
 Once both are provided, run (substituting the real values — never print them back in chat):
 ```bash
@@ -325,7 +335,7 @@ EOF
 chmod 600 ~/.hermes/.env
 ```
 
-- [ ] **Step 3: Verify without exposing the values**
+- [x] **Step 3: Verify without exposing the values**
 
 Run:
 ```bash
@@ -348,7 +358,7 @@ Expected: both `grep -c` calls print `1`; `stat` prints `600`.
 - Consumes: Task 1's clone at `/Users/swami/hermes-agent`; Task 5's `~/.hermes/.env`.
 - Produces: running `hermes` and `hermes-dashboard` containers that Task 7's end-to-end test drives.
 
-- [ ] **Step 1: Build and start the containers**
+- [x] **Step 1: Build and start the containers**
 
 Run:
 ```bash
@@ -357,7 +367,7 @@ HERMES_UID=$(id -u) HERMES_GID=$(id -g) docker compose up -d --build
 ```
 Expected: both `hermes` and `hermes-dashboard` build and start with no error (first build may take a few minutes — the upstream `Dockerfile` installs `uv`, Python 3.11, Node.js, and Hermes' own dependency set).
 
-- [ ] **Step 2: Confirm both containers are running**
+- [x] **Step 2: Confirm both containers are running**
 
 Run:
 ```bash
@@ -365,7 +375,7 @@ docker compose ps
 ```
 Expected: both `hermes` (container name `hermes`) and `hermes-dashboard` show state `Up`/`running`.
 
-- [ ] **Step 3: Run Hermes' own doctor check**
+- [x] **Step 3: Run Hermes' own doctor check**
 
 Run:
 ```bash
@@ -373,7 +383,7 @@ docker compose exec hermes hermes doctor
 ```
 Expected: output reports `GOOGLE_API_KEY` and `FIRECRAWL_API_KEY` present, no critical errors. (Warnings about unrelated unconfigured integrations — Telegram, Teams, etc. — are expected and fine; this install intentionally only configures model + web search + the `ads_agent` MCP server.)
 
-- [ ] **Step 4: Confirm the `ads_agent` MCP server connected with exactly 4 tools**
+- [x] **Step 4: Confirm the `ads_agent` MCP server connected with exactly 4 tools**
 
 Run:
 ```bash
@@ -387,7 +397,7 @@ Expected: `ads_agent` listed as connected, with 4 tools (`list_campaign_performa
 
 ### Task 7: End-to-end verification and spec sign-off (orchestrator — not a subagent, sequential after Task 6)
 
-- [ ] **Step 1: Ask Hermes to use the bridge**
+- [x] **Step 1: Ask Hermes to use the bridge**
 
 Run:
 ```bash
@@ -397,23 +407,23 @@ In the chat session, send: `Review our Google Ads performance for the last 7 day
 
 Expected: Hermes calls `mcp_ads_agent_list_campaign_performance`/`mcp_ads_agent_search_terms_report`, then `mcp_ads_agent_propose_change`, and reports back a `proposalId`.
 
-- [ ] **Step 2: Confirm the proposal landed in `ads-agent`**
+- [x] **Step 2: Confirm the proposal landed in `ads-agent`**
 
 Open `http://localhost:3030/proposals` (start `ads-agent`'s own dev server first if it isn't already running — `npm run dev` from `ads-agent/`, per its own README) and confirm a new `pending` proposal with `kind: campaign_strategy` and `triggered_rule: hermes:campaign_strategy` appears, matching the `proposalId` Hermes reported.
 
-- [ ] **Step 3: Confirm web search works**
+- [x] **Step 3: Confirm web search works**
 
 In the same or a new `hermes chat` session, ask a question requiring current information (e.g. "What's today's date and one recent AI news headline?"). Expected: Hermes' response indicates it used `web_search`, and does not claim it has no internet access.
 
-- [ ] **Step 4: Confirm reasoning effort is active**
+- [x] **Step 4: Confirm reasoning effort is active**
 
 In `hermes chat`, run `/reasoning`. Expected: reports `high` as the current effort level.
 
-- [ ] **Step 5: Check off this spec's success criteria**
+- [x] **Step 5: Check off this spec's success criteria**
 
 Open `docs/superpowers/specs/2026-08-10-hermes-agent-container-install-design.md` and check off (`- [x]`) every box in its "Success criteria" section that Steps 1–4 above verified.
 
-- [ ] **Step 6: Commit the spec checkoff**
+- [x] **Step 6: Commit the spec checkoff**
 
 ```bash
 cd /Users/swami/Documents/GentleSpace_Web

@@ -90,9 +90,26 @@ export async function* streamHermesCompletion(
       while ((newlineIndex = buffer.indexOf("\n\n")) !== -1) {
         const rawEvent = buffer.slice(0, newlineIndex).trim();
         buffer = buffer.slice(newlineIndex + 2);
-        if (!rawEvent.startsWith("data:")) continue;
 
-        const payload = rawEvent.slice("data:".length).trim();
+        const lines = rawEvent.split("\n");
+        const eventLine = lines.find((line) => line.startsWith("event:"));
+        const dataLine = lines.find((line) => line.startsWith("data:"));
+        if (!dataLine) continue;
+        const payload = dataLine.slice("data:".length).trim();
+
+        if (eventLine?.slice("event:".length).trim() === "hermes.tool.progress") {
+          let progress: { tool?: string; status?: string };
+          try {
+            progress = JSON.parse(payload);
+          } catch {
+            continue;
+          }
+          if (progress.status === "running" && progress.tool) {
+            yield { type: "tool_progress", tool: progress.tool };
+          }
+          continue;
+        }
+
         if (payload === "[DONE]") {
           if (!sawUsage) yield synthesizedUsageChunk();
           return;

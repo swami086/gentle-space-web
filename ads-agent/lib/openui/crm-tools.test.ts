@@ -77,11 +77,13 @@ describe("crmToolProvider.list_opportunities", () => {
     ]);
     const result = await crmToolProvider.list_opportunities({});
     expect(toOpenUiOpportunityCard).toHaveBeenCalled();
-    expect(result).toEqual([
-      { name: "Priya", stage: "SHORTLIST", tier: "HOT", amountLabel: "₹15000", maskedPhone: "", source: "WhatsApp" },
-    ]);
-    expect(result[0]).not.toHaveProperty("id");
-    expect(result[0]).not.toHaveProperty("amountInr");
+    expect(result).toEqual({
+      opportunities: [
+        { name: "Priya", stage: "SHORTLIST", tier: "HOT", amountLabel: "₹15000", maskedPhone: "", source: "WhatsApp" },
+      ],
+    });
+    expect(result.opportunities[0]).not.toHaveProperty("id");
+    expect(result.opportunities[0]).not.toHaveProperty("amountInr");
   });
 });
 
@@ -92,8 +94,8 @@ describe("crmToolProvider.search_opportunities", () => {
       { id: "2", name: "Rohan Mehta", stage: "TOUR", tier: null, amountInr: null, contactName: null, maskedPhone: null, source: null, listingName: null, createdAt: "" },
     ]);
     const result = await crmToolProvider.search_opportunities({ query: "priya" });
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("Priya Sharma");
+    expect(result.opportunities).toHaveLength(1);
+    expect(result.opportunities[0]!.name).toBe("Priya Sharma");
   });
 });
 

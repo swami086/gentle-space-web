@@ -33,6 +33,18 @@ describe("OpportunityListView", () => {
     const tree = OpportunityListView({ opportunities: [] });
     expect(JSON.stringify(tree)).toContain("No opportunities found");
   });
+
+  it("filters null column-pluck holes and accepts a nested Query envelope", () => {
+    const fromNulls = OpportunityListView({
+      opportunities: [null, { name: "Priya", stage: "NEW_BRIEF" }, null],
+    });
+    expect(JSON.stringify(fromNulls)).toContain("Priya");
+
+    const nested = OpportunityListView({
+      opportunities: { opportunities: [{ name: "Bob", stage: "SHORTLIST" }] } as unknown as never,
+    });
+    expect(JSON.stringify(nested)).toContain("Bob");
+  });
 });
 
 describe("StageChangeConfirmView", () => {

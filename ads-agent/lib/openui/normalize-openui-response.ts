@@ -6,9 +6,12 @@
  * Campaign draft chat is the one exception that still hard-parses server-side (it persists
  * fields to the campaign_drafts DB row) — see campaign-library.ts's parseSetupCardResponse.
  *
- * Official Generate→Execute programs are multi-statement (`opps = Query(...)\nroot = OpportunityList(opps)`).
+ * Official Generate→Execute programs use object Query results + field pluck:
+ *   root = OpportunityList(list.opportunities)
+ *   list = Query("list_opportunities", {}, {opportunities: []})
  * Never strip Query/Mutation/$bindings when slicing past prose — that left CRM chat with unbound
- * `root = OpportunityList(opps)` and empty UI. See https://www.openui.com/docs/openui-lang/how-it-works
+ * OpportunityList and empty UI. See https://www.openui.com/docs/openui-lang/how-it-works
+ * and https://www.openui.com/docs/openui-lang/queries-mutations
  */
 import { knownOpenUiComponentNames, normalizeNamedKwargsLang, findMatchingParen } from "./normalize-named-kwargs";
 
@@ -58,18 +61,25 @@ export function ensureOpenUiRootAssignment(text: string): string {
   return t;
 }
 
+const OPP_LIST_QUERY_DEFAULTS = "{opportunities: []}";
+
+function firstRegexMatch(re: RegExp, text: string): RegExpMatchArray | null {
+  return text.match(re);
+}
+
 /**
  * OpenUI requires Query as a top-level statement. Bifrost often emits
  * `root = OpportunityList(@Query("list_opportunities", {}, []))` which createParser
- * rejects with `inline-reserved` and leaves `opportunities: []` — empty list +
- * "Couldn't render that response." Hoist the Query call, then fall back to
- * injecting list_opportunities when OpportunityList(opps) is unbound.
+ * rejects with `inline-reserved`. Hoist the Query call, coerce bare-array Query defaults
+ * to `{opportunities: []}`, and rewrite `OpportunityList(ident)` → `ident.opportunities`.
+ *
+ * Bare-array tool results + `list.opportunities` column-pluck null from every row → blank cards.
  */
 export function ensureOpportunityListQueryBinding(text: string): string {
   let t = text.trim();
   if (!t) return t;
 
-  const inline = /((?:root\s*=\s*)?)OpportunityList\(\s*@?Query\s*\(/.exec(t);
+  const inline = firstRegexMatch(/((?:root\s*=\s*)?)OpportunityList\(\s*@?Query\s*\(/, t);
   if (inline && inline.index !== undefined) {
     const assignPrefix = inline[1] ?? "";
     const listStart = inline.index + assignPrefix.length;
@@ -83,15 +93,37 @@ export function ensureOpportunityListQueryBinding(text: string): string {
       const before = t.slice(0, inline.index);
       const after = t.slice(listClose + 1);
       // OpenUI: root first for streaming; Query binding may follow (forward refs OK).
-      t = `${before}${assignPrefix}OpportunityList(opps)\nopps = ${queryCall}${after}`.trim();
-      return t;
+      t = `${before}${assignPrefix}OpportunityList(list.opportunities)\nlist = ${queryCall}${after}`.trim();
     }
   }
 
-  if (!/OpportunityList\(\s*opps\s*\)/.test(t)) return t;
-  if (/opps\s*=\s*Query\s*\(\s*["']list_opportunities["']/.test(t)) return t;
-  const root = /^root\s*=/.test(t) ? t : `root = ${t}`;
-  return `${root}\nopps = Query("list_opportunities", {}, [])`;
+  // Object-shaped defaults for list/search Query tools.
+  t = t.replace(
+    /(=\s*Query\s*\(\s*["'](?:list_opportunities|search_opportunities)["']\s*,\s*\{[\s\S]*?\}\s*,\s*)\[\s*\](\s*(?:,|\)))/g,
+    `$1${OPP_LIST_QUERY_DEFAULTS}$2`,
+  );
+
+  // OpportunityList(ident) → OpportunityList(ident.opportunities) for bare Query bindings.
+  t = t.replace(
+    /OpportunityList\(\s*([A-Za-z_][\w]*)\s*\)/g,
+    (_m, ident: string) => `OpportunityList(${ident}.opportunities)`,
+  );
+
+  if (/=\s*Query\s*\(\s*["'](?:list_opportunities|search_opportunities)["']/.test(t)) return t;
+
+  // Only inject when OpportunityList references an unbound identifier (not an inline array/object).
+  const unbound = firstRegexMatch(
+    /OpportunityList\(\s*([A-Za-z_][\w]*(?:\.opportunities)?)\s*\)/,
+    t,
+  );
+  if (!unbound) return t;
+
+  const withRoot = /^root\s*=/.test(t) ? t : `root = ${t}`;
+  const rooted = withRoot.replace(
+    /OpportunityList\(\s*[A-Za-z_][\w]*(?:\.opportunities)?\s*\)/,
+    "OpportunityList(list.opportunities)",
+  );
+  return `${rooted}\nlist = Query("list_opportunities", {}, ${OPP_LIST_QUERY_DEFAULTS})`;
 }
 
 /** True when a component call's parentheses are unbalanced (likely a maxTokens cutoff mid-stream).

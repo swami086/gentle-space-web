@@ -1,4 +1,4 @@
-export type CopilotMessage = { id: string; role: "user" | "assistant"; content: string };
+export type CopilotMessage = { id: string; role: "user" | "assistant"; content: string; hermes?: boolean };
 
 export type CopilotState = {
   isOpen: boolean;

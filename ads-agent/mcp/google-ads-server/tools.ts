@@ -19,9 +19,12 @@ function googleAdsClient(): GoogleAdsApi {
 }
 
 function customer() {
+  // Client accounts under an MCC need login-customer-id = the manager (Google Ads call-structure).
+  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.trim();
   return googleAdsClient().Customer({
     customer_id: requireEnv("GOOGLE_ADS_CUSTOMER_ID"),
     refresh_token: requireEnv("GOOGLE_ADS_REFRESH_TOKEN"),
+    ...(loginCustomerId ? { login_customer_id: loginCustomerId } : {}),
   });
 }
 
@@ -34,11 +37,13 @@ export type GoogleAdsPerformanceRow = {
 };
 
 export async function fetchGoogleAdsPerformance(): Promise<GoogleAdsPerformanceRow[]> {
+  // GAQL v21+: date range is `segments.date DURING …` in WHERE (bare `DURING` is a query_error).
+  // LAST_3_DAYS is not a valid date literal — use LAST_7_DAYS.
   const rows = await customer().query(`
     SELECT campaign.id, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.all_conversions
     FROM campaign
     WHERE campaign.status = "ENABLED"
-    DURING LAST_3_DAYS
+      AND segments.date DURING LAST_7_DAYS
   `);
   return rows.map((row) => ({
     externalCampaignId: String(row.campaign?.id ?? ""),
@@ -61,7 +66,7 @@ export async function fetchGoogleSearchTerms(): Promise<GoogleSearchTermRow[]> {
     SELECT campaign.id, search_term_view.search_term, metrics.clicks, metrics.conversions
     FROM search_term_view
     WHERE metrics.clicks > 0
-    DURING LAST_7_DAYS
+      AND segments.date DURING LAST_7_DAYS
   `);
   return rows.map((row) => ({
     externalCampaignId: String(row.campaign?.id ?? ""),

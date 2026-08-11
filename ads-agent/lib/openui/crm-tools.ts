@@ -13,9 +13,21 @@ import type { ToolProviderMap } from "./platform-tools";
 
 const STAGE_LABELS = new Map(PIPELINE_STAGES.map((s) => [s.value, s.label] as const));
 
-/** OpenUI OpportunityCard Zod shape — returned by read tools so Query() results plug into OpportunityList. */
+/** OpenUI OpportunityCard Zod shape — rows inside the Query envelope (see toOpenUiListResult). */
 function toOpenUiRows(rows: Opportunity[]): OpenUiOpportunityCardRow[] {
   return rows.map(toOpenUiOpportunityCard);
+}
+
+/**
+ * OpenUI Query results should be objects with named fields + matching defaults
+ * (`data = Query("tool", {}, {opportunities: []})`, then `OpportunityList(data.opportunities)`).
+ * A bare array makes models emit `list.opportunities` which column-plucks null from every row.
+ * @see https://www.openui.com/docs/openui-lang/queries-mutations
+ */
+export type OpenUiOpportunityListResult = { opportunities: OpenUiOpportunityCardRow[] };
+
+function toOpenUiListResult(rows: Opportunity[]): OpenUiOpportunityListResult {
+  return { opportunities: toOpenUiRows(rows) };
 }
 
 /**
@@ -26,12 +38,12 @@ function toOpenUiRows(rows: Opportunity[]): OpenUiOpportunityCardRow[] {
  * @see https://www.openui.com/docs/openui-lang/how-it-works
  */
 export const crmToolProvider: ToolProviderMap = {
-  list_opportunities: async () => toOpenUiRows(await listOpportunities()),
+  list_opportunities: async () => toOpenUiListResult(await listOpportunities()),
   search_opportunities: async (args: Record<string, unknown>) => {
     const query = String(args.query ?? "").toLowerCase();
     const all = await listOpportunities();
     const filtered = !query ? all : all.filter((o) => o.name.toLowerCase().includes(query));
-    return toOpenUiRows(filtered);
+    return toOpenUiListResult(filtered);
   },
   get_opportunity: async (args: Record<string, unknown>) => {
     const row = await getOpportunity(String(args.id ?? ""));
@@ -57,21 +69,30 @@ export const crmReadToolSpecs: ToolSpec[] = [
   {
     name: "list_opportunities",
     description:
-      "List every open CRM opportunity/lead. Returns an array of OpenUI OpportunityCard rows: " +
-      "{name, stage, tier, amountLabel, maskedPhone, source}.",
+      "List every open CRM opportunity/lead. Returns {opportunities: OpportunityCardRow[]} where each row is " +
+      "{name, stage, tier, amountLabel, maskedPhone, source}. Wire as: " +
+      'list = Query("list_opportunities", {}, {opportunities: []}); OpportunityList(list.opportunities).',
     inputSchema: { type: "object", properties: {}, required: [] },
-    outputSchema: { type: "array" },
+    outputSchema: {
+      type: "object",
+      properties: { opportunities: { type: "array" } },
+      required: ["opportunities"],
+    },
   },
   {
     name: "search_opportunities",
     description:
-      "Search CRM opportunities by case-insensitive name substring. Same OpenUI row shape as list_opportunities.",
+      "Search CRM opportunities by case-insensitive name substring. Same {opportunities: [...]} envelope as list_opportunities.",
     inputSchema: {
       type: "object",
       properties: { query: { type: "string", description: "Name substring to search for" } },
       required: ["query"],
     },
-    outputSchema: { type: "array" },
+    outputSchema: {
+      type: "object",
+      properties: { opportunities: { type: "array" } },
+      required: ["opportunities"],
+    },
   },
   {
     name: "get_opportunity",

@@ -28,6 +28,7 @@ export async function POST(req: Request) {
         let reply = "";
         for await (const event of draftHermesReply({ history: body.history ?? [], userMessage, origin })) {
           if (event.type === "delta") send({ delta: event.content });
+          else if (event.type === "tool_progress") send({ tool: event.tool });
           else reply = event.reply;
         }
         send({ done: true, reply });

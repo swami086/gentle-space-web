@@ -2,6 +2,7 @@ import type { ChatMessage } from "../bifrost/client";
 
 export type StreamChunk =
   | { type: "delta"; content: string }
+  | { type: "tool_progress"; tool: string }
   | {
       type: "usage";
       model: string;

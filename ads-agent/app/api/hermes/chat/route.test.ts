@@ -64,4 +64,18 @@ describe("POST /api/hermes/chat", () => {
     expect(events[2]).toEqual({ done: true, reply: "Spend is up 12%." });
     expect(draftHermesReply).toHaveBeenCalledWith({ history: [], userMessage: "how's spend?", origin: "reports" });
   });
+
+  it("forwards tool_progress events as {tool} frames before the delta/done frames", async () => {
+    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    draftHermesReply.mockImplementation(async function* () {
+      yield { type: "tool_progress", tool: "list_opportunities" };
+      yield { type: "delta", content: "Found 3 leads." };
+      yield { type: "done", reply: "Found 3 leads." };
+    });
+    const res = await POST(postRequest({ userMessage: "which leads are hot?", history: [], origin: "crm" }));
+    const events = await readEvents(res);
+    expect(events[0]).toEqual({ tool: "list_opportunities" });
+    expect(events[1]).toEqual({ delta: "Found 3 leads." });
+    expect(events[2]).toEqual({ done: true, reply: "Found 3 leads." });
+  });
 });

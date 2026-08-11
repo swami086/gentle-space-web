@@ -57,14 +57,24 @@ const OpportunityListSchema = z.object({
 export type OpportunityListViewInput = { opportunities?: (OpportunityViewInput | null)[] | null };
 
 export function OpportunityListView(raw: OpportunityListViewInput) {
-  const opportunities = raw.opportunities ?? [];
+  // Tolerate Query envelopes / nulls from bad column-pluck (`array.opportunities` → [null,…]).
+  const incoming = raw.opportunities as unknown;
+  const opportunities = (
+    Array.isArray(incoming)
+      ? incoming
+      : incoming &&
+          typeof incoming === "object" &&
+          Array.isArray((incoming as { opportunities?: unknown }).opportunities)
+        ? ((incoming as { opportunities: (OpportunityViewInput | null)[] }).opportunities ?? [])
+        : []
+  ).filter((o): o is OpportunityViewInput => o != null && typeof o === "object");
   if (opportunities.length === 0) {
     return React.createElement("p", { className: "text-sm text-muted-foreground" }, "No opportunities found.");
   }
   return React.createElement(
     "div",
     { className: "flex flex-col gap-2" },
-    ...opportunities.map((o, index) => React.createElement(OpportunityCardView, { key: index, ...(o ?? {}) })),
+    ...opportunities.map((o, index) => React.createElement(OpportunityCardView, { key: index, ...o })),
   );
 }
 

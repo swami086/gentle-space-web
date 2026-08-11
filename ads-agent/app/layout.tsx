@@ -1,4 +1,5 @@
 import "./globals.css";
+import "@openuidev/react-ui/layered/styles/index.css";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 

@@ -141,4 +141,5 @@ export type CampaignDraftMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  hermes?: boolean;
 };

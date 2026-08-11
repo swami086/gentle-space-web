@@ -1,5 +1,9 @@
 export type HermesChatOrigin = "copilot" | "crm" | "reports" | "campaign";
-export type HermesStreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
+export type HermesStreamEvent =
+  | { delta: string }
+  | { tool: string }
+  | { done: true; reply: string }
+  | { done: true; error: string };
 
 /**
  * Browser-side SSE consumer for the shared POST /api/hermes/chat route. Mirrors the exact

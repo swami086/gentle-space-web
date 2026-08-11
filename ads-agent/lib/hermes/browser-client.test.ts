@@ -49,6 +49,18 @@ describe("streamHermesChat", () => {
     expect(chunks).toEqual([{ delta: "Sp" }, { delta: "end is up." }, { done: true, reply: "Spend is up." }]);
   });
 
+  it("yields a tool event before the final done event", async () => {
+    const events = [`data: {"tool":"list_opportunities"}\n\n`, `data: {"done":true,"reply":"Found 3 leads."}\n\n`];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(events)));
+
+    const { streamHermesChat } = await import("./browser-client");
+    const chunks = [];
+    for await (const chunk of streamHermesChat({ origin: "crm", userMessage: "hi", history: [] })) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toEqual([{ tool: "list_opportunities" }, { done: true, reply: "Found 3 leads." }]);
+  });
+
   it("yields a done/error event when the response is not ok", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
     const { streamHermesChat } = await import("./browser-client");

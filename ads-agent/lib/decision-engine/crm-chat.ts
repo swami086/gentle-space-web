@@ -26,9 +26,9 @@ function buildSystemPrompt(): string {
       "route, not you — you only need to render the confirmation).",
     tools: crmReadToolSpecs,
     toolExamples: [
-      // Official OpenUI: root first (streaming), Query may follow via forward ref.
-      `root = OpportunityList(opps)\nopps = Query("list_opportunities", {}, [])`,
-      `root = OpportunityList(opps)\nopps = Query("search_opportunities", {query: "Priya"}, [])`,
+      // Official OpenUI: object Query result + field pluck (not bare arrays — those column-pluck nulls).
+      `root = OpportunityList(list.opportunities)\nlist = Query("list_opportunities", {}, {opportunities: []})`,
+      `root = OpportunityList(list.opportunities)\nlist = Query("search_opportunities", {query: "Priya"}, {opportunities: []})`,
       `root = OpportunityCard(lead.name, lead.stage, lead.tier, lead.amountLabel, lead.maskedPhone, lead.source)\nlead = Query("get_opportunity", {id: "00000000-0000-0000-0000-000000000001"}, null)`,
       `root = StageChangeConfirm("00000000-0000-0000-0000-000000000001", "Office: Priya Sharma", "SHORTLIST", "TOUR")`,
     ],
@@ -41,8 +41,8 @@ function buildSystemPrompt(): string {
       "Always emit `root = ComponentName(...)` with positional args (Zod key order) — never named " +
         "kwargs like OpportunityCard(name: \"...\").",
       "For opportunity lists, ALWAYS use Query(\"list_opportunities\") or Query(\"search_opportunities\") " +
-        "and pass the result into OpportunityList — never invent or expand CRM record fields as " +
-        "OpportunityCard positional arguments.",
+        "with object defaults {opportunities: []} and pass list.opportunities into OpportunityList — " +
+        "never invent CRM fields as OpportunityCard positionals, and never use bare-array Query defaults.",
       "For stage moves, render StageChangeConfirm with opportunityId, opportunityName, fromStage, " +
         "toStage — never call advance_opportunity_stage yourself; the Confirm button PATCHes the stage route.",
       "Output only openui-lang (root = ComponentName(...)) or a short plain acknowledgment. No " +
