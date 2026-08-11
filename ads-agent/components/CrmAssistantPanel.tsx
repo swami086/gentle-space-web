@@ -9,6 +9,7 @@ import { normalizeOpenUiResponse } from "@/lib/openui/normalize-openui-response"
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 import { SideAssistantPanel, type SideAssistantMessage } from "@/components/pencil/SideAssistantPanel";
 
 const crmChatLibrary = crmLibrary as Library;
@@ -20,7 +21,7 @@ const crmChatToolProvider = createHttpToolProvider([
 ]);
 
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
-type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
+type ChatMsg = { id: string; role: "user" | "assistant"; content: string; hermes?: boolean };
 
 export function CrmAssistantPanel() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -29,6 +30,7 @@ export function CrmAssistantPanel() {
   const [streamingText, setStreamingText] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [hermesMode, setHermesMode] = useState(false);
+  const [toolProgress, setToolProgress] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -47,12 +49,18 @@ export function CrmAssistantPanel() {
           userMessage: trimmed,
           history: messages.map((m) => ({ role: m.role, content: m.content })),
         })) {
-          if ("delta" in event) {
+          if ("tool" in event) {
+            setToolProgress(event.tool);
+          } else if ("delta" in event) {
+            setToolProgress(null); // tool calls are done once real content starts streaming
             accumulated += event.delta;
-            setStreamingText(accumulated);
+            setStreamingText(stripHermesStepNarration(accumulated));
           } else if (!("error" in event)) {
             setRenderError(null);
-            setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: event.reply }]);
+            setMessages((prev) => [
+              ...prev,
+              { id: `a-${Date.now()}`, role: "assistant", content: stripHermesStepNarration(event.reply), hermes: true },
+            ]);
           }
         }
         return;
@@ -92,20 +100,22 @@ export function CrmAssistantPanel() {
     } finally {
       setSending(false);
       setStreamingText("");
+      setToolProgress(null);
     }
   }
 
   const renderedMessages: SideAssistantMessage[] = messages.map((m) => {
     const response = m.role === "assistant" ? normalizeOpenUiResponse(m.content) : m.content;
+    const validForHermes = m.hermes ? looksValidOpenUiLang(response, hermesLibrary) : true;
     return {
       id: m.id,
       role: m.role,
       content:
-        m.role === "assistant" && looksLikeOpenUiLang(response) ? (
+        m.role === "assistant" && looksLikeOpenUiLang(response) && validForHermes ? (
           <Renderer
             response={response}
-            library={crmChatLibrary}
-            toolProvider={crmChatToolProvider}
+            library={m.hermes ? hermesLibrary : crmChatLibrary}
+            toolProvider={m.hermes ? undefined : crmChatToolProvider}
             isStreaming={false}
             onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
           />
@@ -114,6 +124,12 @@ export function CrmAssistantPanel() {
         ),
     };
   });
+
+  if (sending && hermesMode && toolProgress) {
+    renderedMessages.push({ id: "tool-progress", role: "assistant", content: `Working: ${humanizeToolName(toolProgress)}…` });
+  } else if (sending && !streamingText) {
+    renderedMessages.push({ id: "tool-progress", role: "assistant", content: "Thinking…" });
+  }
 
   if (sending && streamingText) {
     const streamResponse = normalizeOpenUiResponse(streamingText);
