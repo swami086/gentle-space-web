@@ -12,6 +12,7 @@ import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
 import { useCopilot } from "./CopilotProvider";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 
 // createLibrary (lang-core) can't unify heterogeneous component C params; Renderer wants react-lang Library.
 const copilotLibrary = platformLibrary as Library;
@@ -36,6 +37,7 @@ export function CopilotPanel() {
   const [error, setError] = useState<string | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [hermesMode, setHermesMode] = useState(false);
+  const [toolProgress, setToolProgress] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -55,13 +57,21 @@ export function CopilotPanel() {
           userMessage: trimmed,
           history: messages.map((m) => ({ role: m.role, content: m.content })),
         })) {
-          if ("delta" in event) {
+          if ("tool" in event) {
+            setToolProgress(event.tool);
+          } else if ("delta" in event) {
+            setToolProgress(null); // tool calls are done once real content starts streaming
             accumulated += event.delta;
-            setStreamingText(accumulated);
+            setStreamingText(stripHermesStepNarration(accumulated));
           } else if ("error" in event) {
             setError(event.error);
           } else {
-            appendMessage({ id: `local-reply-${Date.now()}`, role: "assistant", content: event.reply });
+            appendMessage({
+              id: `local-reply-${Date.now()}`,
+              role: "assistant",
+              content: stripHermesStepNarration(event.reply),
+              hermes: true,
+            });
           }
         }
         return;
@@ -108,6 +118,7 @@ export function CopilotPanel() {
     } finally {
       setSending(false);
       setStreamingText("");
+      setToolProgress(null);
     }
   }
 
@@ -147,12 +158,13 @@ export function CopilotPanel() {
               <div key={message.id} className="ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
                 {message.content}
               </div>
-            ) : looksLikeOpenUiLang(message.content) ? (
+            ) : looksLikeOpenUiLang(message.content) &&
+              (!message.hermes || looksValidOpenUiLang(message.content, hermesLibrary)) ? (
               <div key={message.id} className="max-w-[95%]">
                 <Renderer
                   response={message.content}
-                  library={copilotLibrary}
-                  toolProvider={copilotToolProvider}
+                  library={message.hermes ? hermesLibrary : copilotLibrary}
+                  toolProvider={message.hermes ? undefined : copilotToolProvider}
                   isStreaming={false}
                   onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
                 />
@@ -177,8 +189,15 @@ export function CopilotPanel() {
           {sending && streamingText && !looksLikeOpenUiLang(streamingText) && (
             <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">{streamingText}</div>
           )}
-          {sending && !streamingText && (
-            <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Thinking…</div>
+          {sending && hermesMode && toolProgress ? (
+            <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Working: {humanizeToolName(toolProgress)}…
+            </div>
+          ) : (
+            sending &&
+            !streamingText && (
+              <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Thinking…</div>
+            )
           )}
         </div>
         {(error ?? renderError) && <p className="text-sm text-destructive">{error ?? renderError}</p>}
