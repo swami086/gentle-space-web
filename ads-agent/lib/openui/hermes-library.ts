@@ -119,10 +119,16 @@ export type ResolvedOpenUiAction = { kind: "send"; text: string } | { kind: "ope
  * onAction>`, not just Hermes-mode ones — it's a no-op today for the non-Hermes domain libraries
  * (none of their components call `triggerAction`), but removes the need to touch these call
  * sites again once default-mode interactivity (follow-ups/forms) is added in a later phase.
+ *
+ * Hermes composes `OpenUrl` calls itself from free-form model output (unlike the four domain
+ * models, which only ever echo tool-result URLs) — restrict to http(s) so a hallucinated
+ * `javascript:`/`data:` URI can't execute in the page via `window.open`.
  */
 export function resolveOpenUiAction(event: ActionEvent): ResolvedOpenUiAction {
   if (event.type === BuiltinActionType.OpenUrl && typeof event.params.url === "string") {
-    return { kind: "open_url", url: event.params.url };
+    const url = event.params.url;
+    const isHttpUrl = /^https?:\/\//i.test(url);
+    return isHttpUrl ? { kind: "open_url", url } : { kind: "noop" };
   }
   const text = event.humanFriendlyMessage?.trim();
   return text ? { kind: "send", text } : { kind: "noop" };

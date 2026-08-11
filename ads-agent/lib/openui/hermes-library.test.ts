@@ -132,4 +132,13 @@ describe("resolveOpenUiAction", () => {
     const event: ActionEvent = { type: "some_custom_action", params: {}, humanFriendlyMessage: "Do the thing" };
     expect(resolveOpenUiAction(event)).toEqual({ kind: "send", text: "Do the thing" });
   });
+
+  it("no-ops for a non-http(s) open_url scheme instead of handing it to window.open", () => {
+    const event: ActionEvent = {
+      type: BuiltinActionType.OpenUrl,
+      params: { url: "javascript:alert(document.cookie)" },
+      humanFriendlyMessage: "",
+    };
+    expect(resolveOpenUiAction(event)).toEqual({ kind: "noop" });
+  });
 });
