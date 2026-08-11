@@ -10,6 +10,7 @@ import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 
 const reportsLibrary = analyticsLibrary as Library;
 const reportsToolProvider = createHttpToolProvider([
@@ -18,7 +19,7 @@ const reportsToolProvider = createHttpToolProvider([
   "list_pending_proposals",
 ]);
 type StreamEvent = { delta: string } | { done: true; reply: string } | { done: true; error: string };
-type ChatMsg = { id: string; role: "user" | "assistant"; content: string };
+type ChatMsg = { id: string; role: "user" | "assistant"; content: string; hermes?: boolean };
 
 export function ReportsChat() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -27,6 +28,7 @@ export function ReportsChat() {
   const [streamingText, setStreamingText] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [hermesMode, setHermesMode] = useState(false);
+  const [toolProgress, setToolProgress] = useState<string | null>(null);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -44,11 +46,17 @@ export function ReportsChat() {
           userMessage: trimmed,
           history: messages.map((m) => ({ role: m.role, content: m.content })),
         })) {
-          if ("delta" in event) {
+          if ("tool" in event) {
+            setToolProgress(event.tool);
+          } else if ("delta" in event) {
+            setToolProgress(null); // tool calls are done once real content starts streaming
             accumulated += event.delta;
-            setStreamingText(accumulated);
+            setStreamingText(stripHermesStepNarration(accumulated));
           } else if (!("error" in event)) {
-            setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: event.reply }]);
+            setMessages((prev) => [
+              ...prev,
+              { id: `a-${Date.now()}`, role: "assistant", content: stripHermesStepNarration(event.reply), hermes: true },
+            ]);
           }
         }
         return;
@@ -85,6 +93,7 @@ export function ReportsChat() {
     } finally {
       setSending(false);
       setStreamingText("");
+      setToolProgress(null);
     }
   }
 
@@ -104,12 +113,12 @@ export function ReportsChat() {
             <div key={m.id} className="ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
               {m.content}
             </div>
-          ) : looksLikeOpenUiLang(m.content) ? (
+          ) : looksLikeOpenUiLang(m.content) && (!m.hermes || looksValidOpenUiLang(m.content, hermesLibrary)) ? (
             <div key={m.id} className="max-w-[90%] rounded-lg bg-surface p-3">
               <Renderer
                 response={m.content}
-                library={reportsLibrary}
-                toolProvider={reportsToolProvider}
+                library={m.hermes ? hermesLibrary : reportsLibrary}
+                toolProvider={m.hermes ? undefined : reportsToolProvider}
                 isStreaming={false}
                 onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
@@ -135,6 +144,10 @@ export function ReportsChat() {
             )}
           </div>
         )}
+        {sending && hermesMode && toolProgress && (
+          <p className="text-xs text-muted-foreground">Working: {humanizeToolName(toolProgress)}…</p>
+        )}
+        {sending && !toolProgress && !streamingText && <p className="text-xs text-muted-foreground">Thinking…</p>}
         {renderError && <p className="text-xs text-destructive">{renderError}</p>}
       </div>
       <div className="flex gap-2">
