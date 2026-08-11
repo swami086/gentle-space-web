@@ -11,6 +11,10 @@ import { ManualEditForm } from "@/components/campaign-draft-chat/ManualEditForm"
 import { AiSetupView } from "@/components/campaign-draft-chat/AiSetupView";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
+import { Renderer, type Library } from "@openuidev/react-lang";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
+import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
+import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 
 type Props = {
   initialDraft: CampaignDraft;
@@ -33,6 +37,8 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
   const [editMode, setEditMode] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [hermesMode, setHermesMode] = useState(false);
+  const [toolProgress, setToolProgress] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   async function patchDraft(fields: Record<string, unknown>) {
     setError(null);
@@ -69,9 +75,12 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
           userMessage: content,
           history: messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
         })) {
-          if ("delta" in event) {
+          if ("tool" in event) {
+            setToolProgress(event.tool);
+          } else if ("delta" in event) {
+            setToolProgress(null); // tool calls are done once real content starts streaming
             accumulated += event.delta;
-            setStreamingText(accumulated);
+            setStreamingText(stripHermesStepNarration(accumulated));
           } else if ("error" in event) {
             setError(event.error);
           } else {
@@ -81,8 +90,9 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
                 id: `local-reply-${Date.now()}`,
                 draftId: draft.id,
                 role: "assistant",
-                content: event.reply,
+                content: stripHermesStepNarration(event.reply),
                 createdAt: new Date().toISOString(),
+                hermes: true,
               },
             ]);
           }
@@ -141,6 +151,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
     } finally {
       setSending(false);
       setStreamingText("");
+      setToolProgress(null);
     }
   }
 
@@ -174,25 +185,42 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
                 Tell me what you want to advertise — e.g. &quot;Office space in Whitefield, ₹500/day budget&quot;.
               </p>
             )}
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={
-                  message.role === "user"
-                    ? "ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                    : "max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm"
-                }
-              >
-                {message.content}
+            {messages.map((message) =>
+              message.hermes && looksLikeOpenUiLang(message.content) && looksValidOpenUiLang(message.content, hermesLibrary) ? (
+                <div key={message.id} className="max-w-[90%] rounded-lg bg-muted p-3">
+                  <Renderer
+                    response={message.content}
+                    library={hermesLibrary as Library}
+                    isStreaming={false}
+                    onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
+                  />
+                </div>
+              ) : (
+                <div
+                  key={message.id}
+                  className={
+                    message.role === "user"
+                      ? "ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                      : "max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm"
+                  }
+                >
+                  {message.content}
+                </div>
+              ),
+            )}
+            {sending && hermesMode && toolProgress && (
+              <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                Working: {humanizeToolName(toolProgress)}…
               </div>
-            ))}
-            {sending && (
+            )}
+            {sending && !toolProgress && (
               <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
                 Thinking…
               </div>
             )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {renderError && <p className="text-sm text-destructive">{renderError}</p>}
           <div className="flex gap-2">
             <input
               className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
