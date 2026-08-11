@@ -146,14 +146,14 @@ Metering (`callMeteredStreamingChatCompletion`, `pricing.ts`, `ledger.ts` — st
 
 ## Success criteria
 
-- [ ] `docs/superpowers/hermes-skills/ads-agent/{ads-marketing-superpowers,marketing-brainstorming,marketing-writing-plans,verification-before-proposing}/SKILL.md` exist, versioned in this repo, valid frontmatter.
-- [ ] `ads-agent-campaign-strategy`'s source copy is versioned in this repo too, with `related_skills` and procedure updates applied.
-- [ ] `scripts/sync-hermes-skills.sh` successfully copies all 5 skills into `~/.hermes/skills/`; a fresh Hermes session's `skills_list` shows all 5.
+- [x] `docs/superpowers/hermes-skills/ads-agent/{ads-marketing-superpowers,marketing-brainstorming,marketing-writing-plans,verification-before-proposing}/SKILL.md` exist, versioned in this repo, valid frontmatter.
+- [x] `ads-agent-campaign-strategy`'s source copy is versioned in this repo too, with `related_skills` and procedure updates applied.
+- [x] `scripts/sync-hermes-skills.sh` successfully copies all 5 skills into `~/.hermes/skills/`; a fresh Hermes session's `skills_list` shows all 5.
 - [ ] A campaign-strategy question asked of Hermes (any surface) triggers `skill_view` on `ads-marketing-superpowers` before Hermes answers.
-- [ ] `@openuidev/react-ui` installed; `hermesLibrary` composes without name collisions.
+- [x] `@openuidev/react-ui` installed; `hermesLibrary` composes without name collisions.
 - [ ] A Hermes reply from any of the 4 panels renders as OpenUI cards (not a plain-text bubble) for data-bearing questions, and renders via `openuiChatLibrary`'s prose/callout blocks (not a wall of text, but also not a hard parse error) for purely conversational questions.
 - [ ] A Hermes reply about CRM leads/spend renders the same `OpportunityCard`/`TrendChart`/etc. components the non-Hermes CRM/Reports panels use for equivalent data.
 - [ ] An image-generation request through "Ask Hermes" renders an actual image, not a markdown link/wall of text.
-- [ ] The "Working: `<tool>`" indicator appears and clears correctly during a multi-tool-call Hermes turn.
-- [ ] A deliberately malformed/edge-case Hermes reply falls back to a plain-text bubble instead of a broken render.
-- [ ] No regression to the other four (non-Hermes) chat surfaces' existing rendering or metering behavior.
+- [x] The "Working: `<tool>`" indicator appears and clears correctly during a multi-tool-call Hermes turn (verified live: Campaign Draft Chat showed "Working: tool search…" during the tool call, then cleared once the reply streamed in).
+- [x] A deliberately malformed/edge-case Hermes reply falls back to a plain-text bubble instead of a broken render (`looksValidOpenUiLang` + unit tests).
+- [x] No regression to the other four (non-Hermes) chat surfaces' existing rendering or metering behavior (623 tests pass).
