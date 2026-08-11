@@ -12,7 +12,7 @@ import { AiSetupView } from "@/components/campaign-draft-chat/AiSetupView";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
 import { Renderer, type Library } from "@openuidev/react-lang";
-import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, resolveOpenUiAction, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 
@@ -55,8 +55,8 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
     setDraft(body.draft);
   }
 
-  async function sendMessage() {
-    const content = input.trim();
+  async function sendMessage(contentOverride?: string) {
+    const content = (contentOverride ?? input).trim();
     if (!content || sending) return;
     setSending(true);
     setError(null);
@@ -192,6 +192,11 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
                     response={message.content}
                     library={hermesLibrary as Library}
                     isStreaming={false}
+                    onAction={(event) => {
+                      const action = resolveOpenUiAction(event);
+                      if (action.kind === "send") void sendMessage(action.text);
+                      else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+                    }}
                     onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
                   />
                 </div>
@@ -265,7 +270,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
             <AiSetupView
               draft={draft}
               streamingText={streamingText}
-              isStreaming={sending}
+              isStreaming={sending && !hermesMode}
               onCreateProposal={createProposal}
               creating={creating}
             />
