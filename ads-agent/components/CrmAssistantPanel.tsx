@@ -9,7 +9,7 @@ import { normalizeOpenUiResponse } from "@/lib/openui/normalize-openui-response"
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
-import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, resolveOpenUiAction, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 import { SideAssistantPanel, type SideAssistantMessage } from "@/components/pencil/SideAssistantPanel";
 
 const crmChatLibrary = crmLibrary as Library;
@@ -117,6 +117,11 @@ export function CrmAssistantPanel() {
             library={m.hermes ? hermesLibrary : crmChatLibrary}
             toolProvider={m.hermes ? undefined : crmChatToolProvider}
             isStreaming={false}
+            onAction={(event) => {
+              const action = resolveOpenUiAction(event);
+              if (action.kind === "send") void sendMessage(action.text);
+              else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+            }}
             onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
           />
         ) : (
@@ -139,9 +144,14 @@ export function CrmAssistantPanel() {
       content: looksLikeOpenUiLang(streamResponse) ? (
         <Renderer
           response={streamResponse}
-          library={crmChatLibrary}
-          toolProvider={crmChatToolProvider}
+          library={hermesMode ? hermesLibrary : crmChatLibrary}
+          toolProvider={hermesMode ? undefined : crmChatToolProvider}
           isStreaming
+          onAction={(event) => {
+            const action = resolveOpenUiAction(event);
+            if (action.kind === "send") void sendMessage(action.text);
+            else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+          }}
           onError={() => {
             /* Mid-stream: OpenUI clears via onError([]) and drops unresolved refs — don't flash. */
           }}
