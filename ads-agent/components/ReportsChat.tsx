@@ -10,7 +10,7 @@ import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { HermesModeToggle } from "@/components/hermes/HermesModeToggle";
 import { streamHermesChat } from "@/lib/hermes/browser-client";
-import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, stripHermesStepNarration } from "@/lib/openui/hermes-library";
+import { hermesLibrary, humanizeToolName, looksValidOpenUiLang, resolveOpenUiAction, stripHermesStepNarration } from "@/lib/openui/hermes-library";
 
 const reportsLibrary = analyticsLibrary as Library;
 const reportsToolProvider = createHttpToolProvider([
@@ -120,6 +120,11 @@ export function ReportsChat() {
                 library={m.hermes ? hermesLibrary : reportsLibrary}
                 toolProvider={m.hermes ? undefined : reportsToolProvider}
                 isStreaming={false}
+                onAction={(event) => {
+                  const action = resolveOpenUiAction(event);
+                  if (action.kind === "send") void sendMessage(action.text);
+                  else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+                }}
                 onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             </div>
@@ -134,9 +139,14 @@ export function ReportsChat() {
             {looksLikeOpenUiLang(streamingText) ? (
               <Renderer
                 response={streamingText}
-                library={reportsLibrary}
-                toolProvider={reportsToolProvider}
+                library={hermesMode ? hermesLibrary : reportsLibrary}
+                toolProvider={hermesMode ? undefined : reportsToolProvider}
                 isStreaming
+                onAction={(event) => {
+                  const action = resolveOpenUiAction(event);
+                  if (action.kind === "send") void sendMessage(action.text);
+                  else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
+                }}
                 onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
               />
             ) : (
