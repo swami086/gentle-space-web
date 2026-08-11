@@ -593,6 +593,22 @@ git commit -m "docs: record live browser E2E findings for Task 6 and check off v
 
 ---
 
+---
+
+## Follow-up fix: Twenty CRM `AbortError` → "no leads found" (2026-08-11, post-review)
+
+Root-caused via `superpowers:systematic-debugging` after the user asked whether this pre-existing bug (flagged as "unrelated" above) had been fixed. It had not — investigated and fixed as a separate, scoped change.
+
+**Root cause (not what Step 1 above assumed):** the `client.close()` `AbortError` in `mcp-client.ts` was a red herring — it's already caught and ignored (`mcp-client.test.ts` has a passing regression test for exactly this case). The real, live cause: the user's self-hosted Twenty CRM Docker stack (`twenty-server-1`/`twenty-worker-1`, a separate compose stack from `ads-agent`'s own) is crash-looping (`RestartCount` climbing during this session; `twenty-server-1` never reached `healthy`). `docker compose logs twenty-mcp-gateway` showed interleaved **successful** `list_opportunities` calls (9 real opportunities) and one `{"isError":true,"text":"Error: fetch failed"}` — the Twenty MCP server's own upstream fetch to the flaky Twenty backend failing intermittently. `listOpportunities()` (`lib/crm/twenty-pipeline.ts`) catches *any* error and silently returns `[]` with zero logging (an intentional fail-soft for the `/crm` page), so an infra blip was indistinguishable from "genuinely no opportunities" and invisible in server logs.
+
+**Fix (root-cause-appropriate for a confirmed environmental/transient failure, per the debugging skill's Phase 4 guidance):** `lib/bifrost/mcp-client.ts`'s `withClient()` now retries once (300ms backoff) on any failure — covering both a rejected `connect()`/`callTool()` and Twenty's own `isError: true` "fetch failed" result shape — before giving up, and logs (`console.error`) the tool name + final error on exhaustion so a real outage is now visible in server logs instead of silently degrading to "no leads found". Both existing consumers (`/crm` page and the CRM chat's `list_opportunities`/`search_opportunities` tools) get this transparently, no call-site changes needed.
+
+**What this does and doesn't fix:** a single crash-loop blip during a request now self-heals via retry. A *sustained* outage (confirmed live: the Twenty backend was still crash-looping and unreachable after 80+ seconds of polling during this session) is infrastructure outside `ads-agent`'s repo — the fix correctly still fails (with clear logging) rather than hanging or masking it further.
+
+**Files:** `ads-agent/lib/bifrost/mcp-client.ts` (+26/-6), `ads-agent/lib/bifrost/mcp-client.test.ts` (+44/-4, 5 new tests: retry-on-connect-failure, retry-on-tool-call-failure, retry-on-`isError`-result, exhausted-retries-logs-and-throws, 2 existing tests updated for 2-attempt `close()` call count).
+
+**Verified:** full `npm test` (641 passed, 7 skipped — was 636 before, +5 new), `npx tsc --noEmit` (same 2 pre-existing, unrelated errors as before this branch), live-reproduced against the actually-crash-looping Twenty backend via `npx tsx` (confirmed retry fires, final error now logged with tool name and full context instead of silently vanishing).
+
 ## Self-Review Notes
 
 - **Spec coverage:** bug 1 (Task 1 helper + Tasks 2-5 wiring), bug 2 (Tasks 2-4 streaming-library fix), bug 3 (Task 5 Step 4), unit test expansion (Task 1), live browser E2E (Task 6) — every spec section has a task.

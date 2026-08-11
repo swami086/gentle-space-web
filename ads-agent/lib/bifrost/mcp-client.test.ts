@@ -40,10 +40,11 @@ describe("listTwentyTools", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("still closes the connection when listTools throws", async () => {
+  it("still closes the connection when listTools throws on every attempt", async () => {
     listTools.mockRejectedValue(new Error("boom"));
     await expect(listTwentyTools()).rejects.toThrow("boom");
-    expect(close).toHaveBeenCalledTimes(1);
+    // One connect+close per retry attempt (2 attempts total — see "retries once" tests below).
+    expect(close).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -88,9 +89,46 @@ describe("callTwentyTool", () => {
     await expect(callTwentyTool("update_opportunity", {})).rejects.toThrow(/bad stage/);
   });
 
-  it("closes the connection even when callTool throws", async () => {
+  it("closes the connection on every attempt, even when callTool throws on every attempt", async () => {
     callTool.mockRejectedValue(new Error("not found"));
     await expect(callTwentyTool("get_opportunity", { id: "missing" })).rejects.toThrow("not found");
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once and succeeds when the first attempt's connect() fails transiently (e.g. Twenty backend restarting)", async () => {
+    connect.mockRejectedValueOnce(new Error("fetch failed")).mockResolvedValueOnce(undefined);
+    callTool.mockResolvedValue({ content: [{ type: "text", text: '{"ok":true}' }] });
+
+    await expect(callTwentyTool("list_opportunities", {})).resolves.toEqual({ ok: true });
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once and succeeds when the first attempt's tool call fails transiently", async () => {
+    callTool
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValueOnce({ content: [{ type: "text", text: '{"ok":true}' }] });
+
+    await expect(callTwentyTool("list_opportunities", {})).resolves.toEqual({ ok: true });
+    expect(callTool).toHaveBeenCalledTimes(2);
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once and succeeds when the first attempt returns an isError result (Twenty MCP's own fetch-failed shape)", async () => {
+    callTool
+      .mockResolvedValueOnce({ content: [{ type: "text", text: "Error: fetch failed" }], isError: true })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: '{"ok":true}' }] });
+
+    await expect(callTwentyTool("list_opportunities", {})).resolves.toEqual({ ok: true });
+    expect(callTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up and rejects with the original error after exhausting retries, logging it for visibility", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    callTool.mockRejectedValue(new Error("fetch failed"));
+
+    await expect(callTwentyTool("list_opportunities", {})).rejects.toThrow("fetch failed");
+    expect(callTool).toHaveBeenCalledTimes(2);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("list_opportunities"), expect.any(Error));
   });
 });

@@ -30,24 +30,42 @@ export function parseMcpToolText(text: string): unknown {
   }
 }
 
-async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
-  const client = new Client({ name: "ads-agent", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(TWENTY_MCP_URL)));
-  try {
-    return await fn(client);
-  } finally {
-    // Streamable HTTP close can AbortError after a successful call; never let that wipe the result.
+// The Twenty MCP server's own upstream fetch to the Twenty backend intermittently fails (seen live:
+// "Error: fetch failed" whenever the self-hosted Twenty CRM container is mid-restart) — one retry
+// clears the vast majority of these blips without masking a genuinely down server.
+const MAX_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 300;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withClient<T>(label: string, fn: (client: Client) => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const client = new Client({ name: "ads-agent", version: "1.0.0" });
     try {
-      await client.close();
-    } catch {
-      /* ignore */
+      await client.connect(new StreamableHTTPClientTransport(new URL(TWENTY_MCP_URL)));
+      return await fn(client);
+    } catch (err) {
+      lastErr = err;
+    } finally {
+      // Streamable HTTP close can AbortError after a successful call; never let that wipe the result.
+      try {
+        await client.close();
+      } catch {
+        /* ignore */
+      }
     }
+    if (attempt < MAX_ATTEMPTS) await delay(RETRY_DELAY_MS);
   }
+  console.error(`[twenty-mcp] "${label}" failed after ${MAX_ATTEMPTS} attempts:`, lastErr);
+  throw lastErr;
 }
 
 /** Live tool schemas from the Twenty MCP server — used to build Bifrost's `tools` param. */
 export async function listTwentyTools(): Promise<McpToolSchema[]> {
-  return withClient(async (client) => {
+  return withClient("listTools", async (client) => {
     const { tools } = await client.listTools();
     return tools as McpToolSchema[];
   });
@@ -59,7 +77,7 @@ export async function listTwentyTools(): Promise<McpToolSchema[]> {
  * (resolve-tools-then-generate.ts) once a tool_call has been decided by the model.
  */
 export async function callTwentyTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  return withClient(async (client) => {
+  return withClient(name, async (client) => {
     const result = await client.callTool({ name, arguments: args });
     const textBlock = result.content?.find(
       (block): block is { type: "text"; text: string } => block.type === "text",
