@@ -7,6 +7,7 @@ const GUARDED_ROUTES = [
   "cycle/run/route.ts",
   "proposals/[id]/route.ts",
   "proposals/[id]/approve/route.ts",
+  "proposals/[id]/cancel/route.ts",
   "proposals/[id]/reject/route.ts",
   "campaign-drafts/[id]/route.ts",
   "campaign-drafts/[id]/create-proposal/route.ts",
