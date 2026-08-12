@@ -87,6 +87,8 @@ Three storage jobs, deliberately separated:
                     │    adsagent, context        │
                     │  pgvector · AGE · JSONB     │
                     │  RLS (FORCE) per tenant     │
+                    │  system of record + control │
+                    │  plane (graph manifest)     │
                     └──────────┬──────────────────┘
                                │ CDC (PeerDB / ClickPipes)
                                ▼
@@ -113,6 +115,36 @@ LIKE/regex, date functions, `CASE WHEN`, and JOINs between foreign tables.
 
 **Rule:** cross-system joins execute with only the ClickHouse portion pushed down and the join
 performed in Postgres. Keep analytical tables together in ClickHouse and join them there.
+
+### 3.1 Why PostgreSQL is retained (evaluated 2026-08-12)
+
+Asked directly, once ClickHouse and DuckDB were both in the design: is Postgres still needed?
+**Yes, with high confidence — there is no candidate to replace it.**
+
+| Criterion | PostgreSQL | ClickHouse | DuckDB |
+|---|---|---|---|
+| ACID transactions | yes | **none** | yes, but single-process |
+| Row-level security | `FORCE RLS`, mature | row policies | none |
+| Foreign keys, unique constraints | yes | **none** | partial |
+| Update/delete-heavy OLTP | yes | mutations discouraged | not a server |
+| Concurrent writer processes | yes | yes | **no** (Quack is beta until ~DuckDB 2.0) |
+| Existing code investment | all of `lib/db/*` | none | none |
+
+A proposal-approval flow that commits real ad spend needs transactions and constraints; UD5 already
+records that ClickHouse has neither. GitLab Orbit made the same split — Rails/Postgres as source of
+truth, ClickHouse for the graph only.
+
+### 3.2 What lives in the `context` schema
+
+The graph itself moved to ClickHouse (§6.1), so this Postgres schema holds the **transactional
+control plane** that the columnar store cannot:
+
+- **The graph manifest** — per-tenant `status`, `last_built_at`, `snapshot_id`, `error_message`.
+  Small, contended, and read-modify-written by both the app (marking a tenant stale) and the
+  builder (claiming work). It describes the graph but must not live in it.
+- **Agent task tokens** — the dispatcher-minted `(task_id, profile, org_id)` bindings from the
+  agent spec, kept server-side so they are revocable.
+- **Agent proposal provenance** — which agent proposed what, with which evidence.
 
 ---
 
@@ -273,6 +305,24 @@ Every node and edge table carries `org_id` and is covered by a ClickHouse row po
 snapshots contain a single tenant's rows, so the file boundary is a second, physical isolation
 layer beneath the row policy.
 
+The manifest itself lives in Postgres, not ClickHouse — see §3.2.
+
+### 6.4 Snapshot serving rules
+
+These follow from DuckDB's [concurrency model](https://duckdb.org/docs/current/connect/concurrency)
+and are not optional.
+
+- **Serving processes open snapshots `READ_ONLY`.** The docs are explicit: *"Read-only mode:
+  multiple processes can read from the database, but no processes can write."* That is what allows
+  several horizontally-scaled app instances to serve the same tenant concurrently.
+- **Never build in place.** A rebuild writes a new file for the new `snapshot_id`, then the
+  manifest flips to point at it and readers pick it up on next open. Writing to a file that
+  readers hold would violate the rule above.
+- **Do not rely on multi-process writes.** Cross-process writing needs the Quack remote protocol,
+  *"in beta stage as of DuckDB v1.5.2… expected to become mature by DuckDB v2.0 in fall 2026."*
+  Nothing in this design should depend on it.
+- **Old snapshots are garbage-collected** once no reader holds them, tracked via the manifest.
+
 ---
 
 ## 7. Agent architecture (decided; detailed spec to follow)
@@ -379,3 +429,7 @@ under shared-schema. Needs a designed answer before the first enterprise custome
    on-demand rebuild, and what debounce window avoids thrashing on bulk imports?
 8. **SQL/PGQ adoption** — re-evaluate once PostgreSQL 19 is GA. If it performs, it could replace
    both AGE and hand-written traversal SQL with one standard syntax over the same tables.
+9. **Where snapshot files live** — local disk on a stateful service, or object storage read via
+   DuckDB's `httpfs` extension? Object storage suits ephemeral containers (Coolify/Render) and
+   removes per-instance file management, at the cost of network latency per query. Decide before
+   Phase E, since it shapes the build job's output target.
