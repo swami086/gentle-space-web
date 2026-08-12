@@ -790,7 +790,7 @@ retires the `runtime = "nodejs"` / "do not forward cancellation" workaround in
 | `agent.task_requested` | orchestrator or cron requests agent work | Kanban dispatcher |
 | `reminder.due` | cron finds a due reminder | notification · Today feed |
 | `deletion.requested` | an erasure request is accepted | one consumer per store (§14.4) |
-| `portal.event` | a broker's landing page sends a session event | **BigQuery raw zone** via native subscription (§14.6) |
+| `portal.event` | a broker's landing page sends a session event | **GCS export → ClickHouse S3Queue** (§14.6) |
 
 ### 14.3 Delivery semantics
 
@@ -830,30 +830,61 @@ Cron is a **clock**; Pub/Sub is **transport**. They are not alternatives.
 
 The rule: nothing in a cron job does work that can fail slowly. It finds candidates and publishes.
 
-### 14.6 BigQuery — the raw event zone
+### 14.6 The raw event zone — GCS transport into ClickHouse
 
-Broker landing pages send session clickstream. That lands in **BigQuery via a native Pub/Sub
-[BigQuery subscription](https://docs.cloud.google.com/pubsub/docs/bigquery)**, which writes through
-the Storage Write API *"without intermediate processing"* — no consumer to write or operate.
+Broker landing pages send session clickstream. It lands in the **ClickHouse already being operated**,
+via two built-in features and no consumer code:
 
-**Why not the stores already here.** Firestore was considered and rejected for this: it bills per
-document write and its own best practices warn against *"high write rates to lexicographically close
-documents… known as hotspotting"*, which time-ordered events walk straight into. ClickHouse has no
-native Pub/Sub subscription, so it would need a custom consumer — real work for a solo operator where
-BigQuery needs none.
+```
+Pub/Sub ──native Cloud Storage export subscription──▶ GCS (raw events bucket)
+                                                        │
+                                    ClickHouse S3Queue engine ──MATERIALIZED VIEW──▶ MergeTree
+                                                        │
+                                              files deleted after ingest
+```
 
-**Why the earlier objection to BigQuery does not apply.** §9 rejected BigQuery as the analytical store
-because per-byte-scanned billing plus agent-generated queries is a denial-of-wallet risk. That
-objection was about *agents querying it*. Here it is a write-optimised raw zone that **only scheduled
-transforms read**, so scan volume is bounded and predictable. Agents must never be given access to it.
+[Cloud Storage subscriptions](https://docs.cloud.google.com/pubsub/docs/cloudstorage) are a native
+export type that *"writes messages to an existing Cloud Storage bucket as they are received"*, batched
+by max bytes or max duration. The [S3Queue engine](https://clickhouse.com/docs/reference/engines/table-engines/integrations/s3queue)
+then does *"streaming imports… similar to the Kafka and RabbitMQ engines"*, consuming new files
+continuously without external orchestration. GCS is reached through its S3-compatible endpoint.
 
-**Nothing product-facing depends on it.** If BigQuery is unavailable, events accumulate in Pub/Sub and
-the product is unaffected — which is what makes a ninth system tolerable.
+**Both hops are configuration, not code.** That was the only reason BigQuery was briefly chosen, and
+it does not hold: a self-hosted path with the same property exists, and it removes a ninth system.
+**BigQuery is not used.**
 
-Curated data flows onward from there: scheduled transforms populate Postgres tables the product reads
-and ClickHouse tables analytics reads. The raw zone is date-partitioned so retention expiry is a
-partition drop.
+Three operational details that matter at setup:
 
-**This whole path is gated on consent**, which is designed in
-`2026-08-12-portal-ingestion-consent-design.md`. Events arriving without valid consent for their
-stated purpose are rejected at the ingestion edge and never reach Pub/Sub.
+- **The materialized view starts ingestion.** Per the docs, *"when the MATERIALIZED VIEW joins the
+  engine, the S3Queue Table Engine starts collecting data in the background."* No view, no ingest —
+  a common first-time surprise.
+- **S3Queue requires ClickHouse Keeper**, which is how it tracks already-processed files and avoids
+  double-ingesting across restarts. On a single node Keeper runs embedded in the same process via
+  configuration, so this is a config addition to `docker/Dockerfile.postgres`'s ClickHouse
+  counterpart rather than a service to operate. Bound its state with `tracked_files_limit` and
+  `tracked_file_ttl_sec`.
+- **Files are deleted after ingestion** (`after_processing`). The bucket is transport, not an archive
+  — ClickHouse holds the data, and a replay path is not worth the storage or the compliance surface.
+
+**A separate bucket from the DuckDB snapshots**, deliberately. They have different auth models —
+snapshots use per-tenant prefixes with scoped service accounts (§12.3), while S3Queue authenticates
+with HMAC keys against the S3-compatible endpoint — and different lifecycles. Mixing them would mean
+the coarser credential could reach snapshot data.
+
+**Latency is near-real-time, not streaming**, because of GCS batching. Irrelevant for clickstream
+analytics; worth knowing before anything latency-sensitive is built on it.
+
+**Nothing product-facing depends on this path.** If ingestion stalls, events accumulate in Pub/Sub and
+brokers notice nothing.
+
+Curated data flows onward: scheduled transforms populate Postgres tables the product reads and
+ClickHouse rollups analytics reads.
+
+**The whole path is gated on consent**, designed in
+`2026-08-12-portal-ingestion-consent-design.md`. Events without valid consent for their stated purpose
+are rejected at the ingestion edge and never reach Pub/Sub.
+
+**Erasure note.** Raw files in the bucket are batched, multi-subject, and short-lived, so they are not
+practically addressable per subject. Erasure therefore targets the ClickHouse raw table, where events
+are queryable, and the bucket carries a short lifecycle rule as a backstop for anything not yet
+ingested. The residual exposure is one batch interval.

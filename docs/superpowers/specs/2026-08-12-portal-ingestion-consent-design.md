@@ -37,8 +37,11 @@ guarantee holds.
   safe.
 - **PI2 — Consent is checked at ingestion**, before publish, before storage. Rejected events are
   counted, not persisted.
-- **PI3 — Raw zone is BigQuery**, fed by a native Pub/Sub subscription. Zero code, and cost stays
-  bounded because **no agent ever queries it** — only scheduled transforms do.
+- **PI3 — Raw zone is the ClickHouse already being operated**, reached by Pub/Sub's native Cloud
+  Storage export subscription and ClickHouse's S3Queue engine. Both hops are configuration rather
+  than code, so this needs no new system. BigQuery was considered and rejected once a self-hosted
+  path with the same zero-code property was confirmed. Agents never query the raw zone; only
+  scheduled transforms do.
 - **PI4 — Event taxonomy is fixed and versioned.** Arbitrary event shapes would make purpose
   limitation unenforceable; you cannot state a purpose for a payload you have not defined.
 - **PI5 — Sessions are pseudonymous until linked**, and become personal data at the moment of linkage
@@ -78,7 +81,7 @@ Withdrawal does two things, and the second is the one systems usually miss:
 
 1. **Collection stops** — subsequent events for that subject and purpose are rejected at the gate.
 2. **Prior data is erased** — withdrawal raises a `deletion.requested` event through the same ledger
-   as any other erasure (datastore spec §14.4), covering the BigQuery raw zone and every curated
+   as any other erasure (datastore spec §14.4), covering the ClickHouse raw table and every curated
    table derived from it.
 
 Consent that can be withdrawn without erasing what it authorised is not meaningful consent.
@@ -97,8 +100,11 @@ broker landing page
       ▼
    Pub/Sub  portal.event   (ordering key = org_id)
       │
-      ▼  native BigQuery subscription, zero code
-   BigQuery raw zone ──scheduled transform──▶ Postgres curated · ClickHouse analytics
+      ▼  native Cloud Storage export subscription
+   GCS raw events bucket   (separate from the snapshot bucket; files deleted after ingest)
+      │
+      ▼  ClickHouse S3Queue engine + MATERIALIZED VIEW
+   ClickHouse raw table ──scheduled transform──▶ Postgres curated · ClickHouse rollups
 ```
 
 **The tenant key is an identifier, not a secret.** It is embedded in a public page, so it cannot
@@ -149,16 +155,18 @@ consent-free, the other is neither.
 ## 7. Retention and erasure
 
 **The raw zone is not a permanent archive.** Purpose limitation cuts both ways: data kept beyond its
-stated purpose is unlawful regardless of consent. Raw events carry a retention window per purpose,
-and the BigQuery table is date-partitioned so expiry is a partition drop rather than a scan-and-delete.
+stated purpose is unlawful regardless of consent. Raw events carry a retention window per purpose, and
+the ClickHouse raw table is partitioned by date so expiry is a partition drop rather than a
+scan-and-delete.
 
 Erasure paths, all driven from the deletion ledger:
 
 | Store | Mechanism |
 |---|---|
-| BigQuery raw | `DELETE` by subject on partitioned table, or partition drop at expiry |
+| GCS raw bucket | not addressable per subject — files are batched and multi-subject. A short lifecycle rule bounds exposure to roughly one batch interval; files are deleted after ingest anyway |
+| ClickHouse raw | `DELETE` by subject, or partition drop at retention expiry |
 | Postgres curated | suppression then scheduled erase, per datastore §11.1 |
-| ClickHouse analytics | crypto-shred or lightweight `DELETE` |
+| ClickHouse rollups | crypto-shred or lightweight `DELETE` |
 | Consent records | **retained** — they are the evidence that collection was lawful |
 
 Note the asymmetry: erasing consent records would destroy the proof that prior processing was
@@ -217,10 +225,11 @@ take effect in seconds, not at the next cache expiry.
 
 ## 9. Risks
 
-**A ninth system for a solo operator.** BigQuery joins Postgres, ClickHouse, DuckDB, Firestore,
-Pub/Sub, Langfuse, and two apps. The mitigating property is that the Pub/Sub → BigQuery path is a
-managed subscription with no code to maintain, and nothing product-facing depends on it — if the raw
-zone is unavailable, collection queues in Pub/Sub and the product is unaffected.
+**No new database, but two new dependencies inside ClickHouse.** Choosing the self-hosted path avoids
+a ninth system, at the cost of depending on the S3Queue engine and on ClickHouse Keeper (which S3Queue
+needs to track processed files). Keeper runs embedded on a single node, so it is configuration rather
+than a service — but it is a component that can fail and did not exist before. Nothing product-facing
+depends on this path: if ingestion stalls, events queue in Pub/Sub and brokers notice nothing.
 
 **Consent correctness is now a product surface.** A bug in the gate is a compliance breach, not a
 defect. It needs the same test rigour as tenant isolation: an event with no consent, with withdrawn

@@ -474,7 +474,7 @@ CREATE TABLE context.deletion_propagations (
   request_id  UUID NOT NULL REFERENCES context.deletion_requests(id) ON DELETE CASCADE,
   store       TEXT NOT NULL CHECK (store IN
                 ('postgres','clickhouse','duckdb_snapshot','graph','twenty',
-                 'vector_index','firestore','langfuse','bigquery')),
+                 'vector_index','firestore','langfuse','clickhouse_raw')),
   state       TEXT NOT NULL DEFAULT 'pending'
                 CHECK (state IN ('pending','suppressed','erased','failed')),
   detail      TEXT,
