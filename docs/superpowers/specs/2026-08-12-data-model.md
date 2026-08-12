@@ -420,7 +420,8 @@ CREATE TABLE context.deletion_requests (
 CREATE TABLE context.deletion_propagations (
   request_id  UUID NOT NULL REFERENCES context.deletion_requests(id) ON DELETE CASCADE,
   store       TEXT NOT NULL CHECK (store IN
-                ('postgres','clickhouse','duckdb_snapshot','graph','twenty','vector_index')),
+                ('postgres','clickhouse','duckdb_snapshot','graph','twenty',
+                 'vector_index','firestore','langfuse')),
   state       TEXT NOT NULL DEFAULT 'pending'
                 CHECK (state IN ('pending','suppressed','erased','failed')),
   detail      TEXT,
@@ -542,6 +543,40 @@ pre-fetching or storing its content beyond narrow exceptions, and a persisted pr
 exactly that.
 
 ---
+
+## 8a. Firestore — artifact content (added 2026-08-12)
+
+Not a schema in the SQL sense; Firestore is schemaless by design. What is fixed is the **path
+convention**, because that is what carries tenancy.
+
+```
+artifacts/{org_id}/agent_outputs/{artifact_id}
+artifacts/{org_id}/trace_payloads/{span_id}
+artifacts/{org_id}/context_packs/{pack_id}
+```
+
+Every document carries these fields regardless of its payload shape, so the compliance and cost
+machinery can operate without knowing the shape:
+
+| Field | Type | Why |
+|---|---|---|
+| `org_id` | string | redundant with the path, and checked on read — a mismatch is a bug, not a miss |
+| `subject_refs` | string[] | data subjects whose personal data appears, so erasure can find it |
+| `created_at` | timestamp | retention floor arithmetic |
+| `erase_after` | timestamp | scheduled hard delete, per DPDP Rule 8(3) |
+| `content_type` | string | `talking_points \| draft \| context_pack \| trace_payload` |
+| `payload` | map | the variable part — deliberately unconstrained |
+
+Referenced from Postgres by URL, never by foreign key: `adsagent.proposals.evidence` and trace spans
+hold `artifacts/{org_id}/…` paths. A dangling reference after erasure is expected and must render as
+"content erased", not as an error.
+
+**Access:** Admin SDK, server-side only, with the `{org_id}` segment supplied by the tenant helper —
+never from a request parameter. Reads pass through one accessor that counts operations per tenant per
+day against the cost ceiling.
+
+**Erasure:** recursive delete on `artifacts/{org_id}` for tenant offboarding; query by `subject_refs`
+for per-subject erasure. Both write to `context.deletion_propagations` with `store = 'firestore'`.
 
 ## 9. DuckDB per-tenant snapshot
 

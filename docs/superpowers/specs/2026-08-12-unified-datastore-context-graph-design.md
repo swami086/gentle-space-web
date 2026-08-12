@@ -11,14 +11,16 @@ The product is now framed as a **productised multi-tenant AI SaaS for real-estat
 an internal tool. That reframes every storage decision: tenant isolation stops being a feature and
 becomes the substrate.
 
-Three storage jobs, deliberately separated:
+Storage jobs, deliberately separated:
 
 | Job | Engine | Role |
 |---|---|---|
-| Transactions | PostgreSQL 16 | system of record, tenant-isolated, serves the product |
+| Transactions | **PostgreSQL 18** | system of record, tenant-isolated, serves the product |
 | Analytics | ClickHouse | mirror fed by CDC; never authoritative |
 | Context graph | node + edge **tables** in ClickHouse | queried with SQL; no graph engine |
 | Per-tenant serving | DuckDB snapshot per tenant | rebuilt on demand from ClickHouse |
+| Agent artifact content | **Firestore** (Native mode) | large variable-shaped payloads, referenced by URL from traces (§13) |
+| Agent traces | **Langfuse**, self-hosted on the same ClickHouse | OTEL GenAI spans; structure only, no PII |
 
 ---
 
@@ -82,7 +84,7 @@ Three storage jobs, deliberately separated:
 
 ```
                     ┌─────────────────────────────┐
-   product reads/   │  PostgreSQL 16              │
+   product reads/   │  PostgreSQL 18              │
    writes ─────────▶│  schemas: listings,         │
                     │    adsagent, context        │
                     │  pgvector · AGE · JSONB     │
@@ -107,6 +109,8 @@ Three storage jobs, deliberately separated:
                     └─────────────────────────────┘
 
    Hermes agents ──▶ MCP context server ──▶ all three, tenant-scoped
+                 └──▶ Langfuse (OTEL GenAI spans, structure only)
+                          └──▶ Firestore (artifact content, by reference)
 ```
 
 `pg_clickhouse` (FDW) is installed so application code can reach analytical tables through a single
@@ -635,7 +639,7 @@ The asymmetry that makes this cheap: **only Postgres holds anything irreplaceabl
 - **Twenty** — outside our backup boundary; it is the system of record for person and opportunity,
   so its own retention applies.
 
-### 12.6 Rate limiting
+### 12.6 Rate limiting (see also §13.4)
 
 Two unauthenticated surfaces both call an LLM per request: the public enquiry form and `/api/spaces/search`.
 Each is a cost-attack vector where an attacker spends nothing and we spend per call.
@@ -646,3 +650,93 @@ Each is a cost-attack vector where an attacker spends nothing and we spend per c
   actually bounds loss.
 - Bot mitigation on the public form.
 - Pre-flight token estimation, so an oversized input is rejected before it is paid for.
+
+---
+
+## 13. Agent artifacts and observability (added 2026-08-12)
+
+Two additions decided together, because the same finding drives both. The
+[OpenTelemetry GenAI conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) make content
+capture opt-in and state that for systems handling PII, the recommended pattern is
+**external storage plus a reference**: keep trace structure for debugging without writing customer
+data into the telemetry pipeline. That single rule decides where agent content lives and what traces
+may contain.
+
+### 13.1 Firestore — the artifact content store
+
+**Its job, narrowly.** Large variable-shaped payloads produced or consumed by agents: generated
+artifacts, call-prep talking points, draft text, retrieved context packs, and trace message bodies.
+Referenced by URL from a trace span or a proposal row; never joined to relational data.
+
+**What does *not* go here.** Anything queried by attribute, anything needing a transaction with
+relational state, and anything that belongs in a typed column. The existing eleven JSONB columns stay
+in Postgres: they are write-once payloads read by primary key alongside typed columns, which is the
+one access pattern JSONB handles well.
+
+**Why a document store earns this and JSONB does not.** These payloads are large, individually
+addressed, never filtered on, and need independent lifecycle — deletion without touching the row that
+references them. JSONB's documented weaknesses land exactly here: no HOT updates causing write
+amplification, and DeTOASTing causing read amplification on large values.
+
+**Access is server-side only.** The Admin SDK, from the same API that already resolves tenant. No
+client SDK, no Firestore security rules — tenancy is enforced where it already is, which is what
+keeps this from becoming a third authorization model.
+
+**Tenancy: one database, collection path per tenant.**
+
+```
+artifacts/{org_id}/agent_outputs/{artifact_id}
+artifacts/{org_id}/trace_payloads/{span_id}
+artifacts/{org_id}/context_packs/{pack_id}
+```
+
+The `org_id` path segment comes from the server-resolved tenant, never from a request parameter — the
+same rule as the agent task token. A code path that constructs a collection path without going
+through the tenant helper is the Firestore equivalent of a missing `scopeClause`.
+
+**Erasure is the easy case.** Recursive delete on `artifacts/{org_id}/…` removes a tenant entirely,
+and per-subject deletion removes documents by reference. This is materially simpler than ClickHouse,
+where deletes are expensive — one reason to prefer Firestore over widening the columnar store's role.
+Add `firestore` to the propagation stores in the deletion ledger.
+
+### 13.2 Langfuse — agent traces
+
+**Self-hosted on the ClickHouse already being operated.** Langfuse is built on ClickHouse and was
+acquired by ClickHouse in January 2026, so this adds an application rather than a new engine — the
+decisive property given the operational-surface constraint in §9. The selection rule from the
+research is to pick by deployment model before features: self-hosted for data residency and cost
+control, which DPDP and GDPR both push toward.
+
+**Instrument to the OTEL GenAI conventions, not to Langfuse's SDK.** Vendor-neutral `gen_ai.*`
+attributes mean the backend can be swapped without re-instrumenting agents.
+
+**Two metrics are mandatory**, not optional: `gen_ai.client.operation.duration` and
+`gen_ai.client.token.usage`. Without them cost and latency cannot be reasoned about — and they are
+the same signal that feeds the per-tenant cost ceilings in §12.6, so observability and the
+denial-of-wallet control are one instrumentation effort.
+
+**Caveat to plan around.** As of v1.41 the conventions are **Development status**, so `gen_ai.*`
+attribute names can change without a major version bump. Set
+`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` for dual-emission so a convention change
+does not silently break dashboards.
+
+### 13.3 What a trace may contain
+
+The division that keeps PII out of telemetry:
+
+| In the span | By reference only |
+|---|---|
+| agent profile, task id, tenant id | prompt and completion bodies |
+| tool name, duration, token counts | retrieved context pack contents |
+| proposal id produced, evidence ids | enquiry message text |
+| CDC lag at read time (§12.1) | generated draft text |
+
+Message bodies are not captured on spans at all. `gen_ai.input.messages` and
+`gen_ai.output.messages` stay disabled; the span carries a Firestore reference instead.
+
+### 13.4 Cost bounding
+
+Firestore bills per operation, so the same discipline as §12.6 applies: artifact reads go through a
+single accessor that counts them per tenant per day against the same ceiling as model tokens. Because
+access is server-side only, no untrusted client can drive reads — which is what makes per-operation
+pricing acceptable here and would not be true of a client-facing design.

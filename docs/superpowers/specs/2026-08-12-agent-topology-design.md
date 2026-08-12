@@ -263,6 +263,23 @@ Enforced by the tool surface, not by prompt text:
 
 ---
 
+## 8a. Tracing (added 2026-08-12)
+
+Every agent run is traced to **OpenTelemetry GenAI conventions** — vendor-neutral `gen_ai.*`
+attributes, so the backend (self-hosted Langfuse) can be swapped without re-instrumenting. Two
+metrics are mandatory rather than nice-to-have: `gen_ai.client.operation.duration` and
+`gen_ai.client.token.usage`. They are the same signal that enforces the per-tenant cost ceiling in
+§6, so tracing and denial-of-wallet protection are one effort.
+
+**Spans carry structure; content goes to Firestore by reference.** Prompt and completion bodies,
+retrieved context packs, and generated drafts are not written to spans — `gen_ai.input.messages` and
+`gen_ai.output.messages` stay disabled, and the span holds an `artifacts/{org_id}/…` path instead.
+This is the OTEL-recommended pattern for systems handling PII and it keeps customer data out of the
+telemetry pipeline. Full design in the datastore spec §13.
+
+A span must also carry the **CDC lag** observed when its context pack was read, so a bad proposal can
+be traced back to whether the data behind it was fresh.
+
 ## 9. Verification
 
 Each agent gets one runnable check before it is considered working, in the spirit of the smallest
