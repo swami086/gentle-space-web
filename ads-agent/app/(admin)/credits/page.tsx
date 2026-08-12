@@ -5,7 +5,8 @@ import {
   listMemberBalances,
   listOrgBalances,
 } from "@/lib/db/credits";
-import { requireRole } from "@/lib/auth/dal";
+import { requireRole, requireSession } from "@/lib/auth/dal";
+import { scopeForSession } from "@/lib/auth/scope-interim";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { TabStrip } from "@/components/pencil/TabStrip";
 import { Badge } from "@/components/ui/badge";
@@ -26,17 +27,18 @@ function formatCredits(value: number): string {
 export default async function CreditsPage() {
   const access = await requireRole("admin");
   if (!access.ok) return <ForbiddenNotice />;
-  const orgId = access.session.orgId!;
-
-  const [orgBalances, members, spendByFeature, spendByModel, trend] = await Promise.all([
-    listOrgBalances(),
-    listMemberBalances(orgId),
-    getSpendByFeature(orgId, 30),
-    getSpendByModel(orgId, 30),
-    getSpendTrend(orgId, 30),
+  const session = await requireSession();
+  const scope = await scopeForSession(session);
+  const [memberBalances, spendByFeature, spendByModel, spendTrend] = await Promise.all([
+    listMemberBalances(scope),
+    getSpendByFeature(scope, 30),
+    getSpendByModel(scope, 30),
+    getSpendTrend(scope, 30),
   ]);
+  // Only platform staff see every org's balance; an external admin sees their own.
+  const orgBalances = scope.kind === "platform" ? await listOrgBalances(scope) : [];
 
-  const org = orgBalances.find((o) => o.orgId === orgId);
+  const org = orgBalances.find((o) => o.orgId === scope.orgId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,14 +58,14 @@ export default async function CreditsPage() {
                 {formatCredits(org?.balanceCredits ?? 0)} credits
               </p>
             </div>
-            <AllocateCreditsForm orgId={orgId} />
+            <AllocateCreditsForm orgId={scope.orgId} />
           </CardHeader>
         </Card>
       )}
 
       <div className="flex flex-col gap-3 border-t border-border pt-6">
         <h2 className="text-sm font-semibold text-foreground">Members</h2>
-        {members.length === 0 ? (
+        {memberBalances.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">No members yet.</p>
         ) : (
           <Table>
@@ -74,7 +76,7 @@ export default async function CreditsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => (
+              {memberBalances.map((m) => (
                 <TableRow key={m.userId}>
                   <TableCell className="font-medium text-foreground">{m.displayName ?? m.email}</TableCell>
                   <TableCell>
@@ -143,7 +145,7 @@ export default async function CreditsPage() {
 
       <div className="flex flex-col gap-3 border-t border-border pt-6">
         <h2 className="text-sm font-semibold text-foreground">Daily spend, last 30 days</h2>
-        {trend.length === 0 ? (
+        {spendTrend.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">No usage data yet.</p>
         ) : (
           <Table>
@@ -154,7 +156,7 @@ export default async function CreditsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {trend.map((point) => (
+              {spendTrend.map((point) => (
                 <TableRow key={point.date}>
                   <TableCell>{point.date}</TableCell>
                   <TableCell>{formatCredits(point.totalCredits)}</TableCell>
