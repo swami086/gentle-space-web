@@ -17,7 +17,8 @@ Three storage jobs, deliberately separated:
 |---|---|---|
 | Transactions | PostgreSQL 16 | system of record, tenant-isolated, serves the product |
 | Analytics | ClickHouse | mirror fed by CDC; never authoritative |
-| Context graph | PuppyGraph over ClickHouse | Cypher/Gremlin traversal, zero-copy |
+| Context graph | node + edge **tables** in ClickHouse | queried with SQL; no graph engine |
+| Per-tenant serving | DuckDB snapshot per tenant | rebuilt on demand from ClickHouse |
 
 ---
 
@@ -43,7 +44,18 @@ Three storage jobs, deliberately separated:
 - **UD5 — ClickHouse is adopted now**, as the analytical mirror and the substrate for the context
   graph. Fed by CDC from Postgres. Never the system of record — ClickHouse has no transactions.
 
-- **UD6 — PuppyGraph provides the context graph** over ClickHouse via Cypher/Gremlin, zero-copy.
+- **UD6 — The context graph is plain tables, not a graph engine.** Typed node tables plus a single
+  polymorphic edge table in ClickHouse, queried with SQL. **This replaces the earlier PuppyGraph
+  decision** (revised 2026-08-12, §6.1), removing a commercial dependency whose free edition is
+  single-node and proof-of-concept only.
+
+- **UD13 — Each tenant gets a DuckDB snapshot**, rebuilt on demand from ClickHouse, used to serve
+  that tenant's agent and search reads. ClickHouse holds the multi-tenant union where cross-tenant
+  analytics run; the snapshots are per-tenant projections of it.
+
+- **UD14 — Edge properties are typed columns, not JSON.** Our edge properties are a small, known
+  set. ClickHouse's own guidance: *"You should only use the JSON type when the structure of your
+  data is dynamic… Your data structure is known and consistent — in this case, use normal columns."*
 
 - **UD7 — The graph is a curated projection**, rebuilt on a schedule, not a live mirror of every
   operational row. Matches the existing `lib/graph/rebuild.ts` approach.
@@ -53,7 +65,8 @@ Three storage jobs, deliberately separated:
 
 - **UD9 — Apache AGE is retained**, scoped to the existing listings-search boost in
   `/api/spaces/search`. It is in the hot path and transactional; removing it is out of scope.
-  Two graph engines is a real cost, accepted knowingly (§9).
+  Two graph representations is a real cost, accepted knowingly (§9), and a candidate for collapsing
+  onto one table model once PostgreSQL 19 SQL/PGQ is GA.
 
 - **UD10 — Agents are Hermes profiles**, one per specialisation, internal-facing initially.
 
@@ -83,11 +96,12 @@ Three storage jobs, deliberately separated:
                     │  node + edge tables         │
                     │  row policies per tenant    │
                     └──────────┬──────────────────┘
-                               │ JDBC, zero-copy
+                               │ on-demand export per tenant
                                ▼
                     ┌─────────────────────────────┐
-                    │  PuppyGraph                 │
-                    │  Cypher / Gremlin           │
+                    │  DuckDB snapshot per tenant │
+                    │  one file per org           │
+                    │  serves that tenant's reads │
                     └─────────────────────────────┘
 
    Hermes agents ──▶ MCP context server ──▶ all three, tenant-scoped
@@ -191,21 +205,73 @@ This is what makes questions answerable that SQL handles badly — *which corrid
 convert actually originate from*, *which spaces are substitutes for the one a client rejected*,
 *which campaigns produce enquiries that reach a viewing*.
 
-### How it is built
+### 6.1 Why tables rather than a graph engine (revised 2026-08-12)
 
-A curated projection (UD7). Operational rows land in ClickHouse via CDC; a scheduled job derives
-node and edge tables from them; PuppyGraph declares a graph schema over those tables and serves
-Cypher without copying anything.
+This section replaces an earlier decision to use PuppyGraph. The revision follows
+[GitLab Orbit](https://github.com/gitlabhq/orbit-knowledge-graph), which solves a near-identical
+problem — a per-tenant knowledge graph served to AI agents, with a local embedded tier and a SaaS
+tier.
 
-Every node and edge table carries `org_id` and is covered by a ClickHouse row policy.
+Orbit's history is the argument. It was built on **KùzuDB, an embedded graph database, which was
+then archived** — *"rendering it an unviable foundation for a production system."* GitLab
+benchmarked Neo4j, FalkorDB and Memgraph, and
+[selected ClickHouse](https://gitlab.com/groups/gitlab-org/-/epics/20822) *"for horizontal scale
+and SQL operability."* Their SaaS tier streams data by CDC into ClickHouse and **builds the graph
+there as tables**. No Cypher, no graph engine.
 
-### Honest performance note
+Three consequences for us: the commercial PuppyGraph dependency disappears; the single-node limit
+of its free edition stops mattering; and we avoid betting the graph on a young vendor after
+watching a serious org get burned doing exactly that.
 
-PuppyGraph has no native graph storage, so there is no index-free adjacency. ClickHouse's
-[benchmark](https://clickhouse.com/blog/zero-copy-graph-analytics) across 97 queries on 35.4M
-records reports **28 ms median, 148 ms P95**, and states plainly: *"we will experience a higher
-query latency for the trade-off we have made."* Interactive, but not what a native graph engine
-delivers.
+**Forward compatibility is the bonus.** PostgreSQL 19 (Beta 1 shipped 2026-06-04, Beta 2
+2026-07-16) introduces SQL/PGQ property graphs: `CREATE PROPERTY GRAPH` over `VERTEX TABLES` and
+`EDGE TABLES`, queried with `GRAPH_TABLE(… MATCH …)`. Critically it is *"not a separate execution
+engine bolted onto Postgres — it compiles to relational joins."* Because SQL/PGQ declares a graph
+**over existing tables**, building the table model now means graph query syntax is later available
+by declaration rather than by migration. Caveat: SQL/PGQ has **no variable-length paths** — *"you
+write every hop explicitly"* — so arbitrary-depth traversal still means recursive CTEs. Our known
+queries (fixed-hop POI proximity, bounded corridor hierarchy) fit inside that limit.
+
+### 6.2 Schema conventions
+
+Adopted from Orbit, after inspecting a real 12.3M-edge Orbit graph rather than trusting its schema
+on paper.
+
+- **One polymorphic edge table.** `(source_id, source_kind, relationship_kind, target_id,
+  target_kind)`. Empirically load-bearing: Orbit's five relationship kinds span **eleven distinct
+  kind-triples** — `CALLS` alone appears between four different node-kind pairs. A table per
+  relationship would duplicate; a table per node-pair would explode.
+- **`org_id` denormalised onto every node and edge row**, set at build time. This is exactly how
+  Orbit shares one DuckDB file across repositories (`project_id` on every table).
+- **A manifest table** — `status` enum (`pending | building | ready | error`), `last_built_at`,
+  `error_message` — per tenant. Orbit uses this for index state; we need it for on-demand rebuilds.
+- **`snapshot_id` on every row.** A rebuild lands as a new snapshot and swaps atomically rather
+  than mutating in place, which also makes snapshots diffable.
+- **Typed edge property columns** (`meters`, `weight`, `confidence`, `reason`) per UD14. Add a
+  ClickHouse `JSON` column only if genuinely dynamic properties appear, and give it
+  [type hints](https://clickhouse.com/docs/concepts/best-practices/json-type) if so — hinted paths
+  *"are always stored just like traditional columns… achieve the same performance as if they were
+  modeled as top-level fields."*
+
+**Rejected: `traversal_path`.** Orbit's schema carries it, but every row I sampled in a live
+database had it empty — the column is unpopulated in practice. Hierarchy is instead modelled the
+way Orbit actually models it: as edges (`Directory CONTAINS Directory`, 27k rows). Our
+Area ⊂ Corridor ⊂ City becomes `PART_OF` edges. Add a materialised path later only if traversal
+depth measurably hurts.
+
+### 6.3 How it is built
+
+A curated projection (UD7). Operational rows land in ClickHouse via CDC; a build job derives node
+and edge tables from them under a new `snapshot_id`; per-tenant DuckDB files are exported from
+ClickHouse for serving (UD13).
+
+**Rebuilds are on demand.** A material change to a tenant's listings, enquiries or campaigns marks
+that tenant's graph `pending`; a debounced worker rebuilds and flips the manifest to `ready`.
+Nightly cadence is not used — most tenants change rarely, and the ones that change want freshness.
+
+Every node and edge table carries `org_id` and is covered by a ClickHouse row policy. DuckDB
+snapshots contain a single tenant's rows, so the file boundary is a second, physical isolation
+layer beneath the row policy.
 
 ---
 
@@ -247,7 +313,8 @@ wrapper. This is Epic 0/1 from the tenancy spec, now with RLS as the mechanism. 
 **Phase D — ClickHouse + CDC.** Mirror, row policies, `pg_clickhouse`, validate replicated data
 against source before anything depends on it.
 
-**Phase E — Context graph.** Node/edge projections, PuppyGraph schema, first queries.
+**Phase E — Context graph.** Node/edge tables, the build job, per-tenant DuckDB export, first
+queries in SQL.
 
 **Phase F — Agents.** MCP context server first, then profiles, then kanban wiring.
 
@@ -266,14 +333,21 @@ legitimate reading of the same source — it also argues *"if you expect to scal
 to start with an architecture that grows with you."* Recorded here so the reasoning is not lost;
 not revisited elsewhere.
 
-**PuppyGraph is commercial.** The Developer Edition is forever-free but **single-node, limited to
-two data sources, community support**, and positioned for proof-of-concept. Production requires the
-Enterprise Edition, priced on server memory and CPU. Budget for it, and confirm licensing terms
-before the graph becomes load-bearing for a paying product.
+**~~PuppyGraph is commercial.~~** *Resolved 2026-08-12 — PuppyGraph was dropped (§6.1), so the
+licensing and single-node concerns no longer apply.*
 
-**Two graph engines.** AGE for listings search, PuppyGraph for the context graph. Justified because
-AGE is in the transactional hot path and PuppyGraph is analytical, but it is duplicated concept
-surface. Revisit once the context graph is proven.
+**No graph query language.** Traversals are SQL joins, written by hand. Multi-hop queries are more
+verbose than Cypher and easier to get wrong. Mitigations: keep traversals behind named functions in
+the MCP context server rather than scattered across callers, and revisit once PostgreSQL 19 SQL/PGQ
+is GA. Accepted as the price of dropping the engine.
+
+**Two graph representations.** AGE for the listings-search boost, node/edge tables for the context
+graph. Less duplication than two engines, but still two mental models. If SQL/PGQ lands well, both
+could collapse onto one table model — worth revisiting after PG19 GA.
+
+**DuckDB snapshot fan-out.** One file per tenant means N artifacts to build, store, version, and
+garbage-collect. At small tenant counts this is trivial; it needs an operational answer before it
+is hundreds. The manifest table is the control plane for that.
 
 **AGE is not planner-integrated.** No cross-model query optimisation; the `label(e)[0]` failure and
 graph-fallback path in the current code are symptoms. Keep AGE scoped narrowly.
@@ -291,11 +365,17 @@ under shared-schema. Needs a designed answer before the first enterprise custome
 ## 10. Open questions
 
 1. **CDC transport** — PeerDB/ClickPipes managed, or self-hosted logical replication?
-2. **Graph refresh cadence** — hourly, nightly, or event-triggered?
+2. ~~**Graph refresh cadence**~~ *Resolved 2026-08-12: on demand, debounced, driven by the manifest
+   state machine (§6.3).*
 3. **Single-tenant restore** — logical export per tenant, or a dedicated instance for large accounts?
-4. **PuppyGraph Enterprise cost** at target scale — needs a quote before Phase E commits.
+   Note the DuckDB snapshots make per-tenant *export* trivial; restore is still open.
+4. ~~**PuppyGraph Enterprise cost**~~ *Resolved 2026-08-12: PuppyGraph dropped (§6.1).*
 5. **Corridor vocabulary** — still unresolved from the backend spec; listing areas are free text
    from scrapers (`lib/listings/normalize.ts`). The graph needs a controlled vocabulary for
    `Corridor` nodes to be meaningful.
 6. **Embedding home** — pgvector for operational search is settled; do analytical embeddings get
    duplicated into ClickHouse, or does the graph reference Postgres for similarity?
+7. **"Material change" definition** — what exactly marks a tenant's graph stale and triggers an
+   on-demand rebuild, and what debounce window avoids thrashing on bulk imports?
+8. **SQL/PGQ adoption** — re-evaluate once PostgreSQL 19 is GA. If it performs, it could replace
+   both AGE and hand-written traversal SQL with one standard syntax over the same tables.
