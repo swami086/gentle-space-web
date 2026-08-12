@@ -1,0 +1,23 @@
+# Single-node development configuration. Production values (rpc_secret,
+# admin_token) come from the deployment secret store, not from this file.
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+db_engine    = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr   = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# Development only. Regenerate with: openssl rand -hex 32
+rpc_secret = "4f3a1c8e9b2d7f60a51e8c4d3b9f7a2e6c1d8b5f0a3e7c9d2b4f6a8e0c1d3b5f"
+
+[s3_api]
+# The signer in ads-agent/lib/objectstore/sigv4.ts signs for exactly this region.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain   = ".s3.garage.localhost"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token   = "dev-admin-token-change-me"
+metrics_token = "dev-metrics-token-change-me"
