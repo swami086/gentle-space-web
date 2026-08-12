@@ -22,7 +22,8 @@
     "cycle:run": "tsx --env-file=.env.local scripts/run-once.ts",
     "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts",
     "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts",
-    "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts"
+    "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts",
+    "artifacts:sweep": "tsx --env-file=.env.local scripts/artifact-sweeps.ts"
   },
   "dependencies": {
     "@google-cloud/pubsub": "^6.0.0",
