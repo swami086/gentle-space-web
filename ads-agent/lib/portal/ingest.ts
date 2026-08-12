@@ -6,6 +6,7 @@ import { originAllowed, PLATFORM_SCOPE, resolveIngestKey } from "./config";
 import { ensureConsentInvalidator, getConsentStateCached } from "./consent-cache";
 import { checkRateLimit } from "./rate-limit";
 import { recordRejection, startRejectionFlush, type RejectionReason } from "./rejections";
+import { linkSession } from "./session-links";
 import { envelopeSchema, MAX_BODY_BYTES, purposeFor } from "./taxonomy";
 
 export type IngestInput = { body: string; ingestKey: string | null; origin: string | null };
@@ -78,6 +79,14 @@ export async function ingest(input: IngestInput): Promise<IngestOutcome> {
           payload: event.payload,
         },
       });
+
+      if (event.event === "enquiry_submitted") {
+        await linkSession(
+          scope,
+          { sessionId: envelope.data.session_id, enquiryId: event.payload.enquiry_ref },
+          client,
+        );
+      }
     }
     return ids;
   });
