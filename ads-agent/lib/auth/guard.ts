@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPool } from "@/lib/db/client";
+import { assertApplicationDbRole, getPool } from "@/lib/db/client";
 import type { Scope } from "@/lib/db/scope-sql";
 import { requireApiRole, type MemberRole, type Session } from "./dal";
 import { scopeFor } from "./scope";
@@ -26,6 +26,7 @@ export async function guard(min: MemberRole): Promise<GuardResult> {
     };
   }
 
+  await assertApplicationDbRole();
   const { rows } = await getPool().query<{ kind: "internal" | "external" }>(
     `SELECT kind FROM public.orgs WHERE id = $1`,
     [access.session.orgId],

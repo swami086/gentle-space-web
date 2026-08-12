@@ -11,6 +11,7 @@ const payload: LeadPayload = {
   propertyUrl: "http://localhost:3000/spaces/cowrks",
 };
 
+const PLATFORM = "platform" as const;
 const qualification: LeadQualification = { tier: "hot", cheatSheet: "Ask about move-in date." };
 
 describe("createLeadInTwenty", () => {
@@ -30,7 +31,7 @@ describe("createLeadInTwenty", () => {
     delete process.env.TWENTY_API_KEY;
     process.env.TWENTY_BASE_URL = "http://localhost:3020";
     const { createLeadInTwenty } = await import("./twenty");
-    await expect(createLeadInTwenty(payload, qualification)).resolves.toEqual({ status: "skipped" });
+    await expect(createLeadInTwenty(PLATFORM,payload, qualification)).resolves.toEqual({ status: "skipped" });
   });
 
   it("creates person then opportunity with tier and cheatSheet", async () => {
@@ -53,7 +54,7 @@ describe("createLeadInTwenty", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { createLeadInTwenty } = await import("./twenty");
-    const result = await createLeadInTwenty(payload, qualification);
+    const result = await createLeadInTwenty(PLATFORM,payload, qualification);
     expect(result.status).toBe("created");
     expect(result.personId).toBeTruthy();
     expect(result.opportunityId).toBeTruthy();
@@ -86,7 +87,7 @@ describe("createLeadInTwenty", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { createLeadInTwenty } = await import("./twenty");
-    await expect(createLeadInTwenty(payload, qualification)).resolves.toEqual({
+    await expect(createLeadInTwenty(PLATFORM,payload, qualification)).resolves.toEqual({
       status: "created",
       personId: "person-wrap",
       opportunityId: "opp-wrap",
@@ -103,7 +104,7 @@ describe("createLeadInTwenty", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { createLeadInTwenty } = await import("./twenty");
-    await createLeadInTwenty(
+    await createLeadInTwenty(PLATFORM,
       { ...payload, step2Answers: { teamSize: "15 desks", preferredArea: "Koramangala" } },
       qualification,
     );
@@ -117,7 +118,7 @@ describe("createLeadInTwenty", () => {
     process.env.TWENTY_BASE_URL = "http://localhost:3020";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500 })));
     const { createLeadInTwenty } = await import("./twenty");
-    const result = await createLeadInTwenty(payload, qualification);
+    const result = await createLeadInTwenty(PLATFORM,payload, qualification);
     expect(result.status).toBe("failed");
     expect(result.error).toBeTruthy();
   });
@@ -127,7 +128,7 @@ describe("createLeadInTwenty", () => {
     process.env.TWENTY_BASE_URL = "http://localhost:3020";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     const { createLeadInTwenty } = await import("./twenty");
-    const result = await createLeadInTwenty(payload, qualification);
+    const result = await createLeadInTwenty(PLATFORM,payload, qualification);
     expect(result).toEqual({ status: "failed", error: "network down" });
   });
 
@@ -146,7 +147,7 @@ describe("createLeadInTwenty", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { createLeadInTwenty } = await import("./twenty");
-    const result = await createLeadInTwenty(payload, qualification);
+    const result = await createLeadInTwenty(PLATFORM,payload, qualification);
     expect(result.status).toBe("failed");
     expect(result.personId).toBe("person-42");
     expect(result.error).toBeTruthy();
@@ -167,7 +168,7 @@ describe("createLeadInTwenty", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { createLeadInTwenty } = await import("./twenty");
-    const result = await createLeadInTwenty(payload, qualification);
+    const result = await createLeadInTwenty(PLATFORM,payload, qualification);
     expect(result).toEqual({
       status: "failed",
       personId: "person-77",

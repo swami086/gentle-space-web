@@ -11,6 +11,9 @@ export default defineConfig({
   },
   test: {
     passWithNoTests: true,
+    env: {
+      SKIP_DB_ROLE_CHECK: "1",
+    },
   },
   resolve: {
     alias: {

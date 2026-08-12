@@ -1,4 +1,4 @@
-import { getPool } from "@/lib/db/client";
+import { assertApplicationDbRole, getPool } from "@/lib/db/client";
 import type { Scope } from "@/lib/db/scope-sql";
 import type { Session } from "./dal";
 
@@ -18,6 +18,7 @@ export function scopeFor(session: Session, orgKind: "internal" | "external"): Sc
 /** Server components: derive scope from an already-authenticated session. */
 export async function scopeFromSession(session: Session): Promise<Scope> {
   if (!session.orgId) throw new Error("session has no orgId");
+  await assertApplicationDbRole();
   const { rows } = await getPool().query<{ kind: "internal" | "external" }>(
     `SELECT kind FROM public.orgs WHERE id = $1`,
     [session.orgId],

@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { requireApiRole, query } = vi.hoisted(() => ({
+const { requireApiRole, query, assertApplicationDbRole } = vi.hoisted(() => ({
   requireApiRole: vi.fn(),
   query: vi.fn(),
+  assertApplicationDbRole: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("./dal", () => ({ requireApiRole }));
-vi.mock("@/lib/db/client", () => ({ getPool: () => ({ query }) }));
+vi.mock("@/lib/db/client", () => ({ getPool: () => ({ query }), assertApplicationDbRole }));
 
 import { guard, ownedOr404 } from "./guard";
 import type { Scope } from "@/lib/db/scope-sql";

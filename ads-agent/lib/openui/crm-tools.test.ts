@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { OpenUiOpportunityListResult } from "./crm-tools";
 
 const PLATFORM = { kind: "platform" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
 
@@ -77,7 +78,7 @@ describe("crmToolHandlers.list_opportunities", () => {
         createdAt: "",
       },
     ]);
-    const result = await crmToolHandlers.list_opportunities!(PLATFORM, {});
+    const result = (await crmToolHandlers.list_opportunities!(PLATFORM, {})) as OpenUiOpportunityListResult;
     expect(toOpenUiOpportunityCard).toHaveBeenCalled();
     expect(result).toEqual({
       opportunities: [
@@ -95,7 +96,7 @@ describe("crmToolHandlers.search_opportunities", () => {
       { id: "1", name: "Priya Sharma", stage: "TOUR", tier: null, amountInr: null, contactName: null, maskedPhone: null, source: null, listingName: null, createdAt: "" },
       { id: "2", name: "Rohan Mehta", stage: "TOUR", tier: null, amountInr: null, contactName: null, maskedPhone: null, source: null, listingName: null, createdAt: "" },
     ]);
-    const result = await crmToolHandlers.search_opportunities!(PLATFORM, { query: "priya" });
+    const result = (await crmToolHandlers.search_opportunities!(PLATFORM, { query: "priya" })) as OpenUiOpportunityListResult;
     expect(result.opportunities).toHaveLength(1);
     expect(result.opportunities[0]!.name).toBe("Priya Sharma");
   });

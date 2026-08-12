@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { getPool } from "./client";
+import { assertApplicationDbRole, getPool } from "./client";
 import type { Scope } from "./scope-sql";
 
 /**
@@ -28,6 +28,7 @@ export async function withTenantTransaction<T>(
   fn: (client: PoolClient) => Promise<T>,
   pool?: Pool,
 ): Promise<T> {
+  await assertApplicationDbRole();
   const client = await (pool ?? getPool()).connect();
   try {
     await client.query("BEGIN");

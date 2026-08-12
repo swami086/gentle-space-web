@@ -53,8 +53,8 @@ describe("platformToolProvider / platformToolSpecs", () => {
   it("throws on a tool name collision across domains", () => {
     expect(() =>
       composeToolSpecs(
-        [{ name: "dup", description: "a", parameters: { type: "object", properties: {}, required: [] } }],
-        [{ name: "dup", description: "b", parameters: { type: "object", properties: {}, required: [] } }],
+        [{ name: "dup", inputSchema: {}, outputSchema: {} }],
+        [{ name: "dup", inputSchema: {}, outputSchema: {} }],
       ),
     ).toThrow(/duplicate/);
   });
