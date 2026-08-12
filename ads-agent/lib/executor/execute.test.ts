@@ -107,7 +107,7 @@ describe("executeProposal", () => {
     const result = await executeProposal(ORG, "prop-1");
 
     expect(pauseGoogleCampaign).toHaveBeenCalledWith("customers/1/campaigns/999");
-    expect(updateCampaignStatus).toHaveBeenCalledWith("camp-1", "paused");
+    expect(updateCampaignStatus).toHaveBeenCalledWith(ORG, "camp-1", "paused");
     expect(markProposalExecuted).toHaveBeenCalledWith(ORG, "prop-1");
     expect(result).toEqual({ status: "executed" });
   });
@@ -144,7 +144,7 @@ describe("executeProposal", () => {
 
     const result = await executeProposal(ORG, "prop-1");
 
-    expect(createCampaignRecord).toHaveBeenCalledWith({
+    expect(createCampaignRecord).toHaveBeenCalledWith(ORG, {
       platform: "google",
       name: expect.stringContaining("whitefield"),
       dailyBudget: 500,
@@ -160,7 +160,7 @@ describe("executeProposal", () => {
       descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
       finalUrl: "https://www.gentlespacesolutions.com/spaces",
     });
-    expect(markCampaignActive).toHaveBeenCalledWith("camp-1", "customers/1/campaigns/999");
+    expect(markCampaignActive).toHaveBeenCalledWith(ORG, "camp-1", "customers/1/campaigns/999");
     expect(result).toEqual({ status: "executed" });
   });
 
@@ -175,7 +175,7 @@ describe("executeProposal", () => {
 
     await executeProposal(ORG, "prop-1");
     expect(updateGoogleCampaignBudget).toHaveBeenCalledWith("customers/1/campaigns/999", 600);
-    expect(updateCampaignBudget).toHaveBeenCalledWith("camp-1", 600);
+    expect(updateCampaignBudget).toHaveBeenCalledWith(ORG, "camp-1", 600);
   });
 
   it("adds a negative keyword on the correct campaign", async () => {

@@ -90,12 +90,14 @@ describe("runDecisionCycle", () => {
     await runDecisionCycle(ORG);
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ campaignId: "camp-google", spend: 400, conversions: 1 }),
     );
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ campaignId: "camp-meta", spend: 300, conversions: 0 }),
     );
-    expect(recordCrmSignalSnapshot).toHaveBeenCalledWith({
+    expect(recordCrmSignalSnapshot).toHaveBeenCalledWith(ORG, {
       campaignId: null,
       hotCount: 2,
       warmCount: 1,
@@ -145,6 +147,7 @@ describe("runDecisionCycle", () => {
     ]);
     await runDecisionCycle(ORG);
     expect(recordPerformanceSnapshot).not.toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ spend: 999 }),
     );
   });
@@ -185,9 +188,11 @@ describe("runDecisionCycle", () => {
     await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ campaignId: "camp-meta", spend: 300 }),
     );
     expect(recordPerformanceSnapshot).not.toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ campaignId: "camp-google" }),
     );
   });
@@ -198,6 +203,7 @@ describe("runDecisionCycle", () => {
     await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({ campaignId: "camp-google", spend: 400 }),
     );
   });
