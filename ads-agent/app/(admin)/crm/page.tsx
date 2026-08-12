@@ -1,5 +1,7 @@
+import { notFound } from "next/navigation";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
-import { requireRole } from "@/lib/auth/dal";
+import { requireRole, requireSession } from "@/lib/auth/dal";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { listOpportunities, PIPELINE_STAGES } from "@/lib/crm/twenty-pipeline";
 import { KanbanBoard } from "@/components/pencil/KanbanBoard";
 import { KanbanCard } from "@/components/pencil/KanbanCard";
@@ -27,7 +29,10 @@ export default async function CrmPage() {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const opportunities = await listOpportunities();
+  const scope = await scopeFromSession(await requireSession());
+  if (scope.kind !== "platform") notFound();
+
+  const opportunities = await listOpportunities(scope);
   const columns = PIPELINE_STAGES.map((stage) => ({
     key: stage.value,
     label: stage.label,

@@ -1,27 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
+const clientQuery = vi.fn();
+const release = vi.fn();
 
 vi.hoisted(() => {
   vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 });
 
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./client", () => ({
+  getPool: () => ({
+    query,
+    connect: async () => ({ query: clientQuery, release }),
+  }),
+}));
 vi.mock("node:fs", () => ({
-  readFileSync: vi.fn(() => "CREATE TABLE IF NOT EXISTS placeholder (id UUID);"),
+  readFileSync: vi.fn((p: string) => {
+    if (String(p).endsWith(".up.sql")) return "ALTER TABLE public.users SET role = role;";
+    return "CREATE TABLE IF NOT EXISTS placeholder (id UUID);";
+  }),
+  readdirSync: vi.fn(() => []),
 }));
 
 import { migrate } from "./migrate";
 
 beforeEach(() => {
   query.mockReset();
+  clientQuery.mockReset();
+  query.mockResolvedValue({ rows: [] });
 });
 
 describe("migrate", () => {
-  it("applies schema.sql contents to the pool", async () => {
-    query.mockResolvedValue({});
-    await migrate();
-    expect(query).toHaveBeenCalledWith("CREATE TABLE IF NOT EXISTS placeholder (id UUID);");
+  it("returns no pending migrations when the ledger is current", async () => {
+    const ran = await migrate();
+    expect(ran).toEqual([]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS public.schema_migrations"),
+    );
   });
 
   it("propagates query errors", async () => {

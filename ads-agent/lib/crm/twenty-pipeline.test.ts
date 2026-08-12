@@ -16,6 +16,8 @@ import {
   updateOpportunityStage,
 } from "./twenty-pipeline";
 
+const PLATFORM = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
+
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
@@ -66,7 +68,7 @@ describe("listOpportunities", () => {
       pageInfo: {},
     });
 
-    const rows = await listOpportunities();
+    const rows = await listOpportunities(PLATFORM);
 
     expect(callTwentyTool).toHaveBeenCalledWith("list_opportunities", { limit: 200 });
     expect(rows).toEqual([
@@ -89,7 +91,7 @@ describe("listOpportunities", () => {
         createdAt: "2026-01-25T16:26:00.000Z",
       },
     ]);
-    const rows = await listOpportunities();
+    const rows = await listOpportunities(PLATFORM);
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("API Integration Deal");
     expect(rows[0].amountInr).toBe(75000);
@@ -97,13 +99,13 @@ describe("listOpportunities", () => {
 
   it("returns an empty list when Twenty is not configured", async () => {
     delete process.env.TWENTY_API_KEY;
-    expect(await listOpportunities()).toEqual([]);
+    expect(await listOpportunities(PLATFORM)).toEqual([]);
     expect(callTwentyTool).not.toHaveBeenCalled();
   });
 
   it("returns an empty list when the MCP tool call throws, rather than throwing", async () => {
     callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "list_opportunities" failed: 500'));
-    expect(await listOpportunities()).toEqual([]);
+    expect(await listOpportunities(PLATFORM)).toEqual([]);
   });
 });
 
@@ -115,7 +117,7 @@ describe("getOpportunity", () => {
       createdAt: "2026-08-01T00:00:00.000Z",
     });
 
-    const row = await getOpportunity("opp-1");
+    const row = await getOpportunity(PLATFORM, "opp-1");
 
     expect(callTwentyTool).toHaveBeenCalledWith("get_opportunity", { id: "opp-1" });
     expect(row?.id).toBe("opp-1");
@@ -125,7 +127,7 @@ describe("getOpportunity", () => {
 
   it("returns null when the MCP tool call throws", async () => {
     callTwentyTool.mockRejectedValue(new Error("not found"));
-    expect(await getOpportunity("missing")).toBeNull();
+    expect(await getOpportunity(PLATFORM, "missing")).toBeNull();
   });
 });
 
@@ -133,7 +135,7 @@ describe("updateOpportunityStage", () => {
   it("calls update_opportunity with id + stage and returns ok:true on success", async () => {
     callTwentyTool.mockResolvedValue({ id: "opp-1", stage: "TOUR" });
 
-    const result = await updateOpportunityStage("opp-1", "TOUR");
+    const result = await updateOpportunityStage(PLATFORM, "opp-1", "TOUR");
 
     expect(result).toEqual({ ok: true });
     expect(callTwentyTool).toHaveBeenCalledWith("update_opportunity", { id: "opp-1", stage: "TOUR" });
@@ -141,7 +143,7 @@ describe("updateOpportunityStage", () => {
 
   it("returns ok:false with an error message when the MCP tool call throws", async () => {
     callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "update_opportunity" failed: bad stage'));
-    const result = await updateOpportunityStage("opp-1", "TOUR");
+    const result = await updateOpportunityStage(PLATFORM, "opp-1", "TOUR");
     expect(result).toEqual({ ok: false, error: expect.stringContaining("bad stage") });
   });
 });
@@ -155,7 +157,7 @@ describe("getPipelineValue", () => {
         { id: "3", name: "C", stage: "TOUR", tier: "WARM", amount: null, pointOfContact: null, source: null, listingName: null, createdAt: "" },
       ],
     });
-    expect(await getPipelineValue()).toBe(15000);
+    expect(await getPipelineValue(PLATFORM)).toBe(15000);
   });
 });
 

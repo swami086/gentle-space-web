@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
+import { guard, ownedOr404 } from "@/lib/auth/guard";
 import { decideProposal, getProposalById } from "@/lib/db/proposals";
 import { executeProposal } from "@/lib/executor/execute";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await guard("operator");
+  if (!access.ok) return access.response;
+  const { scope } = access;
   const { id } = await params;
-  const proposal = await getProposalById(id);
-  if (!proposal) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (proposal.status !== "pending") {
-    return NextResponse.json({ error: `proposal is ${proposal.status}, not pending` }, { status: 409 });
+
+  const owned = await ownedOr404((s) => getProposalById(s, id), scope);
+  if (!owned.ok) return owned.response;
+  if (owned.entity.status !== "pending") {
+    return NextResponse.json(
+      { error: `proposal is ${owned.entity.status}, not pending` },
+      { status: 409 },
+    );
   }
 
-  await decideProposal(id, "approved");
-  const result = await executeProposal(id);
+  await decideProposal(scope, id, "approved", access.session.userId, "ui");
+  const result = await executeProposal(scope, id);
   return NextResponse.json({ ok: true, result });
 }

@@ -12,7 +12,7 @@ const AUTH_ISSUER = "gentlespace-auth-service";
 export type MemberRole = "admin" | "operator" | "viewer";
 export type Session = { userId: string; email: string; orgId: string | null; role: MemberRole | null };
 
-const ROLE_RANK: Record<MemberRole, number> = { viewer: 1, operator: 2, admin: 3 };
+export const ROLE_RANK: Record<MemberRole, number> = { viewer: 1, operator: 2, admin: 3 };
 
 function authServiceUrl(): string {
   const url = process.env.AUTH_SERVICE_URL;
@@ -41,9 +41,14 @@ async function ensureShadowRows(session: Session): Promise<void> {
   );
   await getPool().query(
     `INSERT INTO users (id, org_id, email, display_name, role)
-     VALUES ($1, $2, $3, $3, 'member')
+     VALUES ($1, $2, $3, $3, 'viewer')
      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
     [session.userId, session.orgId, session.email],
+  );
+  await getPool().query(
+    `INSERT INTO adsagent.org_cron_settings (org_id) VALUES ($1)
+     ON CONFLICT (org_id) DO NOTHING`,
+    [session.orgId],
   );
 }
 

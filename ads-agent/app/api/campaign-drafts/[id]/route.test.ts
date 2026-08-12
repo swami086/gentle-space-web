@@ -1,13 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "@/lib/types";
 
-const { getDraftById, updateDraftFields, setDraftStatus } = vi.hoisted(() => ({
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
+const { getDraftById, updateDraftFields, setDraftStatus, guard } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   updateDraftFields: vi.fn(),
   setDraftStatus: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, updateDraftFields, setDraftStatus }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { PATCH } from "./route";
 
@@ -33,7 +47,14 @@ function patchRequest(body: unknown) {
   return new Request("http://localhost", { method: "PATCH", body: JSON.stringify(body) });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  guard.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+    scope: TEST_SCOPE,
+  });
+});
 
 describe("PATCH /api/campaign-drafts/[id]", () => {
   it("returns 404 when the draft does not exist", async () => {
@@ -65,8 +86,8 @@ describe("PATCH /api/campaign-drafts/[id]", () => {
 
     const res = await PATCH(patchRequest({ corridor: "whitefield" }), { params: Promise.resolve({ id: "draft-1" }) });
 
-    expect(updateDraftFields).toHaveBeenCalledWith("draft-1", { corridor: "whitefield" });
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "ready");
+    expect(updateDraftFields).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", { corridor: "whitefield" });
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "ready");
     expect(res.status).toBe(200);
     expect((await res.json()).draft).toEqual(draft());
   });
@@ -78,6 +99,6 @@ describe("PATCH /api/campaign-drafts/[id]", () => {
 
     await PATCH(patchRequest({ headlines: [] }), { params: Promise.resolve({ id: "draft-1" }) });
 
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "chatting");
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "chatting");
   });
 });

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
+import { guard } from "@/lib/auth/guard";
 import { grantCredits } from "@/lib/metering/ledger";
-import { requireApiRole } from "@/lib/auth/dal";
 
 export async function POST(req: Request) {
-  const access = await requireApiRole("admin");
+  const access = await guard("admin");
   if (!access.ok) return access.response;
 
   const body = (await req.json()) as {
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "amountCredits must be a positive number" }, { status: 400 });
   }
   await grantCredits({
-    orgId: access.session.orgId!,
+    orgId: access.scope.orgId,
     userId: typeof body.userId === "string" && body.userId ? body.userId : undefined,
     amountCredits: body.amountCredits,
     grantedBy: access.session.email,

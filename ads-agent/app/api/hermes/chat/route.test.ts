@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { requireApiRole, draftHermesReply } = vi.hoisted(() => ({
-  requireApiRole: vi.fn(),
+const scope = { kind: "org" as const, orgId: "o1" };
+
+const { guard, draftHermesReply } = vi.hoisted(() => ({
+  guard: vi.fn(),
   draftHermesReply: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/guard", () => ({ guard }));
 vi.mock("@/lib/decision-engine/hermes-chat", () => ({ draftHermesReply }));
 
 import { POST } from "./route";
@@ -22,36 +24,40 @@ async function readEvents(res: Response) {
     .map((line) => JSON.parse(line.slice("data:".length).trim()));
 }
 
+function authorized() {
+  guard.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" }, scope });
+}
+
 describe("POST /api/hermes/chat", () => {
-  it("returns 401/403 passthrough when requireApiRole rejects", async () => {
-    requireApiRole.mockResolvedValue({ ok: false, response: new Response(null, { status: 403 }) });
+  it("returns 401/403 passthrough when guard rejects", async () => {
+    guard.mockResolvedValue({ ok: false, response: new Response(null, { status: 403 }) });
     const res = await POST(postRequest({ userMessage: "hi", history: [], origin: "copilot" }));
     expect(res.status).toBe(403);
   });
 
   it("requires operator role", async () => {
-    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    authorized();
     draftHermesReply.mockImplementation(async function* () {
       yield { type: "done", reply: "ok" };
     });
     await POST(postRequest({ userMessage: "hi", history: [], origin: "copilot" }));
-    expect(requireApiRole).toHaveBeenCalledWith("operator");
+    expect(guard).toHaveBeenCalledWith("operator");
   });
 
   it("returns 400 when userMessage is missing", async () => {
-    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    authorized();
     const res = await POST(postRequest({ userMessage: "", history: [], origin: "copilot" }));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when origin is missing or invalid", async () => {
-    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    authorized();
     const res = await POST(postRequest({ userMessage: "hi", history: [], origin: "not-a-real-origin" }));
     expect(res.status).toBe(400);
   });
 
   it("streams deltas then a done event with the reply, passing origin through", async () => {
-    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    authorized();
     draftHermesReply.mockImplementation(async function* () {
       yield { type: "delta", content: "Spend is " };
       yield { type: "delta", content: "up 12%." };
@@ -66,7 +72,7 @@ describe("POST /api/hermes/chat", () => {
   });
 
   it("forwards tool_progress events as {tool} frames before the delta/done frames", async () => {
-    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "u1", orgId: "o1" } });
+    authorized();
     draftHermesReply.mockImplementation(async function* () {
       yield { type: "tool_progress", tool: "list_opportunities" };
       yield { type: "delta", content: "Found 3 leads." };

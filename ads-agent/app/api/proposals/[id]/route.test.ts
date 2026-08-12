@@ -1,12 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, updateProposalPayload } = vi.hoisted(() => ({
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
+const { getProposalById, updateProposalPayload, guard } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   updateProposalPayload: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, updateProposalPayload }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { PATCH } from "./route";
 
@@ -41,7 +55,14 @@ function patchRequest(body: unknown) {
   return new Request("http://localhost", { method: "PATCH", body: JSON.stringify(body) });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  guard.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+    scope: TEST_SCOPE,
+  });
+});
 
 describe("PATCH /api/proposals/[id]", () => {
   it("returns 404 when the proposal does not exist", async () => {
@@ -80,6 +101,7 @@ describe("PATCH /api/proposals/[id]", () => {
     const res = await PATCH(patchRequest({ dailyBudgetInr: 700 }), { params: Promise.resolve({ id: "prop-1" }) });
 
     expect(updateProposalPayload).toHaveBeenCalledWith(
+      TEST_SCOPE,
       "prop-1",
       expect.objectContaining({ corridor: "whitefield", dailyBudgetInr: 700 }),
     );

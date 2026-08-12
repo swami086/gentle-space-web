@@ -13,6 +13,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
+const ADMIN_ACTIONS = [{ label: "Run decision cycle now", onSelectKey: "run-cycle" as const }];
+
 export function CommandPalette({ role }: { role: MemberRole | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -42,6 +44,8 @@ export function CommandPalette({ role }: { role: MemberRole | null }) {
     router.refresh();
   }
 
+  const actions = role === "admin" ? ADMIN_ACTIONS : [];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[20vh]"
@@ -65,12 +69,20 @@ export function CommandPalette({ role }: { role: MemberRole | null }) {
                 )),
               )}
             </CommandGroup>
-            <CommandGroup heading="Actions">
-              <CommandItem value="Run decision cycle now" onSelect={runCycleNow}>
-                <RefreshCw className="size-4" strokeWidth={2} />
-                Run decision cycle now
-              </CommandItem>
-            </CommandGroup>
+            {actions.length > 0 ? (
+              <CommandGroup heading="Actions">
+                {actions.map((action) => (
+                  <CommandItem
+                    key={action.onSelectKey}
+                    value={action.label}
+                    onSelect={() => void runCycleNow()}
+                  >
+                    <RefreshCw className="size-4" strokeWidth={2} />
+                    {action.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </div>

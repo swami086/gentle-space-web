@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
+import { guard, ownedOr404 } from "@/lib/auth/guard";
 import {
   appendDraftMessage,
   getDraftById,
@@ -12,12 +12,14 @@ import { isDraftReady } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
-
+  const { scope } = access;
   const { id } = await params;
-  const draft = await getDraftById(id);
-  if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const owned = await ownedOr404((s) => getDraftById(s, id), scope);
+  if (!owned.ok) return owned.response;
+  const draft = owned.entity;
   if (draft.status === "converted") {
     return NextResponse.json({ error: "draft already converted to a proposal" }, { status: 409 });
   }
@@ -25,8 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { content } = (await req.json()) as { content: string };
   if (!content?.trim()) return NextResponse.json({ error: "content is required" }, { status: 400 });
 
-  await appendDraftMessage(id, "user", content);
-  const history = await listDraftMessages(id);
+  await appendDraftMessage(scope, id, "user", content);
+  const history = await listDraftMessages(scope, id);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -52,13 +54,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }
         }
 
-        await appendDraftMessage(id, "assistant", reply);
+        await appendDraftMessage(scope, id, "assistant", reply);
 
         let updatedDraft = draft;
         if (fieldUpdates) {
-          updatedDraft = await updateDraftFields(id, fieldUpdates);
-          await setDraftStatus(id, isDraftReady(updatedDraft) ? "ready" : "chatting");
-          updatedDraft = (await getDraftById(id))!;
+          updatedDraft = await updateDraftFields(scope, id, fieldUpdates);
+          await setDraftStatus(scope, id, isDraftReady(updatedDraft) ? "ready" : "chatting");
+          updatedDraft = (await getDraftById(scope, id))!;
         }
 
         send({ done: true, reply, draft: updatedDraft });

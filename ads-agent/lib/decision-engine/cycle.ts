@@ -1,13 +1,16 @@
-import { listCampaigns } from "../db/campaigns";
-import { createProposal } from "../db/proposals";
-import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
-import { logAiAction } from "../db/ai-action-log";
+import type { Scope } from "@/lib/db/scope-sql";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
 import { fetchMetaPerformance } from "../connectors/meta";
 import { fetchLeadSignal } from "../connectors/twenty";
-import { evaluateRules, type SearchTermRow } from "./rules";
+import { listCampaigns } from "../db/campaigns";
+import { createProposal } from "../db/proposals";
+import { writeAudit } from "../db/audit-log";
+import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
 import { draftRationale } from "./rationale";
+import { evaluateRules, type SearchTermRow } from "./rules";
 import { STRATEGY } from "./strategy-config";
+
+const EMPTY_LEAD_SIGNAL = { hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 };
 
 /** One platform's fetch failing (e.g. the Google Ads MCP server unreachable) must not abort every
  * other platform's snapshot for this tick — matches fetchLeadSignal's existing internal soft-fail
@@ -21,23 +24,27 @@ async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Pr
   }
 }
 
-export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> {
-  const campaigns = await listCampaigns();
+export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated: number }> {
+  const campaigns = await listCampaigns(scope);
   const byExternalId = new Map(
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
   );
 
-  const [googlePerformance, metaPerformance, googleSearchTerms, leadSignal] = await Promise.all([
+  const leadSignal =
+    scope.kind === "platform"
+      ? await softFail("twenty lead signal", () => fetchLeadSignal(scope), EMPTY_LEAD_SIGNAL)
+      : EMPTY_LEAD_SIGNAL;
+
+  const [googlePerformance, metaPerformance, googleSearchTerms] = await Promise.all([
     softFail("google ads performance", fetchGoogleAdsPerformance, []),
     softFail("meta performance", fetchMetaPerformance, []),
     softFail("google ads search terms", fetchGoogleSearchTerms, []),
-    fetchLeadSignal(),
   ]);
 
   for (const row of [...googlePerformance, ...metaPerformance]) {
     const campaign = byExternalId.get(row.externalCampaignId);
     if (!campaign) continue;
-    await recordPerformanceSnapshot({
+    await recordPerformanceSnapshot(scope, {
       campaignId: campaign.id,
       spend: row.spend,
       clicks: row.clicks,
@@ -47,8 +54,9 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
     });
   }
 
-  // Budget-reallocation rules need per-campaign CRM signals; they won't fire until attribution exists.
-  await recordCrmSignalSnapshot({ campaignId: null, ...leadSignal });
+  if (scope.kind === "platform") {
+    await recordCrmSignalSnapshot(scope, { campaignId: null, ...leadSignal });
+  }
 
   const searchTerms: SearchTermRow[] = googleSearchTerms
     .map((row) => {
@@ -59,7 +67,7 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
     })
     .filter((row): row is SearchTermRow => row !== null);
 
-  const recentSnapshots = await recentPerformanceSnapshots(3);
+  const recentSnapshots = await recentPerformanceSnapshots(scope, 3);
   const newProposals = evaluateRules(
     {
       campaigns,
@@ -73,14 +81,17 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
   let proposalsCreated = 0;
   for (const proposal of newProposals) {
     const rationale = await draftRationale(proposal);
-    await createProposal({ ...proposal, rationale });
+    await createProposal(scope, { ...proposal, rationale });
     proposalsCreated++;
   }
 
   if (proposalsCreated > 0) {
-    await logAiAction({
-      domain: "marketing",
-      summary: `Created ${proposalsCreated} proposal${proposalsCreated === 1 ? "" : "s"}`,
+    const summary = `Created ${proposalsCreated} proposal${proposalsCreated === 1 ? "" : "s"}`;
+    await writeAudit(scope, {
+      actorType: "agent",
+      action: "cycle.run",
+      entityType: "cycle",
+      after: { proposalsCreated, summary },
     });
   }
 

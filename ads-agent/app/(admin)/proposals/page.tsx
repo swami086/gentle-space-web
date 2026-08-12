@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
+import { scopeFromSession } from "@/lib/auth/scope";
 import type { ProposalStatus } from "@/lib/types";
 import { listProposals } from "@/lib/db/proposals";
 import { TabStrip } from "@/components/pencil/TabStrip";
@@ -33,9 +34,10 @@ export default async function ProposalsPage({
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
+  const scope = await scopeFromSession(access.session);
   const { status: rawStatus } = await searchParams;
   const status: ProposalStatus = rawStatus && isProposalStatus(rawStatus) ? rawStatus : "pending";
-  const proposals = await listProposals(status);
+  const proposals = await listProposals(scope, status);
 
   return (
     <div className="flex flex-col gap-4">

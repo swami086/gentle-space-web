@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, CampaignDraftMessage } from "@/lib/types";
 
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
 const {
   appendDraftMessage,
   getDraftById,
@@ -9,7 +11,7 @@ const {
   setDraftStatus,
   updateDraftFields,
   draftCampaignChatReply,
-  requireApiRole,
+  guard,
 } = vi.hoisted(() => ({
   appendDraftMessage: vi.fn(),
   getDraftById: vi.fn(),
@@ -17,7 +19,7 @@ const {
   setDraftStatus: vi.fn(),
   updateDraftFields: vi.fn(),
   draftCampaignChatReply: vi.fn(),
-  requireApiRole: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({
@@ -28,7 +30,17 @@ vi.mock("@/lib/db/campaign-drafts", () => ({
   updateDraftFields,
 }));
 vi.mock("@/lib/decision-engine/campaign-chat", () => ({ draftCampaignChatReply }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { POST } from "./route";
 
@@ -80,15 +92,16 @@ async function* singleDoneEvent(event: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
+  guard.mockResolvedValue({
     ok: true,
     session: { orgId: "org-1", email: "op@x.com", userId: "u-1", role: "operator" },
+    scope: TEST_SCOPE,
   });
 });
 
 describe("POST /api/campaign-drafts/[id]/messages", () => {
-  it("returns 401 when requireApiRole rejects the caller", async () => {
-    requireApiRole.mockResolvedValue({
+  it("returns 401 when guard rejects the caller", async () => {
+    guard.mockResolvedValue({
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     });
@@ -131,8 +144,8 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
     const events = await readEvents(res);
     expect(events).toEqual([{ done: true, reply: "What's your daily budget?", draft: draft() }]);
-    expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "user", "Launch a campaign in Whitefield");
-    expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "assistant", "What's your daily budget?");
+    expect(appendDraftMessage).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "user", "Launch a campaign in Whitefield");
+    expect(appendDraftMessage).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "assistant", "What's your daily budget?");
     expect(updateDraftFields).not.toHaveBeenCalled();
   });
 
@@ -168,7 +181,7 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     expect(events[0]).toEqual({ delta: "root = SetupCard(" });
     expect(events[1]).toEqual({ delta: expect.stringContaining("whitefield") });
     expect(events[2]).toEqual({ done: true, reply: "Here's your draft — take a look.", draft: completeDraft });
-    expect(updateDraftFields).toHaveBeenCalledWith("draft-1", { corridor: "whitefield", dailyBudgetInr: 500 });
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "ready");
+    expect(updateDraftFields).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", { corridor: "whitefield", dailyBudgetInr: 500 });
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "ready");
   });
 });

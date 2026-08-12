@@ -1,14 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextResponse } from "next/server";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, decideProposal, executeProposal } = vi.hoisted(() => ({
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
+const { getProposalById, decideProposal, executeProposal, guard } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   decideProposal: vi.fn(),
   executeProposal: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, decideProposal }));
 vi.mock("@/lib/executor/execute", () => ({ executeProposal }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { POST } from "./route";
 
@@ -28,7 +43,14 @@ function pendingProposal(): Proposal {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  guard.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+    scope: TEST_SCOPE,
+  });
+});
 
 describe("POST /api/proposals/[id]/approve", () => {
   it("returns 404 when the proposal does not exist", async () => {
@@ -50,8 +72,8 @@ describe("POST /api/proposals/[id]/approve", () => {
 
     const res = await POST(new Request("http://localhost"), { params: Promise.resolve({ id: "prop-1" }) });
 
-    expect(decideProposal).toHaveBeenCalledWith("prop-1", "approved");
-    expect(executeProposal).toHaveBeenCalledWith("prop-1");
+    expect(decideProposal).toHaveBeenCalledWith(TEST_SCOPE, "prop-1", "approved", "u-1", "ui");
+    expect(executeProposal).toHaveBeenCalledWith(TEST_SCOPE, "prop-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, result: { status: "executed" } });
   });

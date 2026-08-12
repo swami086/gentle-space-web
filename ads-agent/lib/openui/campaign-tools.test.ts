@@ -5,18 +5,29 @@ const { createDraft } = vi.hoisted(() => ({
 }));
 vi.mock("../db/campaign-drafts", () => ({ createDraft }));
 
-import { campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
+import { campaignToolHandlers, campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
+
+const ORG = { kind: "org" as const, orgId: "org-1" };
 
 beforeEach(() => {
   createDraft.mockReset();
+  process.env.ADS_AGENT_ORG_ID = "org-1";
+});
+
+describe("campaignToolHandlers.start_campaign_draft", () => {
+  it("creates a draft and returns id + path", async () => {
+    createDraft.mockResolvedValue({ id: "draft-abc" });
+    const result = await campaignToolHandlers.start_campaign_draft(ORG, {});
+    expect(createDraft).toHaveBeenCalledWith(ORG);
+    expect(result).toEqual({ id: "draft-abc", path: "/campaigns/drafts/draft-abc" });
+  });
 });
 
 describe("campaignToolProvider.start_campaign_draft", () => {
-  it("creates a draft and returns id + path", async () => {
+  it("binds ADS_AGENT_ORG_ID when invoked through the Copilot registry", async () => {
     createDraft.mockResolvedValue({ id: "draft-abc" });
-    const result = await campaignToolProvider.start_campaign_draft({});
-    expect(createDraft).toHaveBeenCalledOnce();
-    expect(result).toEqual({ id: "draft-abc", path: "/campaigns/drafts/draft-abc" });
+    await campaignToolProvider.start_campaign_draft({});
+    expect(createDraft).toHaveBeenCalledWith(ORG);
   });
 });
 

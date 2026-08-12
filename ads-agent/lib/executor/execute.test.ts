@@ -84,17 +84,19 @@ function googleCampaign(overrides: Partial<Campaign> = {}): Campaign {
   };
 }
 
+const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("executeProposal", () => {
   it("throws when the proposal does not exist", async () => {
     getProposalById.mockResolvedValue(null);
-    await expect(executeProposal("missing")).rejects.toThrow("proposal missing not found");
+    await expect(executeProposal(ORG, "missing")).rejects.toThrow("proposal missing not found");
   });
 
   it("throws when the proposal is not approved", async () => {
     getProposalById.mockResolvedValue(approvedProposal({ status: "pending" }));
-    await expect(executeProposal("prop-1")).rejects.toThrow("not approved");
+    await expect(executeProposal(ORG, "prop-1")).rejects.toThrow("not approved");
   });
 
   it("pauses the correct platform campaign and marks the proposal executed", async () => {
@@ -102,11 +104,11 @@ describe("executeProposal", () => {
     getCampaignById.mockResolvedValue(googleCampaign());
     pauseGoogleCampaign.mockResolvedValue(undefined);
 
-    const result = await executeProposal("prop-1");
+    const result = await executeProposal(ORG, "prop-1");
 
     expect(pauseGoogleCampaign).toHaveBeenCalledWith("customers/1/campaigns/999");
-    expect(updateCampaignStatus).toHaveBeenCalledWith("camp-1", "paused");
-    expect(markProposalExecuted).toHaveBeenCalledWith("prop-1");
+    expect(updateCampaignStatus).toHaveBeenCalledWith(ORG, "camp-1", "paused");
+    expect(markProposalExecuted).toHaveBeenCalledWith(ORG, "prop-1");
     expect(result).toEqual({ status: "executed" });
   });
 
@@ -115,7 +117,7 @@ describe("executeProposal", () => {
     getCampaignById.mockResolvedValue(googleCampaign({ platform: "meta", externalId: "ext-meta-1" }));
     pauseMetaCampaign.mockResolvedValue(undefined);
 
-    await executeProposal("prop-1");
+    await executeProposal(ORG, "prop-1");
     expect(pauseMetaCampaign).toHaveBeenCalledWith("ext-meta-1");
   });
 
@@ -140,9 +142,9 @@ describe("executeProposal", () => {
     createCampaignRecord.mockResolvedValue(googleCampaign({ status: "proposed", externalId: null }));
     createFullGoogleCampaign.mockResolvedValue("customers/1/campaigns/999");
 
-    const result = await executeProposal("prop-1");
+    const result = await executeProposal(ORG, "prop-1");
 
-    expect(createCampaignRecord).toHaveBeenCalledWith({
+    expect(createCampaignRecord).toHaveBeenCalledWith(ORG, {
       platform: "google",
       name: expect.stringContaining("whitefield"),
       dailyBudget: 500,
@@ -158,7 +160,7 @@ describe("executeProposal", () => {
       descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
       finalUrl: "https://www.gentlespacesolutions.com/spaces",
     });
-    expect(markCampaignActive).toHaveBeenCalledWith("camp-1", "customers/1/campaigns/999");
+    expect(markCampaignActive).toHaveBeenCalledWith(ORG, "camp-1", "customers/1/campaigns/999");
     expect(result).toEqual({ status: "executed" });
   });
 
@@ -171,9 +173,9 @@ describe("executeProposal", () => {
     );
     getCampaignById.mockResolvedValue(googleCampaign());
 
-    await executeProposal("prop-1");
+    await executeProposal(ORG, "prop-1");
     expect(updateGoogleCampaignBudget).toHaveBeenCalledWith("customers/1/campaigns/999", 600);
-    expect(updateCampaignBudget).toHaveBeenCalledWith("camp-1", 600);
+    expect(updateCampaignBudget).toHaveBeenCalledWith(ORG, "camp-1", 600);
   });
 
   it("adds a negative keyword on the correct campaign", async () => {
@@ -185,7 +187,7 @@ describe("executeProposal", () => {
     );
     getCampaignById.mockResolvedValue(googleCampaign());
 
-    await executeProposal("prop-1");
+    await executeProposal(ORG, "prop-1");
     expect(addGoogleNegativeKeyword).toHaveBeenCalledWith("customers/1/campaigns/999", "residential");
   });
 
@@ -198,21 +200,22 @@ describe("executeProposal", () => {
       }),
     );
 
-    const result = await executeProposal("prop-1");
+    const result = await executeProposal(ORG, "prop-1");
 
     expect(getCampaignById).not.toHaveBeenCalled();
     expect(pauseGoogleCampaign).not.toHaveBeenCalled();
-    expect(markProposalExecuted).toHaveBeenCalledWith("prop-1");
+    expect(markProposalExecuted).toHaveBeenCalledWith(ORG, "prop-1");
     expect(result).toEqual({ status: "executed" });
   });
 
   it("marks an unrecognized proposal kind as failed instead of silently executing it", async () => {
     getProposalById.mockResolvedValue(approvedProposal({ kind: "future_kind" as never }));
 
-    const result = await executeProposal("prop-1");
+    const result = await executeProposal(ORG, "prop-1");
 
     expect(markProposalExecuted).not.toHaveBeenCalled();
     expect(markProposalFailed).toHaveBeenCalledWith(
+      ORG,
       "prop-1",
       expect.stringContaining("future_kind"),
     );
@@ -224,9 +227,9 @@ describe("executeProposal", () => {
     getCampaignById.mockResolvedValue(googleCampaign());
     pauseGoogleCampaign.mockRejectedValue(new Error("Google Ads API: rate limited"));
 
-    const result = await executeProposal("prop-1");
+    const result = await executeProposal(ORG, "prop-1");
 
-    expect(markProposalFailed).toHaveBeenCalledWith("prop-1", "Google Ads API: rate limited");
+    expect(markProposalFailed).toHaveBeenCalledWith(ORG, "prop-1", "Google Ads API: rate limited");
     expect(markProposalExecuted).not.toHaveBeenCalled();
     expect(result).toEqual({ status: "failed", error: "Google Ads API: rate limited" });
   });

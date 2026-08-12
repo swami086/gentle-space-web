@@ -19,7 +19,14 @@ vi.mock("../db/client", () => ({ getPool: () => ({ query }) }));
 
 process.env.AUTH_SERVICE_URL = "http://localhost:3040";
 
-import { getSession, requireSession, requireRole, requireApiRole } from "./dal";
+import {
+  getSession,
+  requireSession,
+  requireRole,
+  requireApiRole,
+  ROLE_RANK,
+  type MemberRole,
+} from "./dal";
 
 beforeEach(() => {
   cookieStore.get.mockReset();
@@ -27,6 +34,32 @@ beforeEach(() => {
   query.mockReset();
   redirectMock.mockClear();
   query.mockResolvedValue({ rows: [] });
+});
+
+describe("role vocabulary", () => {
+  it("ranks every role the database can store", () => {
+    const storable: MemberRole[] = ["admin", "operator", "viewer"];
+    for (const role of storable) {
+      expect(ROLE_RANK[role], `${role} must have a rank`).toBeTypeOf("number");
+    }
+  });
+
+  it("has no rank for a value the database can no longer store", () => {
+    expect((ROLE_RANK as Record<string, number>).member).toBeUndefined();
+  });
+
+  it("shadow-upserts a role the users_role_check constraint accepts", async () => {
+    cookieStore.get.mockReturnValue({ value: "good-token" });
+    jwtVerifyMock.mockResolvedValue({
+      payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" },
+    });
+    await getSession();
+    const usersInsert = query.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO users"));
+    expect(usersInsert, "expected a users upsert").toBeDefined();
+    const written = String(usersInsert?.[0]).match(/'([a-z]+)'\s*\)\s*$/m)?.[1];
+    expect(written, "hard-coded role literal in the users upsert").not.toBe("member");
+    expect(["admin", "operator", "viewer"]).toContain(written);
+  });
 });
 
 describe("getSession", () => {

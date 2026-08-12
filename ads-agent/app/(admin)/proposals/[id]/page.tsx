@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { getProposalById } from "@/lib/db/proposals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +18,9 @@ export default async function ProposalDetailPage({
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
+  const scope = await scopeFromSession(access.session);
   const { id } = await params;
-  const proposal = await getProposalById(id);
+  const proposal = await getProposalById(scope, id);
   if (!proposal) notFound();
 
   return (

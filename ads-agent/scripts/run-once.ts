@@ -3,13 +3,17 @@
  * cron_settings.enabled entirely (that toggle only gates the scheduled
  * worker in run-decision-cycle.ts).
  */
+import { touchLastRunAt } from "../lib/db/org-settings";
 import { runDecisionCycle } from "../lib/decision-engine/cycle";
-import { touchLastRunAt } from "../lib/db/settings";
+
+const orgId = process.env.ADS_AGENT_ORG_ID;
+if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
+const scope = { kind: "org" as const, orgId };
 
 async function main(): Promise<void> {
   console.log("ads-agent: running one decision cycle (manual trigger)");
-  const result = await runDecisionCycle();
-  await touchLastRunAt();
+  const result = await runDecisionCycle(scope);
+  await touchLastRunAt(scope);
   console.log(`ads-agent: cycle complete, ${result.proposalsCreated} proposal(s) created`);
   process.exit(0);
 }

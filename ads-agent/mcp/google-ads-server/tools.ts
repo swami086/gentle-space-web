@@ -253,6 +253,9 @@ export async function addGoogleNegativeKeyword(
  * /api/proposals/[id]/approve|reject routes and executeProposal() as every other proposal.
  */
 export async function proposeChange(input: NewProposal): Promise<{ proposalId: string }> {
-  const proposal = await createProposal(input);
+  const orgId = process.env.ADS_AGENT_ORG_ID;
+  if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
+  const scope = { kind: "org" as const, orgId };
+  const proposal = await createProposal(scope, input);
   return { proposalId: proposal.id };
 }

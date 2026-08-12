@@ -1,5 +1,6 @@
 import type { NewProposal, Proposal, ProposalKind, ProposalStatus } from "../types";
-import { getPool } from "./client";
+import { scopeClause, type Scope } from "./scope-sql";
+import { withTenantTransaction } from "./tx";
 
 type ProposalRow = {
   id: string;
@@ -31,71 +32,112 @@ function rowToProposal(row: ProposalRow): Proposal {
   };
 }
 
-export async function createProposal(input: NewProposal): Promise<Proposal> {
-  const { rows } = await getPool().query<ProposalRow>(
-    `INSERT INTO proposals (kind, campaign_id, payload, triggered_rule, rationale)
-     VALUES ($1, $2, $3::jsonb, $4, $5)
-     RETURNING *`,
-    [
-      input.kind,
-      input.campaignId,
-      JSON.stringify(input.payload),
-      input.triggeredRule,
-      input.rationale ?? null,
-    ],
-  );
-  return rowToProposal(rows[0]);
+export async function createProposal(scope: Scope, input: NewProposal): Promise<Proposal> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<ProposalRow>(
+      `INSERT INTO adsagent.proposals
+         (org_id, kind, campaign_id, payload, triggered_rule, rationale)
+       VALUES ($1::uuid, $2, $3, $4::jsonb, $5, $6)
+       RETURNING *`,
+      [
+        ...s.params,
+        input.kind,
+        input.campaignId,
+        JSON.stringify(input.payload),
+        input.triggeredRule,
+        input.rationale ?? null,
+      ],
+    );
+    return rowToProposal(rows[0]);
+  });
 }
 
-export async function listProposals(status?: ProposalStatus): Promise<Proposal[]> {
-  const { rows } = status
-    ? await getPool().query<ProposalRow>(
-        `SELECT * FROM proposals WHERE status = $1 ORDER BY created_at DESC`,
-        [status],
-      )
-    : await getPool().query<ProposalRow>(`SELECT * FROM proposals ORDER BY created_at DESC`, []);
-  return rows.map(rowToProposal);
+export async function listProposals(scope: Scope, status?: ProposalStatus): Promise<Proposal[]> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = status
+      ? await client.query<ProposalRow>(
+          `SELECT * FROM adsagent.proposals
+            WHERE ${s.sql} AND status = $2
+            ORDER BY created_at DESC`,
+          [...s.params, status],
+        )
+      : await client.query<ProposalRow>(
+          `SELECT * FROM adsagent.proposals WHERE ${s.sql} ORDER BY created_at DESC`,
+          [...s.params],
+        );
+    return rows.map(rowToProposal);
+  });
 }
 
-export async function getProposalById(id: string): Promise<Proposal | null> {
-  const { rows } = await getPool().query<ProposalRow>(
-    `SELECT * FROM proposals WHERE id = $1`,
-    [id],
-  );
-  return rows[0] ? rowToProposal(rows[0]) : null;
+export async function getProposalById(scope: Scope, id: string): Promise<Proposal | null> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<ProposalRow>(
+      `SELECT * FROM adsagent.proposals WHERE ${s.sql} AND id = $2`,
+      [...s.params, id],
+    );
+    return rows[0] ? rowToProposal(rows[0]) : null;
+  });
 }
 
 export async function decideProposal(
+  scope: Scope,
   id: string,
   status: "approved" | "rejected",
+  decidedBy: string,
+  decidedVia: "ui" | "bulk" | "api" | "system" = "ui",
 ): Promise<void> {
-  await getPool().query(
-    `UPDATE proposals SET status = $2, decided_at = NOW() WHERE id = $1`,
-    [id, status],
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.proposals
+          SET status = $3, decided_at = NOW(), decided_by = $4, decided_via = $5
+        WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, status, decidedBy, decidedVia],
+    ),
   );
 }
 
-export async function markProposalExecuted(id: string): Promise<void> {
-  await getPool().query(
-    `UPDATE proposals SET status = 'executed', executed_at = NOW() WHERE id = $1`,
-    [id],
+export async function markProposalExecuted(scope: Scope, id: string): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.proposals
+          SET status = 'executed', executed_at = NOW()
+        WHERE ${s.sql} AND id = $2`,
+      [...s.params, id],
+    ),
   );
 }
 
-export async function markProposalFailed(id: string, error: string): Promise<void> {
-  await getPool().query(`UPDATE proposals SET status = 'failed', error = $2 WHERE id = $1`, [
-    id,
-    error,
-  ]);
+export async function markProposalFailed(scope: Scope, id: string, error: string): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.proposals SET status = 'failed', error = $3 WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, error],
+    ),
+  );
 }
 
 export async function updateProposalPayload(
+  scope: Scope,
   id: string,
   payload: Record<string, unknown>,
 ): Promise<Proposal> {
-  const { rows } = await getPool().query<ProposalRow>(
-    `UPDATE proposals SET payload = $2::jsonb WHERE id = $1 RETURNING *`,
-    [id, JSON.stringify(payload)],
-  );
-  return rowToProposal(rows[0]);
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<ProposalRow>(
+      `UPDATE adsagent.proposals SET payload = $3::jsonb
+        WHERE ${s.sql} AND id = $2
+        RETURNING *`,
+      [...s.params, id, JSON.stringify(payload)],
+    );
+    // A scoped UPDATE that matched nothing is indistinguishable from a
+    // cross-tenant attempt, and must not return a fabricated row.
+    if (!rows[0]) throw new Error(`proposal ${id} not found`);
+    return rowToProposal(rows[0]);
+  });
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Clock } from "lucide-react";
-import { getCronSettings } from "@/lib/db/settings";
+import { scopeFromSession } from "@/lib/auth/scope";
+import { getOrgSettings } from "@/lib/db/org-settings";
 import { cn } from "@/lib/utils";
 import { requireSession } from "@/lib/auth/dal";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -16,7 +17,7 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireSession();
 
-  if (!session.role) {
+  if (!session.role || !session.orgId) {
     return (
       <div className="flex min-h-dvh items-center justify-center px-6">
         <Card className="w-full max-w-sm">
@@ -42,9 +43,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     );
   }
 
-  const settings = await getCronSettings();
-  // Same minimum tier as the Copilot route's requireApiRole("operator") gate (lib/auth/dal.ts) —
-  // defense in depth, mirroring how SidebarNav/nav-config.ts already gate nav visibility by role.
+  const settings = await getOrgSettings(await scopeFromSession(session));
   const canUseCopilot = session.role === "operator" || session.role === "admin";
 
   return (
@@ -66,16 +65,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <span
                 className={cn(
                   "inline-block size-2 rounded-full",
-                  settings.enabled ? "bg-emerald-500" : "bg-muted-foreground/40",
+                  settings.cronEnabled ? "bg-emerald-500" : "bg-muted-foreground/40",
                 )}
                 aria-hidden
               />
-              Cron: {settings.enabled ? "on" : "off"}
+              Cron: {settings.cronEnabled ? "on" : "off"}
               <span className="text-muted-foreground/60">
                 · Last run {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
               </span>
             </div>
-            <RunNowButton />
+            {session.role === "admin" ? <RunNowButton /> : null}
             <UserMenu email={session.email} role={session.role} />
           </div>
         </header>

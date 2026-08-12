@@ -2,6 +2,7 @@
 
 import { callTwentyTool } from "../bifrost/mcp-client";
 import { TWENTY_MCP_TOOLS } from "../bifrost/twenty-mcp-tools";
+import type { Scope } from "../db/scope-sql";
 
 /** The real, configured Twenty pipeline (infra/twenty/README.md "Opportunity stages (API values)")
  * — the single source of truth for every stage list in this app. Corrects the Pencil mock's guessed
@@ -53,6 +54,35 @@ type RawOpportunity = {
 
 function isConfigured(): boolean {
   return Boolean(process.env.TWENTY_API_KEY?.trim());
+}
+
+/**
+ * INTERIM CONTAINMENT — remove at S4, not before.
+ *
+ * Twenty is one shared pipeline today: it is not partitioned by org, so no
+ * scoping in this repository can make that data tenant-safe (tenancy spec, Q4
+ * resolution). Worse, Twenty's deduplication actively merges contacts across
+ * tenant lines in a shared instance, so this is contamination rather than only
+ * a read exposure -- which is why the shared instance is never migrated.
+ *
+ * Containment lives here, in the client, rather than in the routes, so a new
+ * call site inherits the block instead of having to remember it. That is what
+ * makes it survive the next feature.
+ *
+ * It throws rather than returning empty: an empty pipeline is
+ * indistinguishable from a quiet leak in the surfaces that render it.
+ *
+ * The end state is one Twenty instance per org
+ * (2026-08-12-twenty-tenancy-ownership-design.md, TW1). This guard is removed
+ * only once every org has its own.
+ */
+export function assertPlatformScope(scope: Scope, fn: string): void {
+  if (scope.kind !== "platform") {
+    throw new Error(
+      `${fn} is platform-only: Twenty is one shared pipeline and is not tenant-safe. ` +
+        `Removed at S4, once every org has its own instance.`,
+    );
+  }
 }
 
 /** Masks a phone number to show only the country code, the mobile number's first digit, and its
@@ -161,16 +191,11 @@ export function reshapeTwentyOpportunityToolResult(toolName: string, raw: unknow
   return raw;
 }
 
-/** List every open opportunity, via the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),
- * called directly through lib/bifrost/mcp-client.ts (no Bifrost involved — this is a plain data read,
- * not a model decision). Fails soft (empty array) on missing config or a failed tool call — same
- * fail-soft convention as before, so an outage degrades the board to "no leads" rather than a
- * crashed page. */
-export async function listOpportunities(): Promise<Opportunity[]> {
+/** List every open opportunity, via the Twenty MCP server. Platform-only. */
+export async function listOpportunities(scope: Scope): Promise<Opportunity[]> {
+  assertPlatformScope(scope, "listOpportunities");
   if (!isConfigured()) return [];
   try {
-    // Live twenty-crm-mcp-server returns a bare JSON array (often after a prose prefix handled in
-    // parseMcpToolText); older fixtures used `{ records: [...] }`.
     const result = await callTwentyTool(TWENTY_MCP_TOOLS.listOpportunities, { limit: 200 });
     return extractRawOpportunities(result).map(toOpportunity);
   } catch {
@@ -178,11 +203,14 @@ export async function listOpportunities(): Promise<Opportunity[]> {
   }
 }
 
-/** Fetch a single opportunity by id via the Twenty MCP server. */
-export async function getOpportunity(id: string): Promise<Opportunity | null> {
+/** Fetch a single opportunity by id via the Twenty MCP server. Platform-only. */
+export async function getOpportunity(scope: Scope, id: string): Promise<Opportunity | null> {
+  assertPlatformScope(scope, "getOpportunity");
   if (!isConfigured()) return null;
   try {
-    const [record] = extractRawOpportunities(await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id }));
+    const [record] = extractRawOpportunities(
+      await callTwentyTool(TWENTY_MCP_TOOLS.getOpportunity, { id }),
+    );
     return record ? toOpportunity(record) : null;
   } catch {
     return null;
@@ -191,11 +219,13 @@ export async function getOpportunity(id: string): Promise<Opportunity | null> {
 
 export type UpdateStageResult = { ok: true } | { ok: false; error: string };
 
-/** Advance (or move back) an opportunity's stage via the Twenty MCP server. */
+/** Advance (or move back) an opportunity's stage. Platform-only. */
 export async function updateOpportunityStage(
+  scope: Scope,
   id: string,
   stage: PipelineStageValue,
 ): Promise<UpdateStageResult> {
+  assertPlatformScope(scope, "updateOpportunityStage");
   if (!isConfigured()) return { ok: false, error: "Twenty is not configured" };
   try {
     await callTwentyTool(TWENTY_MCP_TOOLS.updateOpportunity, { id, stage });
@@ -205,10 +235,9 @@ export async function updateOpportunityStage(
   }
 }
 
-/** Sum of amountInr across every opportunity currently returned by listOpportunities() — backs Home's
- * Pipeline Value stat. Twenty has no separate "closed/lost" flag surfaced yet, so this is "everything
- * the pipeline query returns," matching fetchLeadSignal's own "account-wide, no attribution yet" note. */
-export async function getPipelineValue(): Promise<number> {
-  const opportunities = await listOpportunities();
+/** Sum of amountInr across every opportunity. Backs Home's Pipeline Value stat. Platform-only. */
+export async function getPipelineValue(scope: Scope): Promise<number> {
+  assertPlatformScope(scope, "getPipelineValue");
+  const opportunities = await listOpportunities(scope);
   return opportunities.reduce((sum, o) => sum + (o.amountInr ?? 0), 0);
 }

@@ -16,6 +16,7 @@ import { resolveToolsThenGenerate } from "./resolve-tools-then-generate";
 import type { MeteringContext } from "../metering/types";
 
 const ctx: MeteringContext = { orgId: "org-1", userId: "user-1", feature: "test" };
+const PLATFORM = { kind: "platform" as const, orgId: "org-1" };
 const baseMessages = [
   { role: "system" as const, content: "sys" },
   { role: "user" as const, content: "show me hot leads" },
@@ -53,7 +54,7 @@ describe("resolveToolsThenGenerate", () => {
       choices: [{ message: { role: "assistant", content: "no tools needed" } }],
     });
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(result).toEqual(baseMessages);
     expect(callTwentyTool).not.toHaveBeenCalled();
@@ -93,7 +94,7 @@ describe("resolveToolsThenGenerate", () => {
       ],
     });
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     const openUiRows = [
       {
@@ -122,7 +123,7 @@ describe("resolveToolsThenGenerate", () => {
       .mockResolvedValueOnce({ choices: [{ message: { role: "assistant", content: "done" } }] } as never);
     callTwentyTool.mockResolvedValueOnce([]).mockResolvedValueOnce({});
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(result).toHaveLength(baseMessages.length + 3);
     expect(callTwentyTool).toHaveBeenCalledTimes(2);
@@ -132,7 +133,7 @@ describe("resolveToolsThenGenerate", () => {
     const mutatingCall = { id: "call_1", type: "function" as const, function: { name: "update_opportunity", arguments: '{"id":"1","stage":"TOUR"}' } };
     callMeteredChatCompletion.mockResolvedValue({ choices: [{ message: { role: "assistant", content: null, tool_calls: [mutatingCall] } }] } as never);
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(callTwentyTool).not.toHaveBeenCalled();
     expect(result).toEqual(baseMessages);
@@ -143,7 +144,7 @@ describe("resolveToolsThenGenerate", () => {
     callMeteredChatCompletion.mockResolvedValue({ choices: [{ message: { role: "assistant", content: null, tool_calls: [toolCall] } }] } as never);
     callTwentyTool.mockResolvedValue([]);
 
-    await resolveToolsThenGenerate(ctx, baseMessages);
+    await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(callMeteredChatCompletion).toHaveBeenCalledTimes(2);
     expect(callTwentyTool).toHaveBeenCalledTimes(2);
@@ -155,7 +156,7 @@ describe("resolveToolsThenGenerate", () => {
     callMeteredChatCompletion.mockResolvedValue({
       choices: [{ message: { role: "assistant", content: "no tools needed" } }],
     });
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
     expect(result).toEqual(baseMessages);
     const [, options] = callMeteredChatCompletion.mock.calls[0];
     expect(options.tools).toEqual([]);
@@ -163,7 +164,7 @@ describe("resolveToolsThenGenerate", () => {
 
   it("returns the original messages unchanged when the resolve call itself throws", async () => {
     callMeteredChatCompletion.mockRejectedValue(new Error("bifrost unreachable"));
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
     expect(result).toEqual(baseMessages);
   });
 });
@@ -174,7 +175,7 @@ describe("resolveToolsThenGenerate — Google Ads", () => {
       choices: [{ message: { role: "assistant", content: "no tools needed" } }],
     });
 
-    await resolveToolsThenGenerate(ctx, baseMessages);
+    await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     const [, options] = callMeteredChatCompletion.mock.calls[0];
     const names = options.tools.map((t: { function: { name: string } }) => t.function.name);
@@ -199,7 +200,7 @@ describe("resolveToolsThenGenerate — Google Ads", () => {
     const rows = [{ externalCampaignId: "111", spend: 40.5, clicks: 12, impressions: 900, conversions: 1 }];
     callGoogleAdsTool.mockResolvedValue(rows);
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(result).toEqual([
       ...baseMessages,
@@ -220,7 +221,7 @@ describe("resolveToolsThenGenerate — Google Ads", () => {
       choices: [{ message: { role: "assistant", content: null, tool_calls: [mutatingCall] } }],
     } as never);
 
-    const result = await resolveToolsThenGenerate(ctx, baseMessages);
+    const result = await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     expect(callGoogleAdsTool).not.toHaveBeenCalled();
     expect(result).toEqual(baseMessages);
@@ -232,7 +233,7 @@ describe("resolveToolsThenGenerate — Google Ads", () => {
       choices: [{ message: { role: "assistant", content: "no tools needed" } }],
     });
 
-    await resolveToolsThenGenerate(ctx, baseMessages);
+    await resolveToolsThenGenerate(ctx, baseMessages, PLATFORM);
 
     const [, options] = callMeteredChatCompletion.mock.calls[0];
     const names = options.tools.map((t: { function: { name: string } }) => t.function.name);

@@ -1,16 +1,34 @@
 import type { ToolSpec } from "@openuidev/lang-core";
 import { getSpendCplTrend, listCampaignsWithLatestCpl } from "../db/dashboard";
 import { listProposals } from "../db/proposals";
+import type { Scope } from "../db/scope-sql";
 import type { ToolProviderMap } from "./platform-tools";
 
-export const analyticsToolProvider: ToolProviderMap = {
-  get_spend_cpl_trend: async (args: Record<string, unknown>) => {
+type ScopedToolHandler = (scope: Scope, args: Record<string, unknown>) => Promise<unknown>;
+
+export const analyticsToolHandlers: Record<string, ScopedToolHandler> = {
+  get_spend_cpl_trend: async (scope, args) => {
     const days = typeof args.days === "number" ? args.days : 7;
-    return getSpendCplTrend(days);
+    return getSpendCplTrend(scope, days);
   },
-  list_campaigns_with_cpl: async () => listCampaignsWithLatestCpl(),
-  list_pending_proposals: async () => listProposals("pending"),
+  list_campaigns_with_cpl: async (scope) => listCampaignsWithLatestCpl(scope),
+  list_pending_proposals: async (scope) => listProposals(scope, "pending"),
 };
+
+function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolProviderMap {
+  return Object.fromEntries(
+    Object.entries(handlers).map(([name, fn]) => [
+      name,
+      (args: Record<string, unknown>) => {
+        const orgId = process.env.ADS_AGENT_ORG_ID;
+        if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
+        return fn({ kind: "org" as const, orgId }, args);
+      },
+    ]),
+  );
+}
+
+export const analyticsToolProvider: ToolProviderMap = bindScopedHandlers(analyticsToolHandlers);
 
 export const analyticsToolSpecs: ToolSpec[] = [
   {

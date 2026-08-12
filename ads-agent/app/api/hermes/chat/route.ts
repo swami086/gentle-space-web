@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
+import { guard } from "@/lib/auth/guard";
 import { draftHermesReply, type HermesChatMessage, type HermesChatOrigin } from "@/lib/decision-engine/hermes-chat";
 
 const VALID_ORIGINS: HermesChatOrigin[] = ["copilot", "crm", "reports", "campaign"];
 
 export async function POST(req: Request) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
 
   const body = (await req.json()) as { userMessage?: string; history?: HermesChatMessage[]; origin?: string };

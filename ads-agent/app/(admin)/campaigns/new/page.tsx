@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { createDraft } from "@/lib/db/campaign-drafts";
 
 export default async function NewCampaignPage() {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const draft = await createDraft();
+  const scope = await scopeFromSession(access.session);
+  const draft = await createDraft(scope);
   redirect(`/campaigns/drafts/${draft.id}`);
 }

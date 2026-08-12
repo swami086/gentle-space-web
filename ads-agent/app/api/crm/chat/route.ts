@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
+import { guard } from "@/lib/auth/guard";
 import { draftCrmChatReply, type CrmChatMessage } from "@/lib/decision-engine/crm-chat";
 
 export async function POST(req: Request) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
 
   const { content, history } = (await req.json()) as { content: string; history?: CrmChatMessage[] };
