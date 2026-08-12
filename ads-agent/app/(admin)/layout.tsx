@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Clock } from "lucide-react";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { getOrgSettings } from "@/lib/db/org-settings";
 import { cn } from "@/lib/utils";
 import { requireSession } from "@/lib/auth/dal";
@@ -17,7 +17,7 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireSession();
 
-  if (!session.role) {
+  if (!session.role || !session.orgId) {
     return (
       <div className="flex min-h-dvh items-center justify-center px-6">
         <Card className="w-full max-w-sm">
@@ -43,9 +43,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     );
   }
 
-  const settings = await getOrgSettings(await scopeForSession(session));
-  // Same minimum tier as the Copilot route's requireApiRole("operator") gate (lib/auth/dal.ts) —
-  // defense in depth, mirroring how SidebarNav/nav-config.ts already gate nav visibility by role.
+  const settings = await getOrgSettings(await scopeFromSession(session));
   const canUseCopilot = session.role === "operator" || session.role === "admin";
 
   return (
@@ -76,7 +74,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 · Last run {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
               </span>
             </div>
-            <RunNowButton />
+            {session.role === "admin" ? <RunNowButton /> : null}
             <UserMenu email={session.email} role={session.role} />
           </div>
         </header>

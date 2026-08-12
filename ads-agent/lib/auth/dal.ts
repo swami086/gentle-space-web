@@ -45,6 +45,11 @@ async function ensureShadowRows(session: Session): Promise<void> {
      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
     [session.userId, session.orgId, session.email],
   );
+  await getPool().query(
+    `INSERT INTO adsagent.org_cron_settings (org_id) VALUES ($1)
+     ON CONFLICT (org_id) DO NOTHING`,
+    [session.orgId],
+  );
 }
 
 export async function getSession(): Promise<Session | null> {

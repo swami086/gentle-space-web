@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole, requireSession } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { listCampaignsWithLatestCpl } from "@/lib/db/dashboard";
 import type { CampaignWithCplRow } from "@/lib/db/dashboard";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export default async function CampaignsPage() {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const scope = await scopeForSession(await requireSession());
+  const scope = await scopeFromSession(await requireSession());
   const campaigns = await listCampaignsWithLatestCpl(scope);
   const columns = BOARD_STATUSES.map((status) => ({
     key: status,

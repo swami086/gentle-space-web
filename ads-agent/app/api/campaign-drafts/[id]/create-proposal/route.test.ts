@@ -1,22 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, Proposal } from "@/lib/types";
 
-const { getDraftById, markDraftConverted, createProposal, requireApiRole, scopeForSession } = vi.hoisted(() => ({
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
+const { getDraftById, markDraftConverted, createProposal, guard } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   markDraftConverted: vi.fn(),
   createProposal: vi.fn(),
-  requireApiRole: vi.fn(),
-  scopeForSession: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, markDraftConverted }));
 vi.mock("@/lib/db/proposals", () => ({ createProposal }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
-vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { POST } from "./route";
-
-const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function readyDraft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
@@ -55,11 +63,11 @@ function proposal(overrides: Partial<Proposal> = {}): Proposal {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
+  guard.mockResolvedValue({
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+    scope: TEST_SCOPE,
   });
-  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/campaign-drafts/[id]/create-proposal", () => {

@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { guard, ownedOr404 } from "@/lib/auth/guard";
 import { getDraftById, setDraftStatus, updateDraftFields } from "@/lib/db/campaign-drafts";
 import { isDraftReady, validateDraftFields } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
-  const scope = await scopeForSession(access.session);
+  const { scope } = access;
   const { id } = await params;
-  const existing = await getDraftById(scope, id);
-  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (existing.status === "converted") {
+
+  const owned = await ownedOr404((s) => getDraftById(s, id), scope);
+  if (!owned.ok) return owned.response;
+  if (owned.entity.status === "converted") {
     return NextResponse.json({ error: "draft already converted to a proposal" }, { status: 409 });
   }
 

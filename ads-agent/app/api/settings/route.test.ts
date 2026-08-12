@@ -1,27 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextResponse } from "next/server";
 
-const { getOrgSettings, setCronEnabled, requireApiRole, scopeForSession } = vi.hoisted(() => ({
+const scope = { kind: "org" as const, orgId: "org-1" };
+const session = { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "admin" as const };
+
+const { getOrgSettings, setCronEnabled, guard } = vi.hoisted(() => ({
   getOrgSettings: vi.fn(),
   setCronEnabled: vi.fn(),
-  requireApiRole: vi.fn(),
-  scopeForSession: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/org-settings", () => ({ getOrgSettings, setCronEnabled }));
-vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/guard", () => ({ guard }));
 
 import { GET, PATCH } from "./route";
 
-const scope = { kind: "org" as const, orgId: "org-1" };
-
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
-    ok: true,
-    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "admin" },
-  });
-  scopeForSession.mockResolvedValue(scope);
+  guard.mockResolvedValue({ ok: true, session, scope });
 });
 
 describe("GET /api/settings", () => {

@@ -1,5 +1,5 @@
 import { requireRole, requireSession } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { getOrgSettings } from "@/lib/db/org-settings";
 import { getConnectorStatus } from "@/lib/env-status";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   const access = await requireRole("admin");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const settings = await getOrgSettings(await scopeForSession(await requireSession()));
+  const settings = await getOrgSettings(await scopeFromSession(await requireSession()));
   const connectorStatus = getConnectorStatus();
 
   return (

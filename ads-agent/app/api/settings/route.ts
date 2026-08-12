@@ -1,23 +1,20 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { guard } from "@/lib/auth/guard";
 import { getOrgSettings, setCronEnabled } from "@/lib/db/org-settings";
 
 export async function GET() {
-  const access = await requireApiRole("viewer");
+  const access = await guard("viewer");
   if (!access.ok) return access.response;
-  const scope = await scopeForSession(access.session);
-  return NextResponse.json(await getOrgSettings(scope));
+  return NextResponse.json(await getOrgSettings(access.scope));
 }
 
 export async function PATCH(req: Request) {
-  const access = await requireApiRole("admin");
+  const access = await guard("admin");
   if (!access.ok) return access.response;
-  const scope = await scopeForSession(access.session);
   const body = (await req.json()) as { enabled?: unknown };
   if (typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
   }
-  await setCronEnabled(scope, body.enabled);
+  await setCronEnabled(access.scope, body.enabled);
   return NextResponse.json({ ok: true });
 }

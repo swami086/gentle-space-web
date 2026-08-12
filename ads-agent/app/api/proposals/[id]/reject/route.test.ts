@@ -1,20 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, decideProposal, requireApiRole, scopeForSession } = vi.hoisted(() => ({
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
+const { getProposalById, decideProposal, guard } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   decideProposal: vi.fn(),
-  requireApiRole: vi.fn(),
-  scopeForSession: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, decideProposal }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
-vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { POST } from "./route";
-
-const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function pendingProposal(): Proposal {
   return {
@@ -34,11 +42,11 @@ function pendingProposal(): Proposal {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
+  guard.mockResolvedValue({
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+    scope: TEST_SCOPE,
   });
-  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/proposals/[id]/reject", () => {

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, CampaignDraftMessage } from "@/lib/types";
 
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
+
 const {
   appendDraftMessage,
   getDraftById,
@@ -9,8 +11,7 @@ const {
   setDraftStatus,
   updateDraftFields,
   draftCampaignChatReply,
-  requireApiRole,
-  scopeForSession,
+  guard,
 } = vi.hoisted(() => ({
   appendDraftMessage: vi.fn(),
   getDraftById: vi.fn(),
@@ -18,8 +19,7 @@ const {
   setDraftStatus: vi.fn(),
   updateDraftFields: vi.fn(),
   draftCampaignChatReply: vi.fn(),
-  requireApiRole: vi.fn(),
-  scopeForSession: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({
@@ -30,12 +30,19 @@ vi.mock("@/lib/db/campaign-drafts", () => ({
   updateDraftFields,
 }));
 vi.mock("@/lib/decision-engine/campaign-chat", () => ({ draftCampaignChatReply }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
-vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
+vi.mock("@/lib/auth/guard", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    guard,
+    ownedOr404: async (loader: (s: typeof TEST_SCOPE) => Promise<unknown>, scope: typeof TEST_SCOPE) => {
+      const entity = await loader(scope);
+      if (!entity) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
+      return { ok: true, entity };
+    },
+  };
+});
 
 import { POST } from "./route";
-
-const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
@@ -85,16 +92,16 @@ async function* singleDoneEvent(event: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
+  guard.mockResolvedValue({
     ok: true,
     session: { orgId: "org-1", email: "op@x.com", userId: "u-1", role: "operator" },
+    scope: TEST_SCOPE,
   });
-  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/campaign-drafts/[id]/messages", () => {
-  it("returns 401 when requireApiRole rejects the caller", async () => {
-    requireApiRole.mockResolvedValue({
+  it("returns 401 when guard rejects the caller", async () => {
+    guard.mockResolvedValue({
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     });

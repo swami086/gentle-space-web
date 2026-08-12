@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { getDraftById, listDraftMessages } from "@/lib/db/campaign-drafts";
 import { CampaignDraftChat } from "@/components/CampaignDraftChat";
 
@@ -13,7 +13,7 @@ export default async function CampaignDraftPage({
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const scope = await scopeForSession(access.session);
+  const scope = await scopeFromSession(access.session);
   const { id } = await params;
   const draft = await getDraftById(scope, id);
   if (!draft) notFound();

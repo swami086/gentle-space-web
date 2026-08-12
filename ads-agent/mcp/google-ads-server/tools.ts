@@ -7,7 +7,6 @@ import {
   toMicros,
 } from "google-ads-api";
 import { requireEnv } from "../../lib/env";
-import { scopeForJob } from "../../lib/auth/scope-interim";
 import { createProposal } from "../../lib/db/proposals";
 import type { NewProposal } from "../../lib/types";
 
@@ -256,7 +255,7 @@ export async function addGoogleNegativeKeyword(
 export async function proposeChange(input: NewProposal): Promise<{ proposalId: string }> {
   const orgId = process.env.ADS_AGENT_ORG_ID;
   if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-  const scope = scopeForJob(orgId);
+  const scope = { kind: "org" as const, orgId };
   const proposal = await createProposal(scope, input);
   return { proposalId: proposal.id };
 }

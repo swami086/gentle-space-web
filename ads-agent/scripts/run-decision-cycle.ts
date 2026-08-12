@@ -5,7 +5,6 @@
  * restarting this process.
  */
 import cron from "node-cron";
-import { scopeForJob } from "../lib/auth/scope-interim";
 import { getOrgSettings, touchLastRunAt } from "../lib/db/org-settings";
 import { runDecisionCycle } from "../lib/decision-engine/cycle";
 
@@ -13,7 +12,7 @@ const SCHEDULE = process.env.CRON_SCHEDULE ?? "0 */6 * * *";
 
 const orgId = process.env.ADS_AGENT_ORG_ID;
 if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-const scope = scopeForJob(orgId);
+const scope = { kind: "org" as const, orgId };
 
 async function tick(): Promise<void> {
   const settings = await getOrgSettings(scope);

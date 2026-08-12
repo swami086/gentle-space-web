@@ -1,7 +1,7 @@
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { SpendCplChart } from "@/components/SpendCplChart";
 import { requireRole, requireSession } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { countAuditToday, listAudit } from "@/lib/db/audit-log";
 import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
 import { fetchLeadSignal } from "@/lib/connectors/twenty";
@@ -16,7 +16,7 @@ export default async function HomePage() {
   const access = await requireRole("viewer");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const scope = await scopeForSession(await requireSession());
+  const scope = await scopeFromSession(await requireSession());
   const isPlatform = scope.kind === "platform";
 
   const [overview, spendCplTrend, leadSignal, pipelineValueInr, aiActionsToday, recentActions] = await Promise.all([

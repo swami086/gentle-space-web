@@ -6,7 +6,7 @@ import {
   listOrgBalances,
 } from "@/lib/db/credits";
 import { requireRole, requireSession } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { TabStrip } from "@/components/pencil/TabStrip";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,7 @@ export default async function CreditsPage() {
   const access = await requireRole("admin");
   if (!access.ok) return <ForbiddenNotice />;
   const session = await requireSession();
-  const scope = await scopeForSession(session);
+  const scope = await scopeFromSession(session);
   const [memberBalances, spendByFeature, spendByModel, spendTrend] = await Promise.all([
     listMemberBalances(scope),
     getSpendByFeature(scope, 30),

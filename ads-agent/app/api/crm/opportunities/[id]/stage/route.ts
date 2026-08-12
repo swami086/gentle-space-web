@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { guard } from "@/lib/auth/guard";
 import { getOpportunity, updateOpportunityStage, PIPELINE_STAGES, type PipelineStageValue } from "@/lib/crm/twenty-pipeline";
 import { writeAudit } from "@/lib/db/audit-log";
 
 const STAGE_LABELS = new Map(PIPELINE_STAGES.map((s) => [s.value, s.label] as const));
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
-  const scope = await scopeForSession(access.session);
+  const { scope } = access;
 
   const { id } = await params;
   const { toStage, opportunityName } = (await req.json()) as { toStage?: string; opportunityName?: string };

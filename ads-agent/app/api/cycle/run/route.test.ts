@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { runDecisionCycle, touchLastRunAt, requireApiRole, scopeForSession } = vi.hoisted(() => ({
+const { runDecisionCycle, touchLastRunAt, guard } = vi.hoisted(() => ({
   runDecisionCycle: vi.fn(),
   touchLastRunAt: vi.fn(),
-  requireApiRole: vi.fn(),
-  scopeForSession: vi.fn(),
+  guard: vi.fn(),
 }));
 
 vi.mock("@/lib/decision-engine/cycle", () => ({ runDecisionCycle }));
 vi.mock("@/lib/db/org-settings", () => ({ touchLastRunAt }));
-vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
-vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/guard", () => ({ guard }));
 
 import { POST } from "./route";
 
@@ -18,11 +16,11 @@ const scope = { kind: "org" as const, orgId: "org-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireApiRole.mockResolvedValue({
+  guard.mockResolvedValue({
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "admin" },
+    scope: { kind: "platform", orgId: "org-1" },
   });
-  scopeForSession.mockResolvedValue(scope);
 });
 
 describe("POST /api/cycle/run", () => {

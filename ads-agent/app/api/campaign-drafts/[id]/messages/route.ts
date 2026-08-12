@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { guard, ownedOr404 } from "@/lib/auth/guard";
 import {
   appendDraftMessage,
   getDraftById,
@@ -13,13 +12,14 @@ import { isDraftReady } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
-
-  const scope = await scopeForSession(access.session);
+  const { scope } = access;
   const { id } = await params;
-  const draft = await getDraftById(scope, id);
-  if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const owned = await ownedOr404((s) => getDraftById(s, id), scope);
+  if (!owned.ok) return owned.response;
+  const draft = owned.entity;
   if (draft.status === "converted") {
     return NextResponse.json({ error: "draft already converted to a proposal" }, { status: 409 });
   }

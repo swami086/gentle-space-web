@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { guard, ownedOr404 } from "@/lib/auth/guard";
 import { getProposalById, updateProposalPayload } from "@/lib/db/proposals";
 import { validateDraftFields } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
@@ -8,17 +7,18 @@ import type { CampaignDraftFields } from "@/lib/types";
 const EDITABLE_FIELDS = ["dailyBudgetInr", "adGroupName", "keywords", "headlines", "descriptions", "finalUrl"] as const;
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
-  const scope = await scopeForSession(access.session);
+  const { scope } = access;
   const { id } = await params;
-  const proposal = await getProposalById(scope, id);
-  if (!proposal) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (proposal.kind !== "create_campaign") {
+
+  const owned = await ownedOr404((s) => getProposalById(s, id), scope);
+  if (!owned.ok) return owned.response;
+  if (owned.entity.kind !== "create_campaign") {
     return NextResponse.json({ error: "only create_campaign proposals are editable" }, { status: 400 });
   }
-  if (proposal.status !== "pending") {
-    return NextResponse.json({ error: `proposal is ${proposal.status}, not pending` }, { status: 409 });
+  if (owned.entity.status !== "pending") {
+    return NextResponse.json({ error: `proposal is ${owned.entity.status}, not pending` }, { status: 409 });
   }
 
   const patch = (await req.json()) as CampaignDraftFields;
@@ -27,7 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: validationErrors.join("; ") }, { status: 422 });
   }
 
-  const nextPayload: Record<string, unknown> = { ...proposal.payload };
+  const nextPayload: Record<string, unknown> = { ...owned.entity.payload };
   for (const field of EDITABLE_FIELDS) {
     if (patch[field] !== undefined) nextPayload[field] = patch[field];
   }

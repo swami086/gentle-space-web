@@ -1,5 +1,4 @@
 import type { ToolSpec } from "@openuidev/lang-core";
-import { scopeForJob } from "@/lib/auth/scope-interim";
 import { getSpendCplTrend, listCampaignsWithLatestCpl } from "../db/dashboard";
 import { listProposals } from "../db/proposals";
 import type { Scope } from "../db/scope-sql";
@@ -23,7 +22,7 @@ function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolPr
       (args: Record<string, unknown>) => {
         const orgId = process.env.ADS_AGENT_ORG_ID;
         if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-        return fn(scopeForJob(orgId), args);
+        return fn({ kind: "org" as const, orgId }, args);
       },
     ]),
   );

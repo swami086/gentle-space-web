@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole, requireSession } from "@/lib/auth/dal";
-import { scopeForSession } from "@/lib/auth/scope-interim";
+import { scopeFromSession } from "@/lib/auth/scope";
 import { listOpportunities, PIPELINE_STAGES } from "@/lib/crm/twenty-pipeline";
 import { KanbanBoard } from "@/components/pencil/KanbanBoard";
 import { KanbanCard } from "@/components/pencil/KanbanCard";
@@ -29,7 +29,7 @@ export default async function CrmPage() {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const scope = await scopeForSession(await requireSession());
+  const scope = await scopeFromSession(await requireSession());
   if (scope.kind !== "platform") notFound();
 
   const opportunities = await listOpportunities(scope);

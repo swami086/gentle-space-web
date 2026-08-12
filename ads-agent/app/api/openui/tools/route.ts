@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireApiRole } from "@/lib/auth/dal";
+import { guard } from "@/lib/auth/guard";
 import { platformToolProvider } from "@/lib/openui/platform-tools";
 
 /** Server executor for OpenUI Query()/Mutation() from client Renderers. */
 export async function POST(req: Request) {
-  const access = await requireApiRole("operator");
+  const access = await guard("operator");
   if (!access.ok) return access.response;
 
   const body = (await req.json()) as { name?: string; args?: Record<string, unknown> };
