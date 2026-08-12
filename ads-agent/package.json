@@ -8,6 +8,10 @@
     "start": "next start -p 3030",
     "lint": "eslint",
     "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "pubsub:bootstrap": "tsx --env-file=.env.local scripts/bootstrap-pubsub-emulator.ts",
+    "relay": "tsx --env-file=.env.local scripts/run-outbox-relay.ts",
+    "reconcile:deletions": "tsx --env-file=.env.local scripts/run-deletion-reconciler.ts",
     "migrate": "tsx --env-file=.env.local lib/db/migrate.ts",
     "migrate:down": "tsx --env-file=.env.local lib/db/migrate.ts --down",
     "worker": "tsx --env-file=.env.local scripts/run-decision-cycle.ts",
@@ -19,6 +23,7 @@
     "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "^6.0.0",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",

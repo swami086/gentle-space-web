@@ -11,6 +11,7 @@ export default defineConfig({
   },
   test: {
     passWithNoTests: true,
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/*.db.test.ts"],
     env: {
       SKIP_DB_ROLE_CHECK: "1",
     },

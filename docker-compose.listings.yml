@@ -16,5 +16,23 @@ services:
       # PG18+ stores data under /var/lib/postgresql/<major>/docker (not .../data).
       - gentle_space_pgdata:/var/lib/postgresql
 
+  # Local Pub/Sub. The official client addresses this automatically when
+  # PUBSUB_EMULATOR_HOST is set, so no test needs cloud credentials.
+  # Caveat: the emulator implements neither dead-letter topics nor subscription
+  # filters, so DLQ behaviour is verified against a real project (Task 6), not here.
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    container_name: gentle-space-pubsub
+    command:
+      - gcloud
+      - beta
+      - emulators
+      - pubsub
+      - start
+      - --project=gentle-space-local
+      - --host-port=0.0.0.0:8085
+    ports:
+      - "8085:8085"
+
 volumes:
   gentle_space_pgdata:
