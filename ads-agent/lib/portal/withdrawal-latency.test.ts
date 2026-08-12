@@ -17,10 +17,11 @@ const scopeFor = (org: string) => ({ kind: "org", orgId: org }) as const;
 
 beforeAll(async () => {
   if (!live) return;
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   process.env.CONSENT_CACHE_TTL_MS = String(TTL_MS);
   pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 5 });
   orgId = (await pool.query<{ id: string }>("SELECT id::text AS id FROM public.orgs ORDER BY id LIMIT 1")).rows[0].id;
-  ingestKey = `pk_test_${Date.now()}`;
+  ingestKey = "pk_s6a_gate_integration";
   await pool.query(
     `INSERT INTO context.tenant_portal_config
        (org_id, ingest_key, allowed_origins, purposes_offered, notice_version)
@@ -41,6 +42,16 @@ afterAll(async () => {
 
 beforeEach(async () => {
   if (!live) return;
+  await pool.query(
+    `INSERT INTO context.tenant_portal_config
+       (org_id, ingest_key, allowed_origins, purposes_offered, notice_version)
+     VALUES ($1, $2, ARRAY['https://broker.test'], ARRAY['space_recommendation'], 1)
+     ON CONFLICT (org_id) DO UPDATE
+       SET ingest_key = EXCLUDED.ingest_key,
+           allowed_origins = EXCLUDED.allowed_origins,
+           purposes_offered = EXCLUDED.purposes_offered`,
+    [orgId, ingestKey],
+  );
   const { clearConsentCache } = await import("./consent-cache");
   clearConsentCache();
   const { clearPortalConfigCache } = await import("./config");
