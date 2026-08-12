@@ -17,6 +17,7 @@ const VIEWS = [
   "v_agent_graph_manifest",
   "v_agent_graph_node",
   "v_agent_graph_edge",
+  "v_agent_spend_today",
 ] as const;
 
 // FDW graph views use definer security — agent_ro has no SELECT on fdw_graph_*.
@@ -29,6 +30,8 @@ const ALLOWED_BASE_TABLES = new Set([
   "adsagent.proposals",
   "adsagent.campaigns",
   "context.graph_manifests",
+  "context.agent_cost_ceilings",
+  "context.agent_token_usage",
 ]);
 
 describe.skipIf(!LIVE)("agent read views", () => {
