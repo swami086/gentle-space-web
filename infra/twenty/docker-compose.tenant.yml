@@ -1,0 +1,62 @@
+# Per-tenant Twenty instance (tenancy spec §9). Differences from
+# infra/twenty/docker-compose.yml, which is the single local dev instance:
+#   - no published host port: N instances would collide on 3020
+#   - no db service: the database lives on the shared Postgres server, so the
+#     marginal cost of a tenant is the server and worker containers only
+#   - IS_MULTIWORKSPACE_ENABLED=false, Twenty's best-tested configuration (TW1)
+name: twenty-${ORG_SLUG}
+
+services:
+  server:
+    image: twentycrm/twenty:${TAG}
+    volumes:
+      - server-local-data:/app/packages/twenty-server/.local-storage
+    environment:
+      NODE_PORT: 3000
+      IS_MULTIWORKSPACE_ENABLED: "false"
+      PG_DATABASE_URL: postgres://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@${PG_DATABASE_HOST}:${PG_DATABASE_PORT}/${PG_DATABASE_NAME}
+      SERVER_URL: ${SERVER_URL}
+      REDIS_URL: redis://redis:6379
+      APP_SECRET: ${APP_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail http://localhost:3000/healthz
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: always
+
+  worker:
+    image: twentycrm/twenty:${TAG}
+    volumes:
+      - server-local-data:/app/packages/twenty-server/.local-storage
+    command: ["yarn", "worker:prod"]
+    environment:
+      IS_MULTIWORKSPACE_ENABLED: "false"
+      PG_DATABASE_URL: postgres://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@${PG_DATABASE_HOST}:${PG_DATABASE_PORT}/${PG_DATABASE_NAME}
+      SERVER_URL: ${SERVER_URL}
+      REDIS_URL: redis://redis:6379
+      APP_SECRET: ${APP_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: always
+
+  redis:
+    image: redis
+    restart: always
+    command: ["--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  server-local-data:
