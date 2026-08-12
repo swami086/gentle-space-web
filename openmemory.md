@@ -141,15 +141,41 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 ## Implementation plans (docs/superpowers/plans/)
 
-- **`2026-08-12-s1-s3-foundation.md`** — S1 (fix the four live defects) → S2 (consolidate onto PG18) → S3 (Scope + row-level security). 9 tasks, 41 steps, hard gate between each stage. **Nothing has been implemented; this is the next thing to execute**, via `superpowers:subagent-driven-development`.
+**Seven plans cover S1–S9a, written 2026-08-12 by seven parallel writers, one per document.** Nothing is
+implemented. Execute in build-sequence order via `superpowers:subagent-driven-development`.
+
+| Plan | Steps | Tasks / waves / max width | PG migrations |
+|---|---|---|---|
+| `2026-08-12-s1-s3-foundation.md` | 150 | 18 / 11 / 3 | `001`–`013` |
+| `2026-08-12-s4-s5-enquiry-spine.md` | 160 | 24 / 10 / 4 | `020`–`029` |
+| `2026-08-12-s5a-event-backbone.md` | 83 | 12 / 6 / 3 | `040`–`044` |
+| `2026-08-12-s6-s6a-clickhouse-portal-ingestion.md` | 137 | 20 / 7 / 4 | `050`–`061` + ClickHouse `000`–`007` |
+| `2026-08-12-s7-attribution.md` | 77 | 11 / 5 / 4 | `070`–`074` |
+| `2026-08-12-s8-s8a-context-graph-artifacts.md` | 80 | 17 / 7 / 5 | `080`–`087` + ClickHouse `010`–`019` |
+| `2026-08-12-s9-s9a-mcp-context-server-tracing.md` | 105 | 17 / 7 / **7** | `100`–`105` |
+
+**Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
+writers work simultaneously without collision. ClickHouse DDL is separately numbered under
+`infra/clickhouse/migrations/`, S6a owning `000`–`007` and S8a owning `010`–`019`, applied by the runner
+at `lib/clickhouse/migrate.ts` (`npx tsx scripts/clickhouse/migrate.ts`, ledger `default._ch_migrations`).
+
+**Two ClickHouse conventions are load-bearing and easy to get silently wrong.** Row policies are
+`TO ALL EXCEPT etl_writer` — `etl_writer` is the user the migration runner and the cross-tenant graph
+builder authenticate as, so under `TO ALL` it is filtered by the policy it just created and every
+cross-tenant maintenance statement matches nothing while appearing to succeed. And the filter is
+`toUUIDOrZero(getSetting('SQL_current_tenant_id'))`, not `toUUID`: `toUUID` raises on an unset setting,
+whereas `toUUIDOrZero` yields the zero UUID and matches nothing, which is what fail-closed means here.
 
 **Parallel-execution facts established 2026-08-12 (do not re-derive):**
-- `superpowers:subagent-driven-development` lists "dispatch multiple implementation subagents in parallel" under **Never** — agents sharing a working tree corrupt each other. Real parallelism requires **one git worktree and branch per agent** (the `best-of-n-runner` subagent type), with a fan-in merge.
-- Wave widths come from the import graph, not from a target agent count. S3's data-layer conversion is **7 units, not 8**: `ads-agent/app/api/campaign-drafts/[id]/create-proposal/route.ts` imports **both** `@/lib/db/proposals` and `@/lib/db/campaign-drafts`, so a signature change to either touches that file and the two modules must be one unit. `twenty-pipeline` is excluded, still blocked on the tenancy spec's open question Q4.
-- Module blast radius (importers, from torbit `gl_imported_symbol`, excluding tests): `proposals` ~11 · `campaign-drafts` 6 · `settings` 6 · `dashboard` 4 · `ai-action-log` 4 · `campaigns` 3 · `credits` 1 · `snapshots` 1.
+- `superpowers:subagent-driven-development` lists "dispatch multiple implementation subagents in parallel" under **Never** — agents sharing a working tree corrupt each other. Real parallelism requires **one git worktree and branch per agent** (the `best-of-n-runner` subagent type), with a fan-in merge closing each wave.
+- **Wave width comes from the import graph, and the honest answer is usually small.** S3's data-layer conversion is **width 3, not 7** — an earlier estimate of 7 units was wrong because it counted modules rather than files: `lib/decision-engine/cycle.ts` is modified by five of the seven units and `app/(admin)/page.tsx` by three, so those two files are the binding constraint. The only place width 7 is real is S9's read tools, where each task creates one new file and shares nothing.
+- Module blast radius (importers, from torbit `gl_imported_symbol`, excluding tests): `proposals` 10 · `campaign-drafts` 6 · `settings` 6 · `dashboard` 4 · `ai-action-log` 4 · `campaigns` 3 · `credits` 1 · `snapshots` 1. `twenty-pipeline` has 9 non-test consumers and is **in scope** (Q4 answered); Twenty is reached through **two separate clients** — `ads-agent/lib/crm/twenty-pipeline.ts` and the root app's `lib/crm/twenty.ts`.
+- **The shared primitives every plan imports, defined by S1–S3 Task 9.** `type Scope` and `scopeClause(scope, column = "org_id")` in `ads-agent/lib/db/scope-sql.ts`; `withTenantTransaction<T>(scope, fn, pool?)` in `ads-agent/lib/db/tx.ts`. The root listings app carries a deliberate twin at `lib/db/tx.ts` — separate `package.json`, pool and deployment, no shared package, so the SQL contract is what is shared. **`scopeClause` alone is inert once RLS is on**: `getPool().query` runs on an arbitrary pooled connection with no transaction, so a query outside `withTenantTransaction` silently returns zero rows everywhere.
 - **The two load-bearing tests.** (1) A **pooled-connection** test: pool size 1, set tenant A in a transaction, commit, then assert `current_tenant()` is NULL on the same physical connection — without this specific test the RLS leak ships silently, invisible to every happy-path test. (2) A catalogue query asserting `FORCE ROW LEVEL SECURITY` on every tenant table (`pg_class.relforcerowsecurity`), because `ENABLE` alone is ignored for table owners.
-- **Built-in escalation:** if AGE fails to build against PG18 (plan Task 5), STOP rather than proceeding to consolidation. The listings search boost depends on it, and the fallback — dropping AGE and moving the boost onto the new node/edge tables — is a design decision, not an implementer's call.
-- Skill/model assignment per role: migrations → `postgres-pro`+`database-designer` (standard) · route guards → `senior-backend`+`security-auditor` (cheap, plan contains the code) · data-layer conversion → `refactoring-specialist`+`typescript-pro` (standard) · cross-tenant suite → `senior-qa`+`tdd-guide` (standard) · PG18 image → `senior-devops`+`docker-expert` (standard) · final whole-branch review → `adversarial-reviewer` (most capable).
+- **Built-in escalations:** if AGE fails to build against PG18 (S1–S3 Task 5), STOP rather than proceeding to consolidation — the listings search boost depends on it and the fallback is a design decision. S2 must not decommission the old instances at its own end; they stay running until S3 has passed on the new one.
+- **`dal.ts:44` inserts the literal `'member'`** on every verified request. Migration `001` narrows the CHECK to `admin|operator|viewer`, so that line must change in the same commit or every login breaks.
+- Model slugs available to subagents are exactly two: `composer-2.5-fast` (mechanical — the plan text already contains the code) and `inherit` (judgement required). Skills are named per task in the plans themselves.
+- **Spec defects and gaps found by writing the plans** are recorded in `docs/superpowers/specs/2026-08-12-open-questions-register.md` — new blocking questions **B5** (`pg_clickhouse`: nobody builds it, S9 assumes it) and **B6** (`evidence`/`proposed_by` ownership), plus 16 spec defects D1–D16. D16 records a *non*-defect, so nobody "fixes" `public.proposals` into a break.
 
 ## Strategy / research
 
