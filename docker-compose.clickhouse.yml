@@ -1,0 +1,23 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    container_name: gentle-space-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+      - "9181:9181"
+    environment:
+      CLICKHOUSE_ETL_PASSWORD: ${CLICKHOUSE_ETL_PASSWORD:-etl}
+      CLICKHOUSE_TENANT_PASSWORD: ${CLICKHOUSE_TENANT_PASSWORD:-tenant}
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - ./infra/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      - ./infra/clickhouse/users.d:/etc/clickhouse-server/users.d:ro
+      - clickhouse_data:/var/lib/clickhouse
+
+volumes:
+  clickhouse_data:

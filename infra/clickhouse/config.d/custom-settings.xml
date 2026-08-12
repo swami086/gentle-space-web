@@ -1,0 +1,5 @@
+<!-- Without this prefix declaration, getSetting('SQL_current_tenant_id') in every
+     row policy fails at query time with "Unknown setting". -->
+<clickhouse>
+  <custom_settings_prefixes>SQL_</custom_settings_prefixes>
+</clickhouse>
