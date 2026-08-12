@@ -99,6 +99,26 @@ services:
       - "8767:8767"
     restart: unless-stopped
 
+  context-mcp:
+    build: .
+    command: ["npx", "tsx", "scripts/run-context-mcp.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      # agent_ro only. DATABASE_URL is deliberately NOT set for this service:
+      # the owner connection would ignore row security unless FORCE is set on
+      # every table, and this server must not depend on that being true.
+      AGENT_RO_DATABASE_URL: postgres://agent_ro:agent_ro_local_dev@db:5432/ads_agent
+      AGENT_CLICKHOUSE_URL: http://clickhouse:8123
+      CONTEXT_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,context-mcp,host.docker.internal
+      CONTEXT_MCP_BIND: "0.0.0.0"
+    ports:
+      - "8768:8768"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
   bifrost-data:

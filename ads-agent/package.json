@@ -22,6 +22,7 @@
     "cycle:run": "tsx --env-file=.env.local scripts/run-once.ts",
     "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts",
     "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts",
+    "mcp:context": "tsx --env-file=.env.local scripts/run-context-mcp.ts",
     "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts",
     "artifacts:sweep": "tsx --env-file=.env.local scripts/artifact-sweeps.ts",
     "graph:worker": "tsx --env-file=.env.local scripts/graph-rebuild-worker.ts"
