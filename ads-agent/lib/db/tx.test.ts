@@ -6,7 +6,7 @@ const connect = vi.fn(async () => ({ query, release }));
 
 vi.mock("./client", () => ({
   getPool: () => ({ connect }),
-  assertApplicationDbRole: vi.fn(async () => {}),
+  assertDbRole: vi.fn(async () => {}),
 }));
 
 import { withTenantTransaction } from "./tx";

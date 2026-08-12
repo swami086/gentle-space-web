@@ -14,6 +14,7 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/*.db.test.ts"],
     env: {
       SKIP_DB_ROLE_CHECK: "1",
+      ...(process.env.TEST_DATABASE_URL ? { DATABASE_URL: process.env.TEST_DATABASE_URL } : {}),
     },
   },
   resolve: {

@@ -86,7 +86,7 @@ suite("consolidated schema layout", () => {
     }
   });
 
-  it("holds the fourteen ads-agent domain tables in adsagent", async () => {
+  it("holds the ads-agent domain tables in adsagent", async () => {
     const { rows } = await pool.query<{ relname: string }>(
       `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'adsagent' AND c.relkind = 'r' ORDER BY c.relname`,
@@ -97,13 +97,22 @@ suite("consolidated schema layout", () => {
       "campaign_draft_messages",
       "campaign_drafts",
       "campaigns",
+      "contacts",
       "credit_grants",
       "crm_signal_snapshots",
       "cron_settings",
+      "enquiries",
+      "enquiry_activities",
+      "enquiry_messages",
+      "enquiry_requirement_revisions",
+      "enquiry_requirements",
+      "enquiry_signals",
+      "notifications",
       "org_balances",
       "org_cron_settings",
       "performance_snapshots",
       "proposals",
+      "reminders",
       "usage_ledger",
       "user_balances",
     ]);

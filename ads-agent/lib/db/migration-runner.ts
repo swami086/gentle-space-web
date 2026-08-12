@@ -13,10 +13,12 @@ const LEDGER = `CREATE TABLE IF NOT EXISTS public.schema_migrations (
  * runner's transaction and leave the ledger insert outside it.
  */
 export function stripOuterTransaction(sql: string): string {
-  return sql
-    .replace(/^\s*BEGIN\s*;/i, "")
-    .replace(/COMMIT\s*;\s*$/i, "")
-    .trim();
+  let body = sql.trim();
+  // Migrations often lead with a path comment before BEGIN; strip those too.
+  body = body.replace(/^(\s*--[^\n]*\n)+/m, "");
+  body = body.replace(/^\s*BEGIN\s*;\s*\n?/i, "");
+  body = body.replace(/\n?\s*COMMIT\s*;\s*$/i, "");
+  return body.trim();
 }
 
 export function pendingMigrations(files: string[], applied: string[]): string[] {

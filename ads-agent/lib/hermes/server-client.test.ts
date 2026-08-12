@@ -21,6 +21,8 @@ describe("streamHermesCompletion", () => {
   beforeEach(() => {
     process.env.HERMES_API_SERVER_URL = "http://127.0.0.1:8642";
     process.env.HERMES_API_SERVER_KEY = "test-key";
+    delete process.env.HERMES_API_SERVER_MODEL;
+    delete process.env.HERMES_API_SERVER_BILLING_MODEL;
   });
 
   afterEach(() => {

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { pendingMigrations, stripOuterTransaction } from "./migration-runner";
 
 describe("stripOuterTransaction", () => {
+  it("removes a leading path comment and outer transaction wrappers", () => {
+    const sql = "-- lib/db/migrations/020_contacts.up.sql\nBEGIN;\nCREATE TABLE t (id INT);\nCOMMIT;\n";
+    expect(stripOuterTransaction(sql)).toBe("CREATE TABLE t (id INT);");
+  });
+
   it("removes a leading BEGIN and trailing COMMIT so the runner owns the transaction", () => {
     const sql = "BEGIN;\nALTER TABLE public.users ADD COLUMN x TEXT;\nCOMMIT;\n";
     expect(stripOuterTransaction(sql)).toBe("ALTER TABLE public.users ADD COLUMN x TEXT;");
