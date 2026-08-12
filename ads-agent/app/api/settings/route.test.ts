@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getCronSettings, setCronEnabled, requireApiRole } = vi.hoisted(() => ({
-  getCronSettings: vi.fn(),
+const { getOrgSettings, setCronEnabled, requireApiRole, scopeForSession } = vi.hoisted(() => ({
+  getOrgSettings: vi.fn(),
   setCronEnabled: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
-vi.mock("@/lib/db/settings", () => ({ getCronSettings, setCronEnabled }));
+vi.mock("@/lib/db/org-settings", () => ({ getOrgSettings, setCronEnabled }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { GET, PATCH } from "./route";
+
+const scope = { kind: "org" as const, orgId: "org-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -17,13 +21,25 @@ beforeEach(() => {
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "admin" },
   });
+  scopeForSession.mockResolvedValue(scope);
 });
 
 describe("GET /api/settings", () => {
   it("returns the current cron settings", async () => {
-    getCronSettings.mockResolvedValue({ enabled: false, lastRunAt: null });
+    getOrgSettings.mockResolvedValue({
+      cronEnabled: false,
+      lastRunAt: null,
+      undoWindowSeconds: 60,
+      approvalThresholdInr: null,
+    });
     const res = await GET();
-    expect(await res.json()).toEqual({ enabled: false, lastRunAt: null });
+    expect(getOrgSettings).toHaveBeenCalledWith(scope);
+    expect(await res.json()).toEqual({
+      cronEnabled: false,
+      lastRunAt: null,
+      undoWindowSeconds: 60,
+      approvalThresholdInr: null,
+    });
   });
 });
 
@@ -40,7 +56,7 @@ describe("PATCH /api/settings", () => {
     const res = await PATCH(
       new Request("http://localhost", { method: "PATCH", body: JSON.stringify({ enabled: true }) }),
     );
-    expect(setCronEnabled).toHaveBeenCalledWith(true);
+    expect(setCronEnabled).toHaveBeenCalledWith(scope, true);
     expect(res.status).toBe(200);
   });
 });

@@ -1,6 +1,7 @@
-import { getCronSettings } from "@/lib/db/settings";
+import { requireRole, requireSession } from "@/lib/auth/dal";
+import { scopeForSession } from "@/lib/auth/scope-interim";
+import { getOrgSettings } from "@/lib/db/org-settings";
 import { getConnectorStatus } from "@/lib/env-status";
-import { requireRole } from "@/lib/auth/dal";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { TabStrip } from "@/components/pencil/TabStrip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
   const access = await requireRole("admin");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const settings = await getCronSettings();
+  const settings = await getOrgSettings(await scopeForSession(await requireSession()));
   const connectorStatus = getConnectorStatus();
 
   return (
@@ -33,7 +34,9 @@ export default async function SettingsPage() {
           <CardTitle className="text-base font-semibold text-foreground">Decision cycle</CardTitle>
         </CardHeader>
         <CardContent>
-          <SettingsForm settings={settings} />
+          <SettingsForm
+            settings={{ enabled: settings.cronEnabled, lastRunAt: settings.lastRunAt }}
+          />
         </CardContent>
       </Card>
 

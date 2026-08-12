@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Clock } from "lucide-react";
-import { getCronSettings } from "@/lib/db/settings";
+import { scopeForSession } from "@/lib/auth/scope-interim";
+import { getOrgSettings } from "@/lib/db/org-settings";
 import { cn } from "@/lib/utils";
 import { requireSession } from "@/lib/auth/dal";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -42,7 +43,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     );
   }
 
-  const settings = await getCronSettings();
+  const settings = await getOrgSettings(await scopeForSession(session));
   // Same minimum tier as the Copilot route's requireApiRole("operator") gate (lib/auth/dal.ts) —
   // defense in depth, mirroring how SidebarNav/nav-config.ts already gate nav visibility by role.
   const canUseCopilot = session.role === "operator" || session.role === "admin";
@@ -66,11 +67,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <span
                 className={cn(
                   "inline-block size-2 rounded-full",
-                  settings.enabled ? "bg-emerald-500" : "bg-muted-foreground/40",
+                  settings.cronEnabled ? "bg-emerald-500" : "bg-muted-foreground/40",
                 )}
                 aria-hidden
               />
-              Cron: {settings.enabled ? "on" : "off"}
+              Cron: {settings.cronEnabled ? "on" : "off"}
               <span className="text-muted-foreground/60">
                 · Last run {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
               </span>

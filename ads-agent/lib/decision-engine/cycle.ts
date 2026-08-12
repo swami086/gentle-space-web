@@ -1,3 +1,4 @@
+import type { Scope } from "../db/scope-sql";
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
@@ -21,7 +22,7 @@ async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Pr
   }
 }
 
-export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> {
+export async function runDecisionCycle(_scope?: Scope): Promise<{ proposalsCreated: number }> {
   const campaigns = await listCampaigns();
   const byExternalId = new Map(
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
