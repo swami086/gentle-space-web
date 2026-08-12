@@ -393,6 +393,58 @@ CREATE TABLE context.agent_action_log (
 
 ---
 
+## 5a. Outbox — the event backbone (added 2026-08-12)
+
+Events are written here **in the same transaction as the domain change**, and a relay publishes them
+to Pub/Sub. This is what removes the dual-write problem; design rationale in datastore spec §14.
+
+```sql
+CREATE TABLE context.outbox_events (
+  id            UUID PRIMARY KEY DEFAULT uuidv7(),   -- also the consumer idempotency key
+  org_id        public.org_ref NOT NULL REFERENCES public.orgs(id),
+
+  topic         TEXT NOT NULL CHECK (topic IN (
+                  'enquiry.received','enquiry.activity_logged','graph.tenant_stale',
+                  'agent.task_requested','reminder.due','deletion.requested')),
+  payload       JSONB NOT NULL,
+  ordering_key  TEXT NOT NULL,          -- org_id::text; per-tenant ordering, never global
+
+  published_at  TIMESTAMPTZ,            -- NULL = awaiting the relay
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  last_error    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- The relay's only query. Partial index keeps it small no matter how much history accumulates.
+CREATE INDEX outbox_events_unpublished_idx
+  ON context.outbox_events (created_at)
+  WHERE published_at IS NULL;
+```
+
+`uuidv7()` matters more here than elsewhere: the relay reads in insertion order, so a time-ordered
+primary key keeps those reads sequential rather than scattered.
+
+The relay claims with `FOR UPDATE SKIP LOCKED` so multiple relay instances are safe:
+
+```sql
+SELECT id, topic, payload, ordering_key
+  FROM context.outbox_events
+ WHERE published_at IS NULL
+ ORDER BY created_at
+ LIMIT 100
+   FOR UPDATE SKIP LOCKED;
+```
+
+**Retention.** Published rows are pruned on a schedule — a high-churn queue table is exactly where
+MVCC bloat and vacuum pressure bite, which is the caveat Morling names against Postgres-backed
+queues. Keep published rows only as long as they are useful for debugging replay, and monitor bloat
+on this table specifically.
+
+**RLS applies here too**, with one exception: the relay connects as its own role and reads across
+tenants by design, since it is publishing everyone's events. That makes the relay role a deliberate
+cross-tenant actor and it must write to `context.access_log` with `actor_kind = 'cross_tenant'` like
+any other.
+
 ## 6. Compliance
 
 ### 6.1 Deletion is suppression, then scheduled erasure

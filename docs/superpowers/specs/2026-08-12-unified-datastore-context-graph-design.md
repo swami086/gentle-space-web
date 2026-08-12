@@ -715,7 +715,7 @@ attributes mean the backend can be swapped without re-instrumenting agents.
 the same signal that feeds the per-tenant cost ceilings in §12.6, so observability and the
 denial-of-wallet control are one instrumentation effort.
 
-**Caveat to plan around.** As of v1.41 the conventions are **Development status**, so `gen_ai.*`
+**Caveat to plan around (Langfuse).** As of v1.41 the conventions are **Development status**, so `gen_ai.*`
 attribute names can change without a major version bump. Set
 `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` for dual-emission so a convention change
 does not silently break dashboards.
@@ -740,3 +740,91 @@ Firestore bills per operation, so the same discipline as §12.6 applies: artifac
 single accessor that counts them per tenant per day against the same ceiling as model tokens. Because
 access is server-side only, no untrusted client can drive reads — which is what makes per-operation
 pricing acceptable here and would not be true of a client-facing design.
+
+---
+
+## 14. Event backbone — Pub/Sub with a transactional outbox (added 2026-08-12)
+
+Six workflows now hang off events, and a single enquiry arriving must trigger local persistence,
+Twenty sync, graph staleness, an agent wake, and a notification. That is fan-out to independent
+consumers, which is what Pub/Sub is for and what a job queue is not.
+
+### 14.1 Publish through the database, never directly
+
+Publishing to Pub/Sub from a request handler creates the **dual-write problem**: the row commits and
+the publish fails, leaving an enquiry nobody processes — or the publish succeeds and the transaction
+rolls back, leaving consumers acting on data that does not exist.
+
+The fix is the [transactional outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html):
+the event is written to an outbox table **in the same transaction as the domain change**, and a relay
+publishes from there. Morling makes the same point in the piece arguing *against* Postgres-as-Kafka —
+this is the one place he endorses going through the database: *"write to Kafka not directly, but
+through your database… that way, both resources are (eventually) consistent."*
+
+```
+request ──┐
+          ├─ BEGIN
+          │    INSERT enquiry
+          │    INSERT outbox_events   ← same transaction
+          ├─ COMMIT ──▶ 200 to the visitor
+          │
+   relay ─┴─ polls unpublished outbox rows ──▶ Pub/Sub ──▶ consumers
+```
+
+The relay polls with `FOR UPDATE SKIP LOCKED` and marks rows published. A log-based relay over
+logical decoding is the alternative, and could later share the CDC pipeline built for ClickHouse at
+S6 — but polling is the right starting point for a solo operator, and the outbox table is the same
+either way.
+
+**The visitor's request no longer waits for anything slow.** No LLM call, no Twenty write. That
+retires the `runtime = "nodejs"` / "do not forward cancellation" workaround in
+`app/api/leads/route.ts`, which exists only because slow work currently sits inside the request.
+
+### 14.2 Topics and consumers
+
+| Topic | Published when | Consumers |
+|---|---|---|
+| `enquiry.received` | a form submission or inbound message lands | local persist · Twenty sync · graph staleness · agent wake · notification |
+| `enquiry.activity_logged` | a call is logged or a note added | Twenty Notes sync · graph staleness · requirement extraction |
+| `graph.tenant_stale` | material change to a tenant's data | debounced rebuild worker (§12.2) |
+| `agent.task_requested` | orchestrator or cron requests agent work | Kanban dispatcher |
+| `reminder.due` | cron finds a due reminder | notification · Today feed |
+| `deletion.requested` | an erasure request is accepted | one consumer per store (§14.4) |
+
+### 14.3 Delivery semantics
+
+**Assume at-least-once and make every consumer idempotent**, keyed on the outbox event id. Pub/Sub
+does offer exactly-once delivery on pull subscriptions, but it is a configuration with caveats, and
+idempotent consumers are cheap insurance that keeps working when the configuration is wrong.
+
+**Ordering key is `org_id`.** Per-tenant ordering is what matters; global ordering does not, and
+demanding it would serialise every tenant behind every other.
+
+**Dead-letter topic on every subscription**, with a caveat worth knowing before it bites: Pub/Sub's
+own [ordering documentation](https://docs.cloud.google.com/pubsub/docs/ordering) warns that when
+messages go to a dead-letter topic, *"order might not be preserved."* So ordering and dead-lettering
+are in tension — consumers must not assume that surviving messages arrived in order after a failure.
+Another reason idempotency, not ordering, carries the correctness.
+
+### 14.4 Deletion propagation is the one that cannot be lost
+
+A lost `deletion.requested` message is a failed erasure obligation under DPDP and GDPR — a compliance
+failure, not a retry.
+
+**The queue is transport; the ledger is truth.** `context.deletion_requests` and
+`context.deletion_propagations` (data model §6.1) already record desired state per store. A reconciling
+sweeper compares the ledger against actual state and re-publishes anything still `pending` past a
+threshold. That inverts the dependency: correctness comes from reconciliation against recorded intent,
+not from trusting delivery — which is what makes at-least-once semantics acceptable for a compliance
+obligation.
+
+### 14.5 What stays on cron, and why both exist
+
+Cron is a **clock**; Pub/Sub is **transport**. They are not alternatives.
+
+- **Cron finds work by time** — reminders now due, snapshots past TTL, records past their retention
+  floor and due for hard erasure, stale-graph sweeps.
+- **Cron then publishes an event** rather than doing the work inline, so the work gets retries,
+  dead-lettering, and fan-out like everything else.
+
+The rule: nothing in a cron job does work that can fail slowly. It finds candidates and publishes.
