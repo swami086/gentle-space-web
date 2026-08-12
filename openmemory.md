@@ -155,7 +155,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 ## Implementation plans (docs/superpowers/plans/)
 
-**Plans cover S1–S10; S1–S9a written 2026-08-12, S10 added 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
+**Plans cover S1–S11; S1–S9a written 2026-08-12, S10–S11 added 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
 
 | Plan | Steps | Tasks / waves / max width | PG migrations |
 |---|---|---|---|
@@ -167,6 +167,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 | `2026-08-12-s8-s8a-context-graph-artifacts.md` | 80 | 17 / 7 / 5 | `080`–`087` + ClickHouse `010`–`014` | **IMPLEMENTED** on `main` (2026-08-12, `0a84788`) |
 | `2026-08-12-s9-s9a-mcp-context-server-tracing.md` | 105 | 17 / 7 / **7** | `100`–`106` + **`103` FDW (B5)** | **IMPLEMENTED** on `main` (`0dddbe9`, 2026-08-13) |
 | `2026-08-13-s10-leads-agent.md` | 633 | 5 / 3 / 3 | (none — reuses S9 `100`–`106`) | **IMPLEMENTED** on local `main` (`73c1a1f`, 2026-08-13) — code+docs; manual Hermes E2E gate remaining |
+| `2026-08-13-s11-decision-engine-extensions.md` | — | **15 / 5 / peak 7** (ceiling 8) | `107`–`109` | **PLAN ONLY** — E1–E7; Torbit-indexed; per-task Cursor skill shortlist |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under
