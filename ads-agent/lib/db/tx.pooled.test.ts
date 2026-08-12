@@ -16,7 +16,10 @@ const ORG_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 let pool: Pool;
 
 beforeAll(() => {
-  if (url) pool = new Pool({ connectionString: url, max: 1 });
+  if (url) {
+    process.env.DATABASE_URL = url;
+    pool = new Pool({ connectionString: url, max: 1 });
+  }
 });
 afterAll(async () => {
   if (pool) await pool.end();
