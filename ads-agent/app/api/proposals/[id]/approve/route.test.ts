@@ -58,7 +58,7 @@ describe("POST /api/proposals/[id]/approve", () => {
 
     const res = await POST(new Request("http://localhost"), { params: Promise.resolve({ id: "prop-1" }) });
 
-    expect(decideProposal).toHaveBeenCalledWith("prop-1", "approved");
+    expect(decideProposal).toHaveBeenCalledWith("prop-1", "approved", "u-1", "ui");
     expect(executeProposal).toHaveBeenCalledWith("prop-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, result: { status: "executed" } });

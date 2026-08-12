@@ -12,6 +12,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: `proposal is ${proposal.status}, not pending` }, { status: 409 });
   }
 
-  await decideProposal(id, "rejected");
+  await decideProposal(id, "rejected", access.session.userId, "ui");
   return NextResponse.json({ ok: true });
 }

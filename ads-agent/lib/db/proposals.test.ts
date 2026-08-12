@@ -100,13 +100,30 @@ describe("getProposalById", () => {
 });
 
 describe("decideProposal", () => {
-  it("sets status and decided_at", async () => {
+  it("persists status, decider and decision route", async () => {
     query.mockResolvedValue({ rows: [] });
-    await decideProposal("prop-1", "approved");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("decided_at = NOW()"), [
-      "prop-1",
+    await decideProposal(
+      "11111111-1111-1111-1111-111111111111",
       "approved",
+      "22222222-2222-2222-2222-222222222222",
+      "ui",
+    );
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("decided_at = NOW()");
+    expect(sql).toContain("decided_by = $3");
+    expect(sql).toContain("decided_via = $4");
+    expect(params).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+      "approved",
+      "22222222-2222-2222-2222-222222222222",
+      "ui",
     ]);
+  });
+
+  it("defaults the decision route to ui", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await decideProposal("prop-1", "rejected", "user-1");
+    expect(query.mock.calls[0][1][3]).toBe("ui");
   });
 });
 

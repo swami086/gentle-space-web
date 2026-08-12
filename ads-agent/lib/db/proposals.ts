@@ -68,10 +68,14 @@ export async function getProposalById(id: string): Promise<Proposal | null> {
 export async function decideProposal(
   id: string,
   status: "approved" | "rejected",
+  decidedBy: string,
+  decidedVia: "ui" | "bulk" | "api" | "system" = "ui",
 ): Promise<void> {
   await getPool().query(
-    `UPDATE proposals SET status = $2, decided_at = NOW() WHERE id = $1`,
-    [id, status],
+    `UPDATE proposals
+        SET status = $2, decided_at = NOW(), decided_by = $3, decided_via = $4
+      WHERE id = $1`,
+    [id, status, decidedBy, decidedVia],
   );
 }
 

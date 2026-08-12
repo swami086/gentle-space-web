@@ -46,7 +46,7 @@ describe("POST /api/proposals/[id]/reject", () => {
   it("decides rejected and never calls any executor", async () => {
     getProposalById.mockResolvedValue(pendingProposal());
     const res = await POST(new Request("http://localhost"), { params: Promise.resolve({ id: "prop-1" }) });
-    expect(decideProposal).toHaveBeenCalledWith("prop-1", "rejected");
+    expect(decideProposal).toHaveBeenCalledWith("prop-1", "rejected", "u-1", "ui");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
