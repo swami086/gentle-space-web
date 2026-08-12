@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const PLATFORM = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
+const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
 describe("fetchLeadSignal", () => {
   const originalEnv = process.env;
 
@@ -34,7 +37,7 @@ describe("fetchLeadSignal", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { fetchLeadSignal } = await import("./twenty");
-    await expect(fetchLeadSignal()).resolves.toEqual({
+    await expect(fetchLeadSignal(PLATFORM)).resolves.toEqual({
       hotCount: 2,
       warmCount: 1,
       coldCount: 1,
@@ -44,13 +47,21 @@ describe("fetchLeadSignal", () => {
     expect(fetchMock.mock.calls[0][1]?.headers?.Authorization).toBe("Bearer k");
   });
 
+  it("refuses org scope before touching Twenty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchLeadSignal } = await import("./twenty");
+    await expect(fetchLeadSignal(ORG)).rejects.toThrow("platform-only");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("returns all zeros when TWENTY_API_KEY is unset", async () => {
     delete process.env.TWENTY_API_KEY;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const { fetchLeadSignal } = await import("./twenty");
-    await expect(fetchLeadSignal()).resolves.toEqual({
+    await expect(fetchLeadSignal(PLATFORM)).resolves.toEqual({
       hotCount: 0,
       warmCount: 0,
       coldCount: 0,
@@ -62,7 +73,7 @@ describe("fetchLeadSignal", () => {
   it("returns all zeros when the request fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500 })));
     const { fetchLeadSignal } = await import("./twenty");
-    await expect(fetchLeadSignal()).resolves.toEqual({
+    await expect(fetchLeadSignal(PLATFORM)).resolves.toEqual({
       hotCount: 0,
       warmCount: 0,
       coldCount: 0,

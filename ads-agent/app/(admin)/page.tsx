@@ -2,8 +2,8 @@ import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { SpendCplChart } from "@/components/SpendCplChart";
 import { requireRole, requireSession } from "@/lib/auth/dal";
 import { scopeForSession } from "@/lib/auth/scope-interim";
-import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
 import { countAuditToday, listAudit } from "@/lib/db/audit-log";
+import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
 import { fetchLeadSignal } from "@/lib/connectors/twenty";
 import { getPipelineValue } from "@/lib/crm/twenty-pipeline";
 import { StatCardView } from "@/lib/openui/shared-metric-cards";
@@ -17,12 +17,13 @@ export default async function HomePage() {
   if (!access.ok) return <ForbiddenNotice />;
 
   const scope = await scopeForSession(await requireSession());
+  const isPlatform = scope.kind === "platform";
 
   const [overview, spendCplTrend, leadSignal, pipelineValueInr, aiActionsToday, recentActions] = await Promise.all([
     getOverviewStats(scope),
     getSpendCplTrend(scope, 30),
-    fetchLeadSignal(),
-    getPipelineValue(),
+    isPlatform ? fetchLeadSignal(scope) : Promise.resolve({ hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 }),
+    isPlatform ? getPipelineValue(scope) : Promise.resolve(0),
     countAuditToday(scope),
     listAudit(scope, 5),
   ]);
@@ -43,8 +44,12 @@ export default async function HomePage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCardView label="Active Campaigns" value={String(overview.activeCampaignCount)} />
-        <StatCardView label="Hot Leads (7d)" value={String(leadSignal.hotCount)} />
-        <StatCardView label="Pipeline Value" value={formatInr(pipelineValueInr)} />
+        {isPlatform ? (
+          <>
+            <StatCardView label="Hot Leads (7d)" value={String(leadSignal.hotCount)} />
+            <StatCardView label="Pipeline Value" value={formatInr(pipelineValueInr)} />
+          </>
+        ) : null}
         <StatCardView label="AI Actions Today" value={String(aiActionsToday)} />
       </div>
 

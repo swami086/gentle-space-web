@@ -1,5 +1,4 @@
 import type { ToolSpec } from "@openuidev/lang-core";
-import { scopeForJob } from "@/lib/auth/scope-interim";
 import {
   getOpportunity,
   listOpportunities,
@@ -35,15 +34,15 @@ function toOpenUiListResult(rows: Opportunity[]): OpenUiOpportunityListResult {
 }
 
 export const crmToolHandlers: Record<string, ScopedToolHandler> = {
-  list_opportunities: async () => toOpenUiListResult(await listOpportunities()),
-  search_opportunities: async (_scope, args) => {
+  list_opportunities: async (scope) => toOpenUiListResult(await listOpportunities(scope)),
+  search_opportunities: async (scope, args) => {
     const query = String(args.query ?? "").toLowerCase();
-    const all = await listOpportunities();
+    const all = await listOpportunities(scope);
     const filtered = !query ? all : all.filter((o) => o.name.toLowerCase().includes(query));
     return toOpenUiListResult(filtered);
   },
-  get_opportunity: async (_scope, args) => {
-    const row = await getOpportunity(String(args.id ?? ""));
+  get_opportunity: async (scope, args) => {
+    const row = await getOpportunity(scope, String(args.id ?? ""));
     return row ? toOpenUiOpportunityCard(row) : null;
   },
   advance_opportunity_stage: async (scope, args) => {
@@ -53,10 +52,10 @@ export const crmToolHandlers: Record<string, ScopedToolHandler> = {
     const label = STAGE_LABELS.get(toStage as (typeof PIPELINE_STAGES)[number]["value"]);
     if (!label) return { ok: false, error: `unknown stage "${toStage}"` };
 
-    const existing = await getOpportunity(id);
+    const existing = await getOpportunity(scope, id);
     const previousStage = existing?.stage ?? null;
 
-    const result = await updateOpportunityStage(id, toStage as (typeof PIPELINE_STAGES)[number]["value"]);
+    const result = await updateOpportunityStage(scope, id, toStage as (typeof PIPELINE_STAGES)[number]["value"]);
     if (result.ok) {
       await writeAudit(scope, {
         actorType: "agent",
@@ -77,7 +76,8 @@ function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolPr
       (args: Record<string, unknown>) => {
         const orgId = process.env.ADS_AGENT_ORG_ID;
         if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-        return fn(scopeForJob(orgId), args);
+        // Twenty is platform-only; the internal org id doubles as the platform tenant id today.
+        return fn({ kind: "platform", orgId }, args);
       },
     ]),
   );

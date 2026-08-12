@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+const PLATFORM = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
 
 const { requireApiRole, scopeForSession, getOpportunity, updateOpportunityStage, writeAudit } = vi.hoisted(() => ({
   requireApiRole: vi.fn(),
@@ -37,7 +37,7 @@ function req(body: unknown) {
 describe("PATCH /api/crm/opportunities/[id]/stage", () => {
   it("updates the stage, writes an audit row, and returns ok:true", async () => {
     requireApiRole.mockResolvedValue({ ok: true, session: { userId: "user-1" } });
-    scopeForSession.mockResolvedValue(ORG);
+    scopeForSession.mockResolvedValue(PLATFORM);
     getOpportunity.mockResolvedValue({ id: "opp-1", stage: "NEW_BRIEF" });
     updateOpportunityStage.mockResolvedValue({ ok: true });
 
@@ -45,8 +45,8 @@ describe("PATCH /api/crm/opportunities/[id]/stage", () => {
       params: Promise.resolve({ id: "opp-1" }),
     });
 
-    expect(updateOpportunityStage).toHaveBeenCalledWith("opp-1", "TOUR");
-    expect(writeAudit).toHaveBeenCalledWith(ORG, {
+    expect(updateOpportunityStage).toHaveBeenCalledWith(PLATFORM, "opp-1", "TOUR");
+    expect(writeAudit).toHaveBeenCalledWith(PLATFORM, {
       actorType: "human",
       actorUserId: "user-1",
       action: "opportunity.stage_changed",
@@ -57,9 +57,22 @@ describe("PATCH /api/crm/opportunities/[id]/stage", () => {
     expect(res.status).toBe(200);
   });
 
+  it("returns 404 for non-platform scope without touching Twenty", async () => {
+    requireApiRole.mockResolvedValue({ ok: true, session: { userId: "user-1" } });
+    scopeForSession.mockResolvedValue({ kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" });
+
+    const res = await PATCH(req({ toStage: "TOUR", opportunityName: "Priya Sharma" }), {
+      params: Promise.resolve({ id: "opp-1" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(getOpportunity).not.toHaveBeenCalled();
+    expect(updateOpportunityStage).not.toHaveBeenCalled();
+  });
+
   it("returns 502 with the Twenty error when the update fails, without logging", async () => {
     requireApiRole.mockResolvedValue({ ok: true, session: { userId: "user-1" } });
-    scopeForSession.mockResolvedValue(ORG);
+    scopeForSession.mockResolvedValue(PLATFORM);
     getOpportunity.mockResolvedValue({ id: "opp-1", stage: "NEW_BRIEF" });
     updateOpportunityStage.mockResolvedValue({ ok: false, error: "Twenty down" });
 
@@ -73,7 +86,7 @@ describe("PATCH /api/crm/opportunities/[id]/stage", () => {
 
   it("rejects a stage value not in PIPELINE_STAGES with 400", async () => {
     requireApiRole.mockResolvedValue({ ok: true, session: { userId: "user-1" } });
-    scopeForSession.mockResolvedValue(ORG);
+    scopeForSession.mockResolvedValue(PLATFORM);
 
     const res = await PATCH(req({ toStage: "NOT_REAL", opportunityName: "X" }), {
       params: Promise.resolve({ id: "opp-1" }),

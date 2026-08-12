@@ -46,6 +46,7 @@ vi.mock("../db/audit-log", () => ({ writeAudit }));
 import { runDecisionCycle } from "./cycle";
 
 const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+const PLATFORM = { kind: "platform" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
 
 const googleCampaign: Campaign = {
   id: "camp-google",
@@ -86,7 +87,7 @@ beforeEach(() => {
 });
 
 describe("runDecisionCycle", () => {
-  it("records a performance snapshot per campaign mapped by externalId, and the CRM signal", async () => {
+  it("records a performance snapshot per campaign mapped by externalId", async () => {
     await runDecisionCycle(ORG);
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
@@ -97,7 +98,15 @@ describe("runDecisionCycle", () => {
       ORG,
       expect.objectContaining({ campaignId: "camp-meta", spend: 300, conversions: 0 }),
     );
-    expect(recordCrmSignalSnapshot).toHaveBeenCalledWith(ORG, {
+    expect(fetchLeadSignal).not.toHaveBeenCalled();
+    expect(recordCrmSignalSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("records the CRM signal only under platform scope", async () => {
+    await runDecisionCycle(PLATFORM);
+
+    expect(fetchLeadSignal).toHaveBeenCalledWith(PLATFORM);
+    expect(recordCrmSignalSnapshot).toHaveBeenCalledWith(PLATFORM, {
       campaignId: null,
       hotCount: 2,
       warmCount: 1,

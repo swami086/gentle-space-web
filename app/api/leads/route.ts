@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     notes: payload.brief,
   });
 
-  const result = await createLeadInTwenty(payload, qualification);
+  const result = await createLeadInTwenty("platform", payload, qualification);
   if (result.status === "failed") {
     console.error("[leads] twenty failed", result.error);
   }

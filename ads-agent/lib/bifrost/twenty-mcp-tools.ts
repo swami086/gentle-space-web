@@ -1,8 +1,19 @@
+import type { Scope } from "../db/scope-sql";
+
 /** Streamable HTTP endpoint for the twenty-mcp-gateway sidecar (see docker-compose.yml).
  * Default is localhost because the Next.js app runs on the host; override to
  * http://twenty-mcp-gateway:8765/mcp only when the caller is inside the Compose network. */
 export const TWENTY_MCP_URL =
   process.env.TWENTY_MCP_URL || "http://localhost:8765/mcp";
+
+/**
+ * Twenty MCP read tools are removed from a non-platform agent profile entirely.
+ * A tool that exists and throws still tells the model the data is there.
+ */
+export function twentyMcpTools(scope: Scope): readonly string[] {
+  if (scope.kind !== "platform") return [];
+  return TWENTY_MCP_READ_TOOL_NAMES;
+}
 
 /**
  * Real tool names exposed by the Twenty MCP server (github.com/mhenry3164/twenty-crm-mcp-server),

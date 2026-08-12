@@ -21,10 +21,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 
-  const existing = await getOpportunity(id);
+  if (scope.kind !== "platform") {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  const existing = await getOpportunity(scope, id);
   const previousStage = existing?.stage ?? null;
 
-  const result = await updateOpportunityStage(id, toStage as PipelineStageValue);
+  const result = await updateOpportunityStage(scope, id, toStage as PipelineStageValue);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
 
   await writeAudit(scope, {

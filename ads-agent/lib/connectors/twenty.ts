@@ -1,3 +1,6 @@
+import type { Scope } from "../db/scope-sql";
+import { assertPlatformScope } from "../crm/twenty-pipeline";
+
 type LeadSignal = { hotCount: number; warmCount: number; coldCount: number; unscoredCount: number };
 
 const EMPTY_SIGNAL: LeadSignal = { hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 };
@@ -18,9 +21,10 @@ function extractOpportunities(json: unknown): { tier?: unknown }[] {
  * Read-only, account-wide lead-tier counts. Twenty has no corridor/UTM field
  * yet, so this cannot attribute leads to a specific campaign — callers
  * record it with campaignId: null, matching the spec's "not every lead is
- * attributable yet" note.
+ * attributable yet" note. Platform-only.
  */
-export async function fetchLeadSignal(): Promise<LeadSignal> {
+export async function fetchLeadSignal(scope: Scope): Promise<LeadSignal> {
+  assertPlatformScope(scope, "fetchLeadSignal");
   const apiKey = process.env.TWENTY_API_KEY?.trim();
   if (!apiKey) return EMPTY_SIGNAL;
 

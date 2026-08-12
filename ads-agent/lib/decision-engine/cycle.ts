@@ -1,14 +1,16 @@
 import type { Scope } from "@/lib/db/scope-sql";
-import { listCampaigns } from "../db/campaigns";
-import { createProposal } from "../db/proposals";
-import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
-import { writeAudit } from "../db/audit-log";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
 import { fetchMetaPerformance } from "../connectors/meta";
 import { fetchLeadSignal } from "../connectors/twenty";
-import { evaluateRules, type SearchTermRow } from "./rules";
+import { listCampaigns } from "../db/campaigns";
+import { createProposal } from "../db/proposals";
+import { writeAudit } from "../db/audit-log";
+import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
 import { draftRationale } from "./rationale";
+import { evaluateRules, type SearchTermRow } from "./rules";
 import { STRATEGY } from "./strategy-config";
+
+const EMPTY_LEAD_SIGNAL = { hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 };
 
 /** One platform's fetch failing (e.g. the Google Ads MCP server unreachable) must not abort every
  * other platform's snapshot for this tick — matches fetchLeadSignal's existing internal soft-fail
@@ -28,11 +30,15 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
   );
 
-  const [googlePerformance, metaPerformance, googleSearchTerms, leadSignal] = await Promise.all([
+  const leadSignal =
+    scope.kind === "platform"
+      ? await softFail("twenty lead signal", () => fetchLeadSignal(scope), EMPTY_LEAD_SIGNAL)
+      : EMPTY_LEAD_SIGNAL;
+
+  const [googlePerformance, metaPerformance, googleSearchTerms] = await Promise.all([
     softFail("google ads performance", fetchGoogleAdsPerformance, []),
     softFail("meta performance", fetchMetaPerformance, []),
     softFail("google ads search terms", fetchGoogleSearchTerms, []),
-    fetchLeadSignal(),
   ]);
 
   for (const row of [...googlePerformance, ...metaPerformance]) {
@@ -48,8 +54,9 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
     });
   }
 
-  // Budget-reallocation rules need per-campaign CRM signals; they won't fire until attribution exists.
-  await recordCrmSignalSnapshot(scope, { campaignId: null, ...leadSignal });
+  if (scope.kind === "platform") {
+    await recordCrmSignalSnapshot(scope, { campaignId: null, ...leadSignal });
+  }
 
   const searchTerms: SearchTermRow[] = googleSearchTerms
     .map((row) => {

@@ -81,15 +81,28 @@ async function twentyPost(
 }
 
 /**
+ * Twenty is one shared pipeline today, so only the platform may write to it.
+ * A single-member union rather than a boolean: adding a second caller kind is
+ * then a deliberate type change reviewed on its own, not a flag flipped.
+ * Removed at S4, once every org has its own Twenty instance
+ * (2026-08-12-twenty-tenancy-ownership-design.md).
+ */
+export type TwentyCaller = "platform";
+
+/**
  * Create Person + Opportunity. Field names must match Twenty workspace
  * (see infra/twenty/README.md). SELECT values are UPPER_SNAKE (`NEW_BRIEF`,
  * `HOT`, `OFFICE`). Step 2 structured answers fold into `brief` via
  * foldStep2Answers rather than becoming separate CRM fields.
  */
 export async function createLeadInTwenty(
+  caller: TwentyCaller,
   payload: LeadPayload,
   qualification: LeadQualification,
 ): Promise<TwentyCreateLeadResult> {
+  if (caller !== "platform") {
+    throw new Error("createLeadInTwenty is platform-only: Twenty is one shared pipeline");
+  }
   if (!isTwentyConfigured()) return { status: "skipped" };
 
   const { firstName, lastName } = splitName(payload.name);

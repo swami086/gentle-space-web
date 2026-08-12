@@ -2,11 +2,12 @@
 import { callMeteredChatCompletion } from "../metering/metered-client";
 import { callTwentyTool, listTwentyTools } from "../bifrost/mcp-client";
 import { callGoogleAdsTool, listGoogleAdsTools } from "../bifrost/google-ads-mcp-client";
-import { TWENTY_MCP_READ_TOOL_NAMES } from "../bifrost/twenty-mcp-tools";
+import { twentyMcpTools } from "../bifrost/twenty-mcp-tools";
 import { GOOGLE_ADS_MCP_READ_TOOL_NAMES } from "../bifrost/google-ads-mcp-tools";
 import { reshapeTwentyOpportunityToolResult } from "../crm/twenty-pipeline";
 import type { ChatMessage, ToolDefinition } from "../bifrost/client";
 import type { MeteringContext } from "../metering/types";
+import type { Scope } from "../db/scope-sql";
 
 const MAX_ROUNDS = 2;
 
@@ -35,13 +36,18 @@ function callReadTool(name: string, args: Record<string, unknown>): Promise<unkn
 export async function resolveToolsThenGenerate(
   ctx: MeteringContext,
   messages: ChatMessage[],
+  scope: Scope,
 ): Promise<ChatMessage[]> {
-  const [twentyResult, googleAdsResult] = await Promise.allSettled([listTwentyTools(), listGoogleAdsTools()]);
+  const allowedTwentyTools = new Set(twentyMcpTools(scope));
+  const [twentyResult, googleAdsResult] = await Promise.allSettled([
+    allowedTwentyTools.size > 0 ? listTwentyTools() : Promise.resolve([]),
+    listGoogleAdsTools(),
+  ]);
   const twentySchemas = twentyResult.status === "fulfilled" ? twentyResult.value : [];
   const googleAdsSchemas = googleAdsResult.status === "fulfilled" ? googleAdsResult.value : [];
 
   const readOnlyTools: ToolDefinition[] = [
-    ...twentySchemas.filter((schema) => (TWENTY_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name)),
+    ...twentySchemas.filter((schema) => allowedTwentyTools.has(schema.name)),
     ...googleAdsSchemas.filter((schema) => (GOOGLE_ADS_MCP_READ_TOOL_NAMES as readonly string[]).includes(schema.name)),
   ].map((schema) => ({
     type: "function" as const,
