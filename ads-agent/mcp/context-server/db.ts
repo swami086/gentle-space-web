@@ -36,7 +36,7 @@ function assertOrgIdUuid(orgId: string): void {
 
 async function pinClickHouseTenant(client: PoolClient, orgId: string): Promise<void> {
   assertOrgIdUuid(orgId);
-  await client.query("LOAD 'pg_clickhouse'");
+  // ponytail: no LOAD — agent_ro cannot load libraries; extension must be installed in DB.
   await client.query(`SET pg_clickhouse.session_settings = $$SQL_current_tenant_id '${orgId}'$$`);
 }
 
