@@ -31,16 +31,16 @@ type CampaignActionPayload = { campaignId: string };
 type BudgetChangePayload = { campaignId: string; newDailyBudgetInr: number };
 type NegativeKeywordPayload = { campaignId: string; keywordText: string };
 
-async function requireCampaign(campaignId: string) {
-  const campaign = await getCampaignById(campaignId);
+async function requireCampaign(scope: Scope, campaignId: string) {
+  const campaign = await getCampaignById(scope, campaignId);
   if (!campaign) throw new Error(`campaign ${campaignId} not found`);
   if (!campaign.externalId) throw new Error(`campaign ${campaignId} has no externalId yet`);
   return campaign;
 }
 
-async function executeCreateCampaign(payload: CreateCampaignPayload): Promise<void> {
+async function executeCreateCampaign(scope: Scope, payload: CreateCampaignPayload): Promise<void> {
   const name = `${payload.corridor} — ${payload.platform} — ${new Date().toISOString().slice(0, 10)}`;
-  const record = await createCampaignRecord({
+  const record = await createCampaignRecord(scope, {
     platform: payload.platform,
     name,
     dailyBudget: payload.dailyBudgetInr,
@@ -59,28 +59,28 @@ async function executeCreateCampaign(payload: CreateCampaignPayload): Promise<vo
           finalUrl: payload.finalUrl,
         })
       : await createMetaCampaign({ name, dailyBudgetInr: payload.dailyBudgetInr });
-  await markCampaignActive(record.id, externalId);
+  await markCampaignActive(scope, record.id, externalId);
 }
 
-async function executePause(payload: CampaignActionPayload): Promise<void> {
-  const campaign = await requireCampaign(payload.campaignId);
+async function executePause(scope: Scope, payload: CampaignActionPayload): Promise<void> {
+  const campaign = await requireCampaign(scope, payload.campaignId);
   if (campaign.platform === "google") await pauseGoogleCampaign(campaign.externalId!);
   else await pauseMetaCampaign(campaign.externalId!);
-  await updateCampaignStatus(campaign.id, "paused");
+  await updateCampaignStatus(scope, campaign.id, "paused");
 }
 
-async function executeBudgetChange(payload: BudgetChangePayload): Promise<void> {
-  const campaign = await requireCampaign(payload.campaignId);
+async function executeBudgetChange(scope: Scope, payload: BudgetChangePayload): Promise<void> {
+  const campaign = await requireCampaign(scope, payload.campaignId);
   if (campaign.platform === "google") {
     await updateGoogleCampaignBudget(campaign.externalId!, payload.newDailyBudgetInr);
   } else {
     await updateMetaCampaignBudget(campaign.externalId!, payload.newDailyBudgetInr);
   }
-  await updateCampaignBudget(campaign.id, payload.newDailyBudgetInr);
+  await updateCampaignBudget(scope, campaign.id, payload.newDailyBudgetInr);
 }
 
-async function executeAddNegativeKeyword(payload: NegativeKeywordPayload): Promise<void> {
-  const campaign = await requireCampaign(payload.campaignId);
+async function executeAddNegativeKeyword(scope: Scope, payload: NegativeKeywordPayload): Promise<void> {
+  const campaign = await requireCampaign(scope, payload.campaignId);
   if (campaign.platform !== "google") {
     throw new Error("add_negative_keyword is only implemented for Google Ads campaigns");
   }
@@ -100,16 +100,16 @@ export async function executeProposal(
   try {
     switch (proposal.kind) {
       case "create_campaign":
-        await executeCreateCampaign(proposal.payload as unknown as CreateCampaignPayload);
+        await executeCreateCampaign(scope, proposal.payload as unknown as CreateCampaignPayload);
         break;
       case "pause":
-        await executePause(proposal.payload as unknown as CampaignActionPayload);
+        await executePause(scope, proposal.payload as unknown as CampaignActionPayload);
         break;
       case "budget_change":
-        await executeBudgetChange(proposal.payload as unknown as BudgetChangePayload);
+        await executeBudgetChange(scope, proposal.payload as unknown as BudgetChangePayload);
         break;
       case "add_negative_keyword":
-        await executeAddNegativeKeyword(proposal.payload as unknown as NegativeKeywordPayload);
+        await executeAddNegativeKeyword(scope, proposal.payload as unknown as NegativeKeywordPayload);
         break;
       case "campaign_strategy":
         // Narrative/advisory proposal (see lib/types.ts's CampaignStrategyPayload) — nothing to

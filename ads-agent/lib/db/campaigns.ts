@@ -1,5 +1,6 @@
 import type { Campaign, CampaignStatus, NewCampaign, Platform } from "../types";
-import { getPool } from "./client";
+import { scopeClause, type Scope } from "./scope-sql";
+import { withTenantTransaction } from "./tx";
 
 type CampaignRow = {
   id: string;
@@ -25,45 +26,80 @@ function rowToCampaign(row: CampaignRow): Campaign {
   };
 }
 
-export async function createCampaignRecord(input: NewCampaign): Promise<Campaign> {
-  const { rows } = await getPool().query<CampaignRow>(
-    `INSERT INTO campaigns (platform, name, daily_budget, corridor)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [input.platform, input.name, input.dailyBudget, input.corridor],
+export async function createCampaignRecord(scope: Scope, input: NewCampaign): Promise<Campaign> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignRow>(
+      `INSERT INTO adsagent.campaigns (org_id, platform, name, daily_budget, corridor)
+       VALUES ($1::uuid, $2, $3, $4, $5)
+       RETURNING *`,
+      [...s.params, input.platform, input.name, input.dailyBudget, input.corridor],
+    );
+    return rowToCampaign(rows[0]);
+  });
+}
+
+export async function listCampaigns(scope: Scope): Promise<Campaign[]> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignRow>(
+      `SELECT * FROM adsagent.campaigns WHERE ${s.sql} ORDER BY created_at DESC`,
+      [...s.params],
+    );
+    return rows.map(rowToCampaign);
+  });
+}
+
+export async function getCampaignById(scope: Scope, id: string): Promise<Campaign | null> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignRow>(
+      `SELECT * FROM adsagent.campaigns WHERE ${s.sql} AND id = $2`,
+      [...s.params, id],
+    );
+    return rows[0] ? rowToCampaign(rows[0]) : null;
+  });
+}
+
+export async function markCampaignActive(
+  scope: Scope,
+  id: string,
+  externalId: string,
+): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.campaigns SET external_id = $3, status = 'active'
+        WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, externalId],
+    ),
   );
-  return rowToCampaign(rows[0]);
 }
 
-export async function listCampaigns(): Promise<Campaign[]> {
-  const { rows } = await getPool().query<CampaignRow>(
-    `SELECT * FROM campaigns ORDER BY created_at DESC`,
-  );
-  return rows.map(rowToCampaign);
-}
-
-export async function getCampaignById(id: string): Promise<Campaign | null> {
-  const { rows } = await getPool().query<CampaignRow>(
-    `SELECT * FROM campaigns WHERE id = $1`,
-    [id],
-  );
-  return rows[0] ? rowToCampaign(rows[0]) : null;
-}
-
-export async function markCampaignActive(id: string, externalId: string): Promise<void> {
-  await getPool().query(
-    `UPDATE campaigns SET external_id = $2, status = 'active' WHERE id = $1`,
-    [id, externalId],
+export async function updateCampaignBudget(
+  scope: Scope,
+  id: string,
+  dailyBudget: number,
+): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.campaigns SET daily_budget = $3 WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, dailyBudget],
+    ),
   );
 }
 
-export async function updateCampaignBudget(id: string, dailyBudget: number): Promise<void> {
-  await getPool().query(`UPDATE campaigns SET daily_budget = $2 WHERE id = $1`, [
-    id,
-    dailyBudget,
-  ]);
-}
-
-export async function updateCampaignStatus(id: string, status: CampaignStatus): Promise<void> {
-  await getPool().query(`UPDATE campaigns SET status = $2 WHERE id = $1`, [id, status]);
+export async function updateCampaignStatus(
+  scope: Scope,
+  id: string,
+  status: CampaignStatus,
+): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.campaigns SET status = $3 WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, status],
+    ),
+  );
 }

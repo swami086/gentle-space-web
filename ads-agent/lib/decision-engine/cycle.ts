@@ -1,4 +1,4 @@
-import type { Scope } from "../db/scope-sql";
+import type { Scope } from "@/lib/db/scope-sql";
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
@@ -23,7 +23,7 @@ async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Pr
 }
 
 export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated: number }> {
-  const campaigns = await listCampaigns();
+  const campaigns = await listCampaigns(scope);
   const byExternalId = new Map(
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
   );
@@ -38,7 +38,7 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
   for (const row of [...googlePerformance, ...metaPerformance]) {
     const campaign = byExternalId.get(row.externalCampaignId);
     if (!campaign) continue;
-    await recordPerformanceSnapshot({
+    await recordPerformanceSnapshot(scope, {
       campaignId: campaign.id,
       spend: row.spend,
       clicks: row.clicks,
@@ -49,7 +49,7 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
   }
 
   // Budget-reallocation rules need per-campaign CRM signals; they won't fire until attribution exists.
-  await recordCrmSignalSnapshot({ campaignId: null, ...leadSignal });
+  await recordCrmSignalSnapshot(scope, { campaignId: null, ...leadSignal });
 
   const searchTerms: SearchTermRow[] = googleSearchTerms
     .map((row) => {
@@ -60,7 +60,7 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
     })
     .filter((row): row is SearchTermRow => row !== null);
 
-  const recentSnapshots = await recentPerformanceSnapshots(3);
+  const recentSnapshots = await recentPerformanceSnapshots(scope, 3);
   const newProposals = evaluateRules(
     {
       campaigns,
