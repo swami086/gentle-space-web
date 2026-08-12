@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { isAiSearchConfigured } from "@/lib/ai/client";
 import { maxPossibleOverlap } from "../../../../lib/graph/score";
 import { toPublicListing } from "../../../../lib/listings/public";
+import { emitSearchPerformed } from "../../../../lib/portal/emit";
+import { newSessionId, readSessionId, sessionCookie } from "../../../../lib/portal/session";
 import { retrieveListings } from "../../../../lib/search/retrieve";
-import { logSearchQuery } from "../../../../lib/search/query-log";
 
 export async function POST(req: Request) {
   if (!isAiSearchConfigured()) {
@@ -23,18 +24,22 @@ export async function POST(req: Request) {
     const { interpretedQuery, queryEntities, listings } = await retrieveListings(query);
     const matchedEntities = maxPossibleOverlap(queryEntities) > 0 ? queryEntities : undefined;
 
-    await logSearchQuery({
+    const existingSession = readSessionId(req.headers.get("cookie"));
+    const sessionId = existingSession ?? newSessionId();
+    await emitSearchPerformed({
+      sessionId,
       query,
-      interpretedQuery,
-      entities: queryEntities,
+      filters: { interpreted_query: interpretedQuery.slice(0, 200) },
       resultCount: listings.length,
     });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       interpretedQuery,
       listings: listings.map(toPublicListing),
       matchedEntities,
     });
+    if (!existingSession) res.headers.set("Set-Cookie", sessionCookie(sessionId));
+    return res;
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "search failed" }, { status: 502 });

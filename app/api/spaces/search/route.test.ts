@@ -12,6 +12,11 @@ vi.mock("@/lib/db/listings", () => ({
   searchListingsByEmbedding: vi.fn(),
 }));
 
+const emitSearchPerformed = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/portal/emit", () => ({
+  emitSearchPerformed: (...args: unknown[]) => emitSearchPerformed(...args),
+}));
+
 vi.mock("../../../../lib/graph/age", () => ({
   scoreListingsAgainstQuery: vi.fn(),
 }));
@@ -136,6 +141,30 @@ describe("POST /api/spaces/search", () => {
     );
     expect(embedTexts).toHaveBeenCalledWith(["Private cabin · Metro"], "query");
     expect(searchListingsByEmbedding).toHaveBeenCalledWith([0.1, 0.2, 0.3], 20);
+  });
+
+  it("emits search_performed through the portal pipeline rather than writing search_queries", async () => {
+    vi.mocked(rewriteSearchQuery).mockResolvedValue("Private cabin · Metro");
+    vi.mocked(extractSearchEntities).mockResolvedValue({
+      areas: ["koramangala"],
+      amenities: [],
+      deskTypes: [],
+      landmarks: [],
+      budgetSignals: [],
+    });
+    vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2, 0.3]]);
+    vi.mocked(searchListingsByEmbedding).mockResolvedValue([
+      { listing: sampleListing, vectorSimilarity: 0.9 },
+    ]);
+    vi.mocked(scoreListingsAgainstQuery).mockResolvedValue(new Map());
+
+    const res = await postSearch({ query: "hsr layout 20 desks" });
+    expect(res.status).toBe(200);
+    expect(emitSearchPerformed).toHaveBeenCalledTimes(1);
+    const [input] = emitSearchPerformed.mock.calls[0];
+    expect(input.query).toBe("hsr layout 20 desks");
+    expect(input.sessionId).toMatch(/^[A-Za-z0-9_-]{16,64}$/);
+    expect(res.headers.get("set-cookie")).toContain("gs_sid=");
   });
 
   it("masks listing privacy fields in the JSON payload", async () => {
