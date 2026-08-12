@@ -15,6 +15,7 @@ vi.mock("./client", () => ({
   }),
 }));
 vi.mock("node:fs", () => ({
+  existsSync: vi.fn(() => false),
   readFileSync: vi.fn((p: string) => {
     if (String(p).endsWith(".up.sql")) return "ALTER TABLE public.users SET role = role;";
     return "CREATE TABLE IF NOT EXISTS placeholder (id UUID);";
