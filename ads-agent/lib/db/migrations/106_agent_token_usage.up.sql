@@ -35,6 +35,10 @@ CREATE POLICY tenant_isolation ON context.agent_cost_ceilings
   USING      (org_id = public.current_tenant())
   WITH CHECK (org_id = public.current_tenant());
 
+-- security_invoker applies invoker rights — agent_ro needs SELECT on FORCE RLS
+-- bases (same pairing as migration 102 / Task 3 adsagent read views).
+GRANT SELECT ON context.agent_cost_ceilings, context.agent_token_usage TO agent_ro;
+
 -- Every existing org gets a ceiling immediately: assertWithinCeiling halts when
 -- no row exists, so an org without one cannot run an agent at all.
 INSERT INTO context.agent_cost_ceilings (org_id, daily_ceiling_usd)
