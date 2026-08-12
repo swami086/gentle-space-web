@@ -1,6 +1,6 @@
+import type { Scope } from "../db/scope-sql";
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
-import type { Scope } from "../db/scope-sql";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
 import { logAiAction } from "../db/ai-action-log";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";

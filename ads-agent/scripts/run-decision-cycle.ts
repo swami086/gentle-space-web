@@ -5,20 +5,25 @@
  * restarting this process.
  */
 import cron from "node-cron";
-import { getCronSettings, touchLastRunAt } from "../lib/db/settings";
+import { scopeForJob } from "../lib/auth/scope-interim";
+import { getOrgSettings, touchLastRunAt } from "../lib/db/org-settings";
 import { runDecisionCycle } from "../lib/decision-engine/cycle";
 
 const SCHEDULE = process.env.CRON_SCHEDULE ?? "0 */6 * * *";
 
+const orgId = process.env.ADS_AGENT_ORG_ID;
+if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
+const scope = scopeForJob(orgId);
+
 async function tick(): Promise<void> {
-  const settings = await getCronSettings();
-  if (!settings.enabled) {
+  const settings = await getOrgSettings(scope);
+  if (!settings.cronEnabled) {
     console.log("ads-agent worker: cron disabled, skipping tick");
     return;
   }
   console.log("ads-agent worker: running decision cycle");
-  const result = await runDecisionCycle();
-  await touchLastRunAt();
+  const result = await runDecisionCycle(scope);
+  await touchLastRunAt(scope);
   console.log(`ads-agent worker: cycle complete, ${result.proposalsCreated} proposal(s) created`);
 }
 
