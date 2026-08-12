@@ -17,7 +17,11 @@ async function main(): Promise<void> {
     return;
   }
   console.error(`twenty coverage: ${gaps.length} org(s) not yet covered`);
-  for (const gap of gaps) console.error(`  ${gap.orgId}: ${gap.reason}`);
+  for (const gap of gaps) {
+    const slug = gap.slug ? ` slug=${gap.slug}` : "";
+    console.error(`  ${gap.orgId}:${slug} ${gap.reason}`);
+  }
+  console.error("\nRun: npx tsx --env-file=.env.local scripts/provision-twenty-gaps.ts");
   process.exit(1);
 }
 

@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { setTwentyConnectionState, upsertTwentyConnection } from "../db/twenty-connections";
+import {
+  activateTwentyConnectionRow,
+  getTwentyConnection,
+  setTwentyConnectionState,
+  upsertTwentyConnection,
+} from "../db/twenty-connections";
+import { ensureTenantPostgres } from "./twenty-postgres";
 
 export type PlanInput = {
   orgId: string;
@@ -29,13 +36,32 @@ export type TwentyServicePlan = {
 
 export type CoolifyApi = {
   createService(plan: TwentyServicePlan): Promise<{ uuid: string }>;
+  updateCompose(serviceUuid: string, dockerComposeRaw: string): Promise<void>;
   setEnvVars(serviceUuid: string, vars: { key: string; value: string }[]): Promise<void>;
   setFqdn(serviceUuid: string, fqdn: string): Promise<void>;
   deploy(serviceUuid: string): Promise<void>;
-  health(serviceUuid: string): Promise<"healthy" | "unhealthy">;
+  connectToDockerNetwork(serviceUuid: string): Promise<void>;
+  health(serviceUuid: string, opts?: { maxWaitMs?: number; onStatus?: (status: string) => void }): Promise<"healthy" | "unhealthy">;
+};
+
+export type ProvisionOptions = {
+  /** When false, deploy and return — skip the Coolify health poll (default 90s max). */
+  waitForHealth?: boolean;
 };
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** Coolify 4.1: connect_to_docker_network does not always attach on deploy — join Postgres via SSH. */
+function ensureTwentyCoolifyNetwork(serviceUuid: string): void {
+  const ssh = process.env.TWENTY_PG_ENSURE_SSH?.trim();
+  if (!ssh) return;
+  const script = `
+docker network connect coolify server-${serviceUuid} 2>/dev/null || true
+docker network connect coolify worker-${serviceUuid} 2>/dev/null || true
+docker restart server-${serviceUuid} worker-${serviceUuid} 2>/dev/null || true
+`.trim();
+  execFileSync("ssh", ["-o", "BatchMode=yes", ssh, script], { stdio: "inherit" });
+}
 
 export function buildTwentyServicePlan(input: PlanInput): TwentyServicePlan {
   if (!SLUG.test(input.orgSlug)) {
@@ -84,24 +110,52 @@ export function buildTwentyServicePlan(input: PlanInput): TwentyServicePlan {
 export async function provisionTwentyInstance(
   api: CoolifyApi,
   input: PlanInput,
+  opts: ProvisionOptions = {},
 ): Promise<{ serviceUuid: string; state: "provisioning" }> {
   const plan = buildTwentyServicePlan(input);
-  const { uuid } = await api.createService(plan);
+  const existing = await getTwentyConnection(input.orgId);
+  let uuid: string;
 
-  await upsertTwentyConnection({
-    orgId: input.orgId,
-    baseUrl: plan.fqdn,
-    apiKeyRef: plan.apiKeyRef,
-    coolifyServiceUuid: uuid,
-    twentyVersion: input.twentyTag,
-    state: "provisioning",
+  await ensureTenantPostgres({
+    orgSlug: input.orgSlug,
+    postgresPassword: input.postgresPassword,
   });
 
-  await api.setEnvVars(uuid, plan.envVars);
-  await api.setFqdn(uuid, plan.fqdn);
-  await api.deploy(uuid);
+  if (existing?.coolifyServiceUuid && ["provisioning", "failed"].includes(existing.state)) {
+    uuid = existing.coolifyServiceUuid;
+  } else {
+    const created = await api.createService(plan);
+    uuid = created.uuid;
+    await upsertTwentyConnection({
+      orgId: input.orgId,
+      baseUrl: plan.fqdn,
+      apiKeyRef: plan.apiKeyRef,
+      coolifyServiceUuid: uuid,
+      twentyVersion: input.twentyTag,
+      state: "provisioning",
+    });
+  }
 
-  const health = await api.health(uuid);
+  await api.setEnvVars(uuid, [
+    ...plan.envVars,
+    // Avoid ambiguous `redis` DNS once connect_to_docker_network joins the shared coolify network.
+    { key: "REDIS_URL", value: `redis://redis-${uuid}:6379` },
+  ]);
+  await api.setFqdn(uuid, plan.fqdn);
+  await api.connectToDockerNetwork(uuid);
+  await api.updateCompose(uuid, plan.dockerComposeRaw);
+  await api.deploy(uuid);
+  ensureTwentyCoolifyNetwork(uuid);
+
+  if (opts.waitForHealth === false) {
+    console.log(`twenty: deployed ${uuid} (health poll skipped — check Coolify, then --activate)`);
+    return { serviceUuid: uuid, state: "provisioning" };
+  }
+
+  const health = await api.health(uuid, {
+    maxWaitMs: Number(process.env.TWENTY_PROVISION_HEALTH_MAX_MS ?? 90_000),
+    onStatus: (status) => console.log(`twenty: waiting for healthy… (${status})`),
+  });
   if (health !== "healthy") {
     await setTwentyConnectionState(
       input.orgId,
@@ -119,9 +173,7 @@ export async function activateTwentyConnection(
   apiKeyRef: string,
   twentyVersion: string,
 ): Promise<void> {
-  void apiKeyRef;
-  void twentyVersion;
-  await setTwentyConnectionState(orgId, "active", null);
+  await activateTwentyConnectionRow(orgId, apiKeyRef, twentyVersion);
 }
 
 export function createCoolifyApi(baseUrl: string, token: string): CoolifyApi {
@@ -135,7 +187,11 @@ export function createCoolifyApi(baseUrl: string, token: string): CoolifyApi {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error(`coolify ${method} ${apiPath} ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) {
+      const err = new Error(`coolify ${method} ${apiPath} ${res.status}: ${text.slice(0, 200)}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
     return text ? JSON.parse(text) : undefined;
   }
 
@@ -146,34 +202,62 @@ export function createCoolifyApi(baseUrl: string, token: string): CoolifyApi {
         project_uuid: plan.projectUuid,
         server_uuid: plan.serverUuid,
         environment_name: plan.environmentName,
-        docker_compose_raw: plan.dockerComposeRaw,
+        docker_compose_raw: Buffer.from(plan.dockerComposeRaw, "utf-8").toString("base64"),
         instant_deploy: false,
       })) as { uuid?: string };
       if (!json?.uuid) throw new Error("coolify: service create returned no uuid");
       return { uuid: json.uuid };
     },
+    async updateCompose(serviceUuid, dockerComposeRaw) {
+      await call("PATCH", `/api/v1/services/${serviceUuid}`, {
+        docker_compose_raw: Buffer.from(dockerComposeRaw, "utf-8").toString("base64"),
+      });
+    },
     async setEnvVars(serviceUuid, vars) {
       for (const v of vars) {
-        await call("POST", `/api/v1/services/${serviceUuid}/envs`, {
-          key: v.key,
-          value: v.value,
-          is_preview: false,
-        });
+        try {
+          await call("POST", `/api/v1/services/${serviceUuid}/envs`, {
+            key: v.key,
+            value: v.value,
+            is_preview: false,
+          });
+        } catch (err) {
+          const status = (err as Error & { status?: number }).status;
+          if (status !== 409) throw err;
+          await call("PATCH", `/api/v1/services/${serviceUuid}/envs`, {
+            key: v.key,
+            value: v.value,
+            is_preview: false,
+          });
+        }
       }
     },
     async setFqdn(serviceUuid, fqdn) {
-      await call("PATCH", `/api/v1/services/${serviceUuid}`, { domains: fqdn });
+      await call("PATCH", `/api/v1/services/${serviceUuid}`, {
+        urls: [{ name: "server", url: fqdn }],
+        force_domain_override: true,
+      });
     },
     async deploy(serviceUuid) {
       await call("GET", `/api/v1/deploy?uuid=${serviceUuid}`);
     },
-    async health(serviceUuid) {
-      for (let attempt = 0; attempt < 60; attempt++) {
+    async connectToDockerNetwork(serviceUuid) {
+      await call("PATCH", `/api/v1/services/${serviceUuid}`, { connect_to_docker_network: true });
+    },
+    async health(serviceUuid, opts = {}) {
+      const maxWaitMs = opts.maxWaitMs ?? 90_000;
+      const intervalMs = 5_000;
+      const attempts = Math.ceil(maxWaitMs / intervalMs);
+      for (let attempt = 0; attempt < attempts; attempt++) {
         const json = (await call("GET", `/api/v1/services/${serviceUuid}`)) as {
           status?: string;
+          applications?: { name: string; status?: string }[];
         };
-        if (json?.status?.includes("running:healthy")) return "healthy";
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const status = json?.status ?? "unknown";
+        const server = json?.applications?.find((a) => a.name === "server")?.status;
+        opts.onStatus?.(server ? `${status} server=${server}` : status);
+        if (status.includes("running:healthy")) return "healthy";
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
       return "unhealthy";
     },

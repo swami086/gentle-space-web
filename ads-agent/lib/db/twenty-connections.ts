@@ -122,6 +122,30 @@ export async function setTwentyConnectionState(
   });
 }
 
+/** Persists the operator-supplied key ref when flipping to active (§9 step 6). */
+export async function activateTwentyConnectionRow(
+  orgId: string,
+  apiKeyRef: string,
+  twentyVersion: string,
+): Promise<void> {
+  await withTenantTransaction({ kind: "org", orgId }, async (c) => {
+    const { rowCount } = await c.query(
+      `UPDATE context.twenty_connections
+          SET state = 'active',
+              api_key_ref = $2,
+              twenty_version = $3,
+              last_error = NULL,
+              provisioned_at = COALESCE(provisioned_at, now()),
+              updated_at = now()
+        WHERE org_id = $1`,
+      [orgId, apiKeyRef, twentyVersion],
+    );
+    if (rowCount === 0) {
+      throw new Error(`twenty: no connection row for org ${orgId} — run provisioning first`);
+    }
+  });
+}
+
 export async function touchTwentyLastSync(orgId: string): Promise<void> {
   await withTenantTransaction({ kind: "org", orgId }, async (c) => {
     await c.query(
@@ -139,10 +163,11 @@ export async function touchTwentyLastSync(orgId: string): Promise<void> {
  */
 export async function orgsWithoutOwnInstance(
   sharedBaseUrl: string,
-): Promise<{ orgId: string; reason: string }[]> {
+): Promise<{ orgId: string; slug: string | null; reason: string }[]> {
   return withCrossTenantRead("twenty-coverage-check", async (c) => {
-    const { rows } = await c.query<{ org_id: string; reason: string }>(
+    const { rows } = await c.query<{ org_id: string; slug: string | null; reason: string }>(
       `SELECT o.id AS org_id,
+              o.slug,
               CASE
                 WHEN t.org_id IS NULL          THEN 'no connection'
                 WHEN t.base_url = $1           THEN 'shared instance'
@@ -156,6 +181,6 @@ export async function orgsWithoutOwnInstance(
         ORDER BY o.id`,
       [sharedBaseUrl],
     );
-    return rows.map((r) => ({ orgId: r.org_id, reason: r.reason }));
+    return rows.map((r) => ({ orgId: r.org_id, slug: r.slug, reason: r.reason }));
   });
 }

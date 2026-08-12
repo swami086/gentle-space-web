@@ -12,6 +12,7 @@ import { listActivities, logCall } from "../db/enquiry-activities";
 import { addMessage, listMessages } from "../db/enquiry-messages";
 import { applyRevision, createRevision, getRequirement } from "../db/enquiry-requirements";
 import { suppressEnquiry } from "../db/erasure";
+import { slugifyOrgName } from "../db/orgs";
 import type { Scope } from "../db/scope-sql";
 
 /**
@@ -28,7 +29,7 @@ let orgB: string;
 let userA: string;
 let scopeA: Scope;
 let scopeB: Scope;
-/** Fixture org names — public.orgs has no slug column in this schema. */
+/** Fixture org names for integration tests (slug derived via slugifyOrgName). */
 const ORG_NAME_A = "Spine Test A";
 const ORG_NAME_B = "Spine Test B";
 
@@ -68,9 +69,9 @@ beforeAll(async () => {
     );
   }
   const org = await pool.query<{ id: string }>(
-    `INSERT INTO public.orgs (name, kind) VALUES ($1, 'external'), ($2, 'external')
+    `INSERT INTO public.orgs (name, slug, kind) VALUES ($1, $3, 'external'), ($2, $4, 'external')
      RETURNING id`,
-    [ORG_NAME_A, ORG_NAME_B],
+    [ORG_NAME_A, ORG_NAME_B, slugifyOrgName(ORG_NAME_A), slugifyOrgName(ORG_NAME_B)],
   );
   orgA = org.rows[0].id;
   orgB = org.rows[1].id;

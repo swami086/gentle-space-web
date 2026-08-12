@@ -11,10 +11,16 @@ import {
   createCoolifyApi,
   provisionTwentyInstance,
 } from "../lib/crm/twenty-provisioning";
+import { provisionTwentyLocal } from "../lib/crm/twenty-provision-local";
+import { requireOrgSlug } from "../lib/db/orgs";
 
-function arg(name: string): string {
+function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
-  const value = index >= 0 ? process.argv[index + 1] : undefined;
+  return index >= 0 ? process.argv[index + 1] : undefined;
+}
+
+function requireArg(name: string): string {
+  const value = arg(name);
   if (!value) throw new Error(`provision-twenty-instance: --${name} is required`);
   return value;
 }
@@ -36,16 +42,43 @@ function env(name: string): string {
 
 async function main(): Promise<void> {
   if (process.argv.includes("--activate")) {
-    await activateTwentyConnection(arg("org-id"), arg("api-key-ref"), arg("tag"));
-    console.log(`twenty: org ${arg("org-id")} is active`);
+    await activateTwentyConnection(requireArg("org-id"), requireArg("api-key-ref"), requireArg("tag"));
+    console.log(`twenty: org ${requireArg("org-id")} is active`);
     return;
   }
 
-  const orgSlug = arg("slug");
+  const orgId = requireArg("org-id");
+  const orgSlug = arg("slug") ?? (await requireOrgSlug(orgId));
+
+  if (process.argv.includes("--local")) {
+    const postgresPassword = process.env.TWENTY_PG_PASSWORD?.trim();
+    if (!postgresPassword) throw new Error("provision-twenty-instance: TWENTY_PG_PASSWORD is not set");
+    const result = await provisionTwentyLocal({
+      orgId,
+      orgSlug,
+      postgresPassword,
+      twentyTag: process.env.TWENTY_TAG,
+    });
+    const keyRef = process.env.LOCAL_TWENTY_USE_SHARED_KEY === "1"
+      ? "env://TWENTY_API_KEY"
+      : `env://TWENTY_API_KEY_${orgSlug.replace(/-/g, "_").toUpperCase()}`;
+    console.log(`twenty local: tenant DB ready, registry state=provisioning
+  base_url=${result.baseUrl}
+  Tenant DB: twenty_${orgSlug.replace(/-/g, "_")} on gentle-space-pg (TWENTY_PG_ADMIN_URL)
+
+  Activate when TWENTY_API_KEY is set:
+    npx tsx --env-file=.env.local scripts/provision-twenty-instance.ts \\
+      --local --activate --org-id ${orgId} --api-key-ref ${keyRef} --tag ${process.env.TWENTY_TAG ?? "latest"}`);
+    return;
+  }
+
+  const noWait = process.argv.includes("--no-wait");
   const api = createCoolifyApi(env("COOLIFY_BASE_URL"), env("COOLIFY_API_TOKEN"));
-  const result = await provisionTwentyInstance(api, {
-    orgId: arg("org-id"),
-    orgSlug,
+  const result = await provisionTwentyInstance(
+    api,
+    {
+      orgId,
+      orgSlug,
     projectUuid: env("COOLIFY_PROJECT_UUID"),
     serverUuid: env("COOLIFY_SERVER_UUID"),
     environmentName: process.env.COOLIFY_ENVIRONMENT ?? "production",
@@ -55,7 +88,9 @@ async function main(): Promise<void> {
     appSecret: env("TWENTY_APP_SECRET"),
     encryptionKey: env("TWENTY_ENCRYPTION_KEY"),
     twentyTag: process.env.TWENTY_TAG ?? "latest",
-  });
+  },
+    { waitForHealth: !noWait },
+  );
 
   const variable = `TWENTY_API_KEY_${orgSlug.replace(/-/g, "_").toUpperCase()}`;
   console.log(`twenty: service ${result.serviceUuid} deployed and healthy, state=provisioning
@@ -66,7 +101,7 @@ Manual steps (tenancy spec §9, steps 4-6):
      ONLY. A workspace-admin key is not needed and must not be issued.
   3. Put it in ${variable} in the secret store, then run:
      npx tsx --env-file=.env.local scripts/provision-twenty-instance.ts \\
-       --activate --org-id ${arg("org-id")} --api-key-ref env://${variable} --tag ${process.env.TWENTY_TAG ?? "latest"}`);
+       --activate --org-id ${orgId} --api-key-ref env://${variable} --tag ${process.env.TWENTY_TAG ?? "latest"}`);
 }
 
 main()

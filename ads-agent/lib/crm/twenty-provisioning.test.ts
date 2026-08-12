@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { upsertTwentyConnection, setTwentyConnectionState } = vi.hoisted(() => ({
-  upsertTwentyConnection: vi.fn(),
-  setTwentyConnectionState: vi.fn(),
-}));
+const { upsertTwentyConnection, setTwentyConnectionState, activateTwentyConnectionRow } =
+  vi.hoisted(() => ({
+    upsertTwentyConnection: vi.fn(),
+    setTwentyConnectionState: vi.fn(),
+    activateTwentyConnectionRow: vi.fn(),
+  }));
 vi.mock("../db/twenty-connections", () => ({
   upsertTwentyConnection,
   setTwentyConnectionState,
+  activateTwentyConnectionRow,
+  getTwentyConnection: vi.fn().mockResolvedValue(null),
 }));
+vi.mock("./twenty-postgres", () => ({ ensureTenantPostgres: vi.fn().mockResolvedValue(undefined) }));
 
 import {
   activateTwentyConnection,
@@ -46,6 +51,12 @@ function fakeApi(): CoolifyApi & { calls: string[] } {
     }),
     deploy: vi.fn(async () => {
       calls.push("deploy");
+    }),
+    connectToDockerNetwork: vi.fn(async () => {
+      calls.push("connectToDockerNetwork");
+    }),
+    updateCompose: vi.fn(async () => {
+      calls.push("updateCompose");
     }),
     health: vi.fn(async () => {
       calls.push("health");
@@ -87,7 +98,15 @@ describe("provisionTwentyInstance", () => {
     const api = fakeApi();
     const result = await provisionTwentyInstance(api, input);
     expect(result).toEqual({ serviceUuid: "svc-abc", state: "provisioning" });
-    expect(api.calls).toEqual(["createService", "setEnvVars", "setFqdn", "deploy", "health"]);
+    expect(api.calls).toEqual([
+      "createService",
+      "setEnvVars",
+      "setFqdn",
+      "connectToDockerNetwork",
+      "updateCompose",
+      "deploy",
+      "health",
+    ]);
     expect(upsertTwentyConnection).toHaveBeenCalledWith({
       orgId: input.orgId,
       baseUrl: "https://acme-realty.crm.gentlespace.in",
@@ -112,8 +131,12 @@ describe("provisionTwentyInstance", () => {
 });
 
 describe("activateTwentyConnection", () => {
-  it("is the only thing that flips the state to active", async () => {
+  it("persists the key ref and flips the state to active", async () => {
     await activateTwentyConnection(input.orgId, "env://TWENTY_API_KEY_ACME_REALTY", "v1.9.0");
-    expect(setTwentyConnectionState).toHaveBeenCalledWith(input.orgId, "active", null);
+    expect(activateTwentyConnectionRow).toHaveBeenCalledWith(
+      input.orgId,
+      "env://TWENTY_API_KEY_ACME_REALTY",
+      "v1.9.0",
+    );
   });
 });

@@ -62,23 +62,6 @@ function splitIndianPhone(phone: string | null | undefined): Record<string, unkn
 }
 
 /**
- * The interim containment from the tenancy spec's Q4 resolution. Twenty's
- * deduplication has already merged contacts across tenant lines in the shared
- * instance, so no org except the platform may touch it. Removed by Task 24
- * once every org has its own instance — not before.
- */
-function assertNotSharedInstance(orgId: string, baseUrl: string): void {
-  const shared = process.env.SHARED_TWENTY_BASE_URL?.replace(/\/$/, "");
-  if (!shared) return;
-  if (baseUrl.replace(/\/$/, "") !== shared) return;
-  if (orgId === process.env.PLATFORM_ORG_ID) return;
-  throw new Error(
-    `twenty: interim platform-only guard — org ${orgId} would reach the shared instance, ` +
-      `whose contacts are merged across tenants and cannot be separated`,
-  );
-}
-
-/**
  * The only constructor. Constructing a Twenty client any other way is the
  * equivalent of a missing scopeClause. It throws rather than returning an
  * empty result, because an empty result is indistinguishable from a customer
@@ -90,7 +73,6 @@ export async function getTwentyClient(orgId: string): Promise<TwentyClient> {
   if (connection.state !== "active") {
     throw new Error(`twenty: connection for org ${orgId} is in state ${connection.state}`);
   }
-  assertNotSharedInstance(orgId, connection.baseUrl);
 
   const base = connection.baseUrl.replace(/\/$/, "");
   const key = await resolveTwentyApiKey(connection.apiKeyRef);

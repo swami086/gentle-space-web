@@ -9,6 +9,7 @@ import { listSignals, refreshEnquirySignals } from "../db/enquiry-signals";
 import { listNotifications } from "../db/notifications";
 import { createReminder, listPendingReminders } from "../db/reminders";
 import { getTodayFeed } from "../db/today-feed";
+import { slugifyOrgName } from "../db/orgs";
 import { fireDueReminders } from "../reminders/scheduler";
 import type { Scope } from "../db/scope-sql";
 
@@ -61,8 +62,8 @@ beforeAll(async () => {
     );
   }
   const org = await pool.query<{ id: string }>(
-    `INSERT INTO public.orgs (name, kind) VALUES ($1, 'external') RETURNING id`,
-    [ORG_NAME],
+    `INSERT INTO public.orgs (name, slug, kind) VALUES ($1, $2, 'external') RETURNING id`,
+    [ORG_NAME, slugifyOrgName(ORG_NAME)],
   );
   orgId = org.rows[0].id;
   const user = await pool.query<{ id: string }>(

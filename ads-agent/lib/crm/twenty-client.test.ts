@@ -22,8 +22,6 @@ const active = {
 
 beforeEach(() => {
   getTwentyConnection.mockReset();
-  process.env.PLATFORM_ORG_ID = "org-platform";
-  process.env.SHARED_TWENTY_BASE_URL = "https://crm.gentlespace.in";
 });
 
 afterEach(() => {
@@ -41,19 +39,17 @@ describe("getTwentyClient", () => {
     await expect(getTwentyClient("org-1")).rejects.toThrow(/state suspended/i);
   });
 
-  it("refuses a non-platform org pointed at the contaminated shared instance", async () => {
+  it("no longer special-cases the shared instance, because no org points at it", async () => {
     getTwentyConnection.mockResolvedValue({ ...active, baseUrl: "https://crm.gentlespace.in" });
-    await expect(getTwentyClient("org-1")).rejects.toThrow(/interim platform-only guard/i);
+    const client = await getTwentyClient("org-1");
+    expect(client.orgId).toBe("org-1");
   });
 
-  it("allows the platform org on the shared instance while the guard stands", async () => {
-    getTwentyConnection.mockResolvedValue({
-      ...active,
-      orgId: "org-platform",
-      baseUrl: "https://crm.gentlespace.in",
-    });
-    const client = await getTwentyClient("org-platform");
-    expect(client.orgId).toBe("org-platform");
+  it("still refuses any org without its own active connection, which is the stronger guard", async () => {
+    getTwentyConnection.mockResolvedValue(null);
+    await expect(getTwentyClient("org-2")).rejects.toThrow(/no Twenty connection/i);
+    getTwentyConnection.mockResolvedValue({ ...active, state: "deprovisioned" });
+    await expect(getTwentyClient("org-1")).rejects.toThrow(/state deprovisioned/i);
   });
 
   it("binds requests to that org's base url and key", async () => {
