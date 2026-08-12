@@ -45,6 +45,8 @@ vi.mock("../db/ai-action-log", () => ({ logAiAction }));
 
 import { runDecisionCycle } from "./cycle";
 
+const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
 const googleCampaign: Campaign = {
   id: "camp-google",
   platform: "google",
@@ -85,7 +87,7 @@ beforeEach(() => {
 
 describe("runDecisionCycle", () => {
   it("records a performance snapshot per campaign mapped by externalId, and the CRM signal", async () => {
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ campaignId: "camp-google", spend: 400, conversions: 1 }),
@@ -103,7 +105,7 @@ describe("runDecisionCycle", () => {
   });
 
   it("passes mapped search terms with local campaign ids into evaluateRules", async () => {
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
     const ruleInput = evaluateRules.mock.calls[0][0];
     expect(ruleInput.searchTerms).toEqual([
       { campaignId: "camp-google", searchTerm: "1bhk for rent", clicks: 3, conversions: 0 },
@@ -116,12 +118,13 @@ describe("runDecisionCycle", () => {
     ]);
     draftRationale.mockResolvedValue("CPL has been too high for 3 days.");
 
-    const result = await runDecisionCycle();
+    const result = await runDecisionCycle(ORG);
 
     expect(draftRationale).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "pause", campaignId: "camp-google" }),
     );
     expect(createProposal).toHaveBeenCalledWith(
+      ORG,
       expect.objectContaining({
         kind: "pause",
         campaignId: "camp-google",
@@ -132,7 +135,7 @@ describe("runDecisionCycle", () => {
   });
 
   it("returns proposalsCreated: 0 when no rule triggers", async () => {
-    await expect(runDecisionCycle()).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
     expect(createProposal).not.toHaveBeenCalled();
   });
 
@@ -140,7 +143,7 @@ describe("runDecisionCycle", () => {
     fetchGoogleAdsPerformance.mockResolvedValue([
       { externalCampaignId: "unknown-ext-id", spend: 999, clicks: 1, impressions: 1, conversions: 0 },
     ]);
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
     expect(recordPerformanceSnapshot).not.toHaveBeenCalledWith(
       expect.objectContaining({ spend: 999 }),
     );
@@ -157,7 +160,7 @@ describe("runDecisionCycle", () => {
     draftRationale.mockResolvedValue("rationale");
     createProposal.mockResolvedValue({});
 
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
 
     expect(logAiAction).toHaveBeenCalledWith({ domain: "marketing", summary: "Created 1 proposal" });
   });
@@ -171,7 +174,7 @@ describe("runDecisionCycle", () => {
     recentPerformanceSnapshots.mockResolvedValue([]);
     evaluateRules.mockReturnValue([]);
 
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
 
     expect(logAiAction).not.toHaveBeenCalled();
   });
@@ -179,7 +182,7 @@ describe("runDecisionCycle", () => {
   it("still records the Meta snapshot when fetchGoogleAdsPerformance rejects (MCP server unreachable)", async () => {
     fetchGoogleAdsPerformance.mockRejectedValue(new Error("google ads mcp: connect ECONNREFUSED"));
 
-    await expect(runDecisionCycle()).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ campaignId: "camp-meta", spend: 300 }),
@@ -192,7 +195,7 @@ describe("runDecisionCycle", () => {
   it("still records the Google Ads snapshot when fetchMetaPerformance rejects", async () => {
     fetchMetaPerformance.mockRejectedValue(new Error("meta: rate limited"));
 
-    await expect(runDecisionCycle()).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ campaignId: "camp-google", spend: 400 }),
@@ -202,7 +205,7 @@ describe("runDecisionCycle", () => {
   it("passes an empty search-terms list into evaluateRules when fetchGoogleSearchTerms rejects, without throwing", async () => {
     fetchGoogleSearchTerms.mockRejectedValue(new Error("google ads mcp: connect ECONNREFUSED"));
 
-    await runDecisionCycle();
+    await runDecisionCycle(ORG);
 
     const ruleInput = evaluateRules.mock.calls[0][0];
     expect(ruleInput.searchTerms).toEqual([]);

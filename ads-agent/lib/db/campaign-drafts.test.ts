@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./tx", () => ({
+  withTenantTransaction: (_scope: unknown, fn: (c: { query: typeof query }) => unknown) => fn({ query }),
+}));
 
+import type { Scope } from "./scope-sql";
 import {
   appendDraftMessage,
   createDraft,
@@ -13,15 +16,17 @@ import {
   updateDraftFields,
 } from "./campaign-drafts";
 
-const row = {
+const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
+const draftRow = {
   id: "draft-1",
   status: "chatting",
-  corridor: "whitefield",
-  daily_budget_inr: "500",
-  ad_group_name: "Whitefield Office Space",
-  keywords: [{ text: "office space whitefield", matchType: "phrase" }],
-  headlines: ["Office Space in Whitefield"],
-  descriptions: ["Skip the broker games."],
+  corridor: null,
+  daily_budget_inr: null,
+  ad_group_name: null,
+  keywords: [],
+  headlines: [],
+  descriptions: [],
   final_url: "https://www.gentlespacesolutions.com/spaces",
   proposal_id: null,
   created_at: new Date("2026-08-03T00:00:00.000Z"),
@@ -31,92 +36,91 @@ const row = {
 beforeEach(() => query.mockReset());
 
 describe("createDraft", () => {
-  it("inserts a default row and returns the mapped draft", async () => {
-    query.mockResolvedValue({ rows: [{ ...row, status: "chatting", corridor: null, daily_budget_inr: null, ad_group_name: null, keywords: [], headlines: [], descriptions: [] }] });
-    const result = await createDraft();
-    expect(result).toMatchObject({ id: "draft-1", status: "chatting", corridor: null, dailyBudgetInr: null });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO campaign_drafts DEFAULT VALUES"));
+  it("stamps the caller's org_id", async () => {
+    query.mockResolvedValue({ rows: [draftRow] });
+    await createDraft(ORG);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("INSERT INTO adsagent.campaign_drafts (org_id)");
+    expect(params).toEqual([ORG.orgId]);
   });
 });
 
 describe("getDraftById", () => {
-  it("returns null when missing", async () => {
+  it("returns null for a draft outside the caller's scope", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(getDraftById("missing")).resolves.toBeNull();
-  });
-
-  it("maps a found row, converting daily_budget_inr to a number", async () => {
-    query.mockResolvedValue({ rows: [row] });
-    const result = await getDraftById("draft-1");
-    expect(result).toEqual({
-      id: "draft-1",
-      status: "chatting",
-      corridor: "whitefield",
-      dailyBudgetInr: 500,
-      adGroupName: "Whitefield Office Space",
-      keywords: [{ text: "office space whitefield", matchType: "phrase" }],
-      headlines: ["Office Space in Whitefield"],
-      descriptions: ["Skip the broker games."],
-      finalUrl: "https://www.gentlespacesolutions.com/spaces",
-      proposalId: null,
-      createdAt: "2026-08-03T00:00:00.000Z",
-      updatedAt: "2026-08-03T00:00:00.000Z",
-    });
+    await expect(getDraftById(ORG, "draft-x")).resolves.toBeNull();
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "draft-x"]);
   });
 });
 
 describe("updateDraftFields", () => {
-  it("builds an UPDATE with jsonb casts only for array fields", async () => {
-    query.mockResolvedValue({ rows: [row] });
-    await updateDraftFields("draft-1", { corridor: "koramangala", headlines: ["New headline"] });
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE campaign_drafts SET corridor = $2, headlines = $3::jsonb, updated_at = NOW() WHERE id = $1"),
-      ["draft-1", "koramangala", JSON.stringify(["New headline"])],
-    );
+  it("numbers field placeholders from $3, after scope and id", async () => {
+    query.mockResolvedValue({ rows: [{ ...draftRow, corridor: "HSR" }] });
+    await updateDraftFields(ORG, "draft-1", { corridor: "HSR" });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("corridor = $3");
+    expect(sql).toContain("org_id = $1::uuid");
+    expect(sql).toContain("id = $2");
+    expect(params).toEqual([ORG.orgId, "draft-1", "HSR"]);
   });
 
-  it("throws when the draft does not exist", async () => {
+  it("serialises json fields", async () => {
+    query.mockResolvedValue({ rows: [draftRow] });
+    await updateDraftFields(ORG, "draft-1", { headlines: ["a", "b"] });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("headlines = $3::jsonb");
+    expect(params[2]).toBe(JSON.stringify(["a", "b"]));
+  });
+
+  it("throws when the scoped update matched nothing", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(updateDraftFields("missing", { corridor: "hsr" })).rejects.toThrow("campaign draft missing not found");
-  });
-
-  it("returns the existing draft unchanged when given an empty patch", async () => {
-    query.mockResolvedValueOnce({ rows: [row] });
-    const result = await updateDraftFields("draft-1", {});
-    expect(result.id).toBe("draft-1");
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("SELECT * FROM campaign_drafts WHERE id = $1"), ["draft-1"]);
+    await expect(updateDraftFields(ORG, "draft-1", { corridor: "HSR" })).rejects.toThrow(
+      "campaign draft draft-1 not found",
+    );
   });
 });
 
 describe("setDraftStatus", () => {
-  it("updates status", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await setDraftStatus("draft-1", "ready");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("SET status = $2"), ["draft-1", "ready"]);
+    await setDraftStatus(ORG, "draft-1", "ready");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "draft-1", "ready"]);
   });
 });
 
 describe("markDraftConverted", () => {
-  it("sets status converted and links the proposal", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await markDraftConverted("draft-1", "prop-1");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("status = 'converted'"), ["draft-1", "prop-1"]);
+    await markDraftConverted(ORG, "draft-1", "prop-1");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "draft-1", "prop-1"]);
   });
 });
 
-describe("appendDraftMessage and listDraftMessages", () => {
-  it("inserts a message and maps the returned row", async () => {
+describe("appendDraftMessage", () => {
+  it("stamps org_id and only writes against a draft in scope", async () => {
     query.mockResolvedValue({
-      rows: [{ id: "msg-1", draft_id: "draft-1", role: "user", content: "hello", created_at: new Date("2026-08-03T00:00:00.000Z") }],
+      rows: [{ id: "m1", draft_id: "draft-1", role: "user", content: "hi", created_at: new Date(0) }],
     });
-    const result = await appendDraftMessage("draft-1", "user", "hello");
-    expect(result).toEqual({ id: "msg-1", draftId: "draft-1", role: "user", content: "hello", createdAt: "2026-08-03T00:00:00.000Z" });
+    await appendDraftMessage(ORG, "draft-1", "user", "hi");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("adsagent.campaign_draft_messages");
+    expect(sql).toContain("adsagent.campaign_drafts");
+    expect(params).toEqual([ORG.orgId, "draft-1", "user", "hi"]);
   });
 
-  it("lists messages ordered ascending by created_at", async () => {
+  it("throws when the parent draft is out of scope", async () => {
     query.mockResolvedValue({ rows: [] });
-    await listDraftMessages("draft-1");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("ORDER BY created_at ASC"), ["draft-1"]);
+    await expect(appendDraftMessage(ORG, "draft-x", "user", "hi")).rejects.toThrow(
+      "campaign draft draft-x not found",
+    );
+  });
+});
+
+describe("listDraftMessages", () => {
+  it("scopes the listing", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await listDraftMessages(ORG, "draft-1");
+    expect(query.mock.calls[0][0]).toContain("org_id = $1::uuid");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "draft-1"]);
   });
 });

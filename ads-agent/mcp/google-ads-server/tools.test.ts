@@ -21,6 +21,7 @@ vi.mock("../../lib/db/proposals", () => ({ createProposal: createProposalMock })
 
 beforeEach(() => {
   vi.resetModules();
+  process.env.ADS_AGENT_ORG_ID = "org-1";
   process.env.GOOGLE_ADS_DEVELOPER_TOKEN = "dev-token";
   process.env.GOOGLE_ADS_CLIENT_ID = "client-id";
   process.env.GOOGLE_ADS_CLIENT_SECRET = "client-secret";
@@ -209,6 +210,6 @@ describe("proposeChange", () => {
     const result = await proposeChange(input);
 
     expect(result).toEqual({ proposalId: "prop-99" });
-    expect(createProposalMock).toHaveBeenCalledWith(input);
+    expect(createProposalMock).toHaveBeenCalledWith({ kind: "org", orgId: "org-1" }, input);
   });
 });

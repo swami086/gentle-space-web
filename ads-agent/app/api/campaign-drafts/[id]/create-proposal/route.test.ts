@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, Proposal } from "@/lib/types";
 
-const { getDraftById, markDraftConverted, createProposal, requireApiRole } = vi.hoisted(() => ({
+const { getDraftById, markDraftConverted, createProposal, requireApiRole, scopeForSession } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   markDraftConverted: vi.fn(),
   createProposal: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, markDraftConverted }));
 vi.mock("@/lib/db/proposals", () => ({ createProposal }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 
 import { POST } from "./route";
+
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function readyDraft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
@@ -55,6 +59,7 @@ beforeEach(() => {
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
   });
+  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/campaign-drafts/[id]/create-proposal", () => {
@@ -78,6 +83,7 @@ describe("POST /api/campaign-drafts/[id]/create-proposal", () => {
     const res = await POST(new Request("http://localhost", { method: "POST" }), { params: Promise.resolve({ id: "draft-1" }) });
 
     expect(createProposal).toHaveBeenCalledWith(
+      TEST_SCOPE,
       expect.objectContaining({
         kind: "create_campaign",
         payload: expect.objectContaining({
@@ -88,7 +94,7 @@ describe("POST /api/campaign-drafts/[id]/create-proposal", () => {
         }),
       }),
     );
-    expect(markDraftConverted).toHaveBeenCalledWith("draft-1", "prop-1");
+    expect(markDraftConverted).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "prop-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ proposalId: "prop-1" });
   });

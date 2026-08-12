@@ -10,6 +10,7 @@ const {
   updateDraftFields,
   draftCampaignChatReply,
   requireApiRole,
+  scopeForSession,
 } = vi.hoisted(() => ({
   appendDraftMessage: vi.fn(),
   getDraftById: vi.fn(),
@@ -18,6 +19,7 @@ const {
   updateDraftFields: vi.fn(),
   draftCampaignChatReply: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({
@@ -29,8 +31,11 @@ vi.mock("@/lib/db/campaign-drafts", () => ({
 }));
 vi.mock("@/lib/decision-engine/campaign-chat", () => ({ draftCampaignChatReply }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 
 import { POST } from "./route";
+
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
@@ -84,6 +89,7 @@ beforeEach(() => {
     ok: true,
     session: { orgId: "org-1", email: "op@x.com", userId: "u-1", role: "operator" },
   });
+  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/campaign-drafts/[id]/messages", () => {
@@ -131,8 +137,8 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
     const events = await readEvents(res);
     expect(events).toEqual([{ done: true, reply: "What's your daily budget?", draft: draft() }]);
-    expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "user", "Launch a campaign in Whitefield");
-    expect(appendDraftMessage).toHaveBeenCalledWith("draft-1", "assistant", "What's your daily budget?");
+    expect(appendDraftMessage).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "user", "Launch a campaign in Whitefield");
+    expect(appendDraftMessage).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "assistant", "What's your daily budget?");
     expect(updateDraftFields).not.toHaveBeenCalled();
   });
 
@@ -168,7 +174,7 @@ describe("POST /api/campaign-drafts/[id]/messages", () => {
     expect(events[0]).toEqual({ delta: "root = SetupCard(" });
     expect(events[1]).toEqual({ delta: expect.stringContaining("whitefield") });
     expect(events[2]).toEqual({ done: true, reply: "Here's your draft — take a look.", draft: completeDraft });
-    expect(updateDraftFields).toHaveBeenCalledWith("draft-1", { corridor: "whitefield", dailyBudgetInr: 500 });
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "ready");
+    expect(updateDraftFields).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", { corridor: "whitefield", dailyBudgetInr: 500 });
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "ready");
   });
 });

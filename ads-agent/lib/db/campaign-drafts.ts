@@ -4,7 +4,8 @@ import type {
   CampaignDraftMessage,
   CampaignDraftStatus,
 } from "../types";
-import { getPool } from "./client";
+import { scopeClause, type Scope } from "./scope-sql";
+import { withTenantTransaction } from "./tx";
 
 type CampaignDraftRow = {
   id: string;
@@ -38,19 +39,26 @@ function rowToDraft(row: CampaignDraftRow): CampaignDraft {
   };
 }
 
-export async function createDraft(): Promise<CampaignDraft> {
-  const { rows } = await getPool().query<CampaignDraftRow>(
-    `INSERT INTO campaign_drafts DEFAULT VALUES RETURNING *`,
-  );
-  return rowToDraft(rows[0]);
+export async function createDraft(scope: Scope): Promise<CampaignDraft> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignDraftRow>(
+      `INSERT INTO adsagent.campaign_drafts (org_id) VALUES ($1::uuid) RETURNING *`,
+      [...s.params],
+    );
+    return rowToDraft(rows[0]);
+  });
 }
 
-export async function getDraftById(id: string): Promise<CampaignDraft | null> {
-  const { rows } = await getPool().query<CampaignDraftRow>(
-    `SELECT * FROM campaign_drafts WHERE id = $1`,
-    [id],
-  );
-  return rows[0] ? rowToDraft(rows[0]) : null;
+export async function getDraftById(scope: Scope, id: string): Promise<CampaignDraft | null> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignDraftRow>(
+      `SELECT * FROM adsagent.campaign_drafts WHERE ${s.sql} AND id = $2`,
+      [...s.params, id],
+    );
+    return rows[0] ? rowToDraft(rows[0]) : null;
+  });
 }
 
 const FIELD_COLUMNS: Record<keyof CampaignDraftFields, string> = {
@@ -66,44 +74,69 @@ const FIELD_COLUMNS: Record<keyof CampaignDraftFields, string> = {
 const JSON_FIELDS = new Set<keyof CampaignDraftFields>(["keywords", "headlines", "descriptions"]);
 
 export async function updateDraftFields(
+  scope: Scope,
   id: string,
   fields: CampaignDraftFields,
 ): Promise<CampaignDraft> {
   const entries = Object.entries(fields) as [keyof CampaignDraftFields, unknown][];
   if (entries.length === 0) {
-    const existing = await getDraftById(id);
+    const existing = await getDraftById(scope, id);
     if (!existing) throw new Error(`campaign draft ${id} not found`);
     return existing;
   }
 
+  const s = scopeClause(scope);
+  // $1 is the scope param and $2 is the id, so field placeholders start at $3.
   const setClauses = entries.map(([field], index) => {
     const column = FIELD_COLUMNS[field];
-    const placeholder = `$${index + 2}`;
+    const placeholder = `$${index + 3}`;
     return JSON_FIELDS.has(field) ? `${column} = ${placeholder}::jsonb` : `${column} = ${placeholder}`;
   });
   const values = entries.map(([field, value]) =>
     JSON_FIELDS.has(field) ? JSON.stringify(value) : value,
   );
 
-  const { rows } = await getPool().query<CampaignDraftRow>(
-    `UPDATE campaign_drafts SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = $1 RETURNING *`,
-    [id, ...values],
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignDraftRow>(
+      `UPDATE adsagent.campaign_drafts
+          SET ${setClauses.join(", ")}, updated_at = NOW()
+        WHERE ${s.sql} AND id = $2
+        RETURNING *`,
+      [...s.params, id, ...values],
+    );
+    if (!rows[0]) throw new Error(`campaign draft ${id} not found`);
+    return rowToDraft(rows[0]);
+  });
+}
+
+export async function setDraftStatus(
+  scope: Scope,
+  id: string,
+  status: CampaignDraftStatus,
+): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.campaign_drafts SET status = $3, updated_at = NOW()
+        WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, status],
+    ),
   );
-  if (!rows[0]) throw new Error(`campaign draft ${id} not found`);
-  return rowToDraft(rows[0]);
 }
 
-export async function setDraftStatus(id: string, status: CampaignDraftStatus): Promise<void> {
-  await getPool().query(`UPDATE campaign_drafts SET status = $2, updated_at = NOW() WHERE id = $1`, [
-    id,
-    status,
-  ]);
-}
-
-export async function markDraftConverted(id: string, proposalId: string): Promise<void> {
-  await getPool().query(
-    `UPDATE campaign_drafts SET status = 'converted', proposal_id = $2, updated_at = NOW() WHERE id = $1`,
-    [id, proposalId],
+export async function markDraftConverted(
+  scope: Scope,
+  id: string,
+  proposalId: string,
+): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `UPDATE adsagent.campaign_drafts
+          SET status = 'converted', proposal_id = $3, updated_at = NOW()
+        WHERE ${s.sql} AND id = $2`,
+      [...s.params, id, proposalId],
+    ),
   );
 }
 
@@ -126,21 +159,41 @@ function rowToMessage(row: CampaignDraftMessageRow): CampaignDraftMessage {
 }
 
 export async function appendDraftMessage(
+  scope: Scope,
   draftId: string,
   role: "user" | "assistant",
   content: string,
 ): Promise<CampaignDraftMessage> {
-  const { rows } = await getPool().query<CampaignDraftMessageRow>(
-    `INSERT INTO campaign_draft_messages (draft_id, role, content) VALUES ($1, $2, $3) RETURNING *`,
-    [draftId, role, content],
-  );
-  return rowToMessage(rows[0]);
+  const s = scopeClause(scope, "d.org_id");
+  return withTenantTransaction(scope, async (client) => {
+    // The parent draft carries authoritative ownership; the SELECT is what
+    // makes a message under another tenant's draft impossible to create, and
+    // org_id is denormalised onto the row so it can carry its own RLS policy.
+    const { rows } = await client.query<CampaignDraftMessageRow>(
+      `INSERT INTO adsagent.campaign_draft_messages (org_id, draft_id, role, content)
+       SELECT d.org_id, d.id, $3, $4
+         FROM adsagent.campaign_drafts d
+        WHERE ${s.sql} AND d.id = $2
+       RETURNING *`,
+      [...s.params, draftId, role, content],
+    );
+    if (!rows[0]) throw new Error(`campaign draft ${draftId} not found`);
+    return rowToMessage(rows[0]);
+  });
 }
 
-export async function listDraftMessages(draftId: string): Promise<CampaignDraftMessage[]> {
-  const { rows } = await getPool().query<CampaignDraftMessageRow>(
-    `SELECT * FROM campaign_draft_messages WHERE draft_id = $1 ORDER BY created_at ASC`,
-    [draftId],
-  );
-  return rows.map(rowToMessage);
+export async function listDraftMessages(
+  scope: Scope,
+  draftId: string,
+): Promise<CampaignDraftMessage[]> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CampaignDraftMessageRow>(
+      `SELECT * FROM adsagent.campaign_draft_messages
+        WHERE ${s.sql} AND draft_id = $2
+        ORDER BY created_at ASC`,
+      [...s.params, draftId],
+    );
+    return rows.map(rowToMessage);
+  });
 }
