@@ -51,5 +51,6 @@ backups/
 .cursor/rules/openmemory.mdc
 .worktrees/
 .superpowers/
+.bin/
 CLAUDE.md
 AGENTS.md
