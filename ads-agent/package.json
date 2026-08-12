@@ -12,6 +12,8 @@
     "pubsub:bootstrap": "tsx --env-file=.env.local scripts/bootstrap-pubsub-emulator.ts",
     "relay": "tsx --env-file=.env.local scripts/run-outbox-relay.ts",
     "reconcile:deletions": "tsx --env-file=.env.local scripts/run-deletion-reconciler.ts",
+    "outbox:health": "tsx --env-file=.env.local scripts/check-outbox-health.ts",
+    "outbox:prune": "tsx --env-file=.env.local scripts/prune-outbox.ts",
     "migrate": "tsx --env-file=.env.local lib/db/migrate.ts",
     "migrate:down": "tsx --env-file=.env.local lib/db/migrate.ts --down",
     "worker": "tsx --env-file=.env.local scripts/run-decision-cycle.ts",
