@@ -5,11 +5,19 @@ import { applyMigrations, rollbackLast } from "./migration-runner";
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "lib/db/migrations");
 
+/** Migration 003 grants on ag_catalog; ensure AGE is loaded on fresh consolidated DBs. */
+async function ensureGraphExtensions(): Promise<void> {
+  const pool = getPool();
+  await pool.query("CREATE EXTENSION IF NOT EXISTS age");
+  await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
+}
+
 /**
  * Applies legacy schema bootstrap (if present) then every numbered migration not
  * already recorded in public.schema_migrations.
  */
 export async function migrate(): Promise<string[]> {
+  await ensureGraphExtensions();
   const schemaPath = path.join(process.cwd(), "lib/db/schema.sql");
   if (existsSync(schemaPath)) {
     await getPool().query(readFileSync(schemaPath, "utf-8"));

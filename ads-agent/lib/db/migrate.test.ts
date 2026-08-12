@@ -35,6 +35,8 @@ describe("migrate", () => {
   it("returns no pending migrations when the ledger is current", async () => {
     const ran = await migrate();
     expect(ran).toEqual([]);
+    expect(query).toHaveBeenCalledWith("CREATE EXTENSION IF NOT EXISTS age");
+    expect(query).toHaveBeenCalledWith("CREATE EXTENSION IF NOT EXISTS vector");
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS public.schema_migrations"),
     );
