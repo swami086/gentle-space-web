@@ -14,6 +14,7 @@ const VIEWS = [
   "v_agent_spaces",
   "v_agent_proposals",
   "v_agent_campaigns",
+  "v_agent_graph_manifest",
   "v_agent_graph_node",
   "v_agent_graph_edge",
 ] as const;
@@ -27,6 +28,7 @@ const ALLOWED_BASE_TABLES = new Set([
   "adsagent.enquiry_activities",
   "adsagent.proposals",
   "adsagent.campaigns",
+  "context.graph_manifests",
 ]);
 
 describe.skipIf(!LIVE)("agent read views", () => {
