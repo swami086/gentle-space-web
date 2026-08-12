@@ -1,3 +1,5 @@
+import { assertWithinCeiling, recordTokenUsage } from "../../lib/db/agent-cost";
+import { assertNoMessageBodies, safeErrorCode } from "../../lib/tracing/redact";
 import { assertToolAllowed, verifyTaskToken, type TaskTokenClaims } from "./task-token";
 
 export type SpanRecord = {
@@ -41,20 +43,12 @@ export function getSpanSink(): SpanSink {
 }
 
 /**
- * Turns any thrown value into a stable code. Never `err.message`: a message can
- * carry an enquiry body or a contact address, and this value reaches a span
- * (datastore §13.3). Task 15 replaces this with the shared `safeErrorCode`.
- */
-function errorCode(err: unknown): string {
-  const code = (err as { code?: unknown })?.code;
-  return typeof code === "string" && /^[a-z_]{3,40}$/.test(code) ? code : "tool_error";
-}
-
-/**
- * The one path every tool call takes. Token verification, tool allowlist, span
- * emission — and, from Task 17, the per-tenant cost ceiling. Because
- * registerGuardedTool in index.ts is the only caller of server.registerTool,
- * there is no untraced call path for any of those checks to be bypassed on.
+ * The one path every tool call takes: token verification, tool allowlist, cost
+ * ceiling, execution, token-usage record, span emission. `registerGuardedTool`
+ * in index.ts is the only caller of server.registerTool, so there is no
+ * untraced call path on which any of those can be bypassed — which matters
+ * because the token metrics are the same signal that enforces the per-tenant
+ * ceiling (agent spec §8a).
  */
 export async function dispatchTool<T>(
   toolName: string,
@@ -68,28 +62,51 @@ export async function dispatchTool<T>(
   try {
     claims = await verifyTaskToken(token);
     assertToolAllowed(claims, toolName);
+    // Halts rather than warns, and before any work is paid for.
+    await assertWithinCeiling(claims.orgId);
     return await run(claims);
   } catch (err) {
     status = "error";
-    statusCode = errorCode(err);
+    statusCode = safeErrorCode(err);
     throw err;
   } finally {
+    const durationMs = Date.now() - startedAt;
+    if (claims) {
+      // A tool call costs even when it fails, so it meters either way. Metering
+      // must not mask the original error, hence the swallow.
+      await recordTokenUsage(claims.orgId, {
+        profile: claims.profile,
+        tool: toolName,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+      }).catch(() => undefined);
+    }
     const attributes: Record<string, string | number | boolean> = {
       "gen_ai.operation.name": "execute_tool",
       "gen_ai.tool.name": toolName,
       "gen_ai.agent.name": claims?.profile ?? "unknown",
       "gentlespace.tenant.id": claims?.orgId ?? "unknown",
       "gentlespace.task.id": claims?.taskId ?? "unknown",
-      "gen_ai.client.operation.duration": Date.now() - startedAt,
+      "gen_ai.client.operation.duration": durationMs,
+      "gen_ai.client.token.usage": 0,
     };
     if (statusCode) attributes["error.type"] = statusCode;
-    await getSpanSink().emit({
-      name: `execute_tool ${toolName}`,
-      attributes,
-      startedAt,
-      endedAt: Date.now(),
-      status,
-      statusCode,
-    });
+    try {
+      // Structure only. If an attribute ever violates the rule, the span is
+      // dropped rather than emitted — telemetry is never worth a PII leak, and
+      // a dropped span cannot change the tool's result.
+      assertNoMessageBodies(attributes);
+      await getSpanSink().emit({
+        name: `execute_tool ${toolName}`,
+        attributes,
+        startedAt,
+        endedAt: Date.now(),
+        status,
+        statusCode,
+      });
+    } catch {
+      console.warn(JSON.stringify({ event: "span_dropped", tool: toolName }));
+    }
   }
 }

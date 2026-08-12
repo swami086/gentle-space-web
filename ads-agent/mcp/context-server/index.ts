@@ -13,8 +13,9 @@ import { getEnquiry, listEnquiries, REPLY_STATES } from "./read-enquiries";
 import { getCampaignPerformance } from "./read-performance";
 import { AGENT_VISIBLE_PROPOSAL_STATUSES, listProposals } from "./read-proposals";
 import { getSpace, searchSpaces } from "./read-spaces";
+import { otlpSpanSink } from "../../lib/tracing/otlp-sink";
 import type { TaskTokenClaims } from "./task-token";
-import { dispatchTool } from "./tool-context";
+import { dispatchTool, setSpanSink } from "./tool-context";
 
 export {
   bufferSpanSink,
@@ -211,6 +212,10 @@ export function resolveContextMcpBind(): string {
  * and every client here opens a fresh session per call.
  */
 export async function startContextMcpServer(port = 8768): Promise<void> {
+  // Spans go to Langfuse over OTLP/HTTP. A missing LANGFUSE_OTLP_ENDPOINT makes
+  // the sink a no-op rather than an error, so the server runs locally without it.
+  setSpanSink(otlpSpanSink("context-mcp"));
+
   const handler = createMcpHandler(() => buildContextMcpServer());
   const nodeHandler = toNodeHandler(handler);
   const validateHost = hostHeaderValidation(resolveContextMcpAllowedHosts());

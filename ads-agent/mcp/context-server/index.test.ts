@@ -14,6 +14,15 @@ const tokenMock = vi.hoisted(() => ({
 }));
 vi.mock("./task-token", () => tokenMock);
 
+const costMock = vi.hoisted(() => ({
+  assertWithinCeiling: vi.fn(),
+  recordTokenUsage: vi.fn(),
+  CostCeilingExceededError: class extends Error {
+    readonly code = "cost_ceiling_exceeded";
+  },
+}));
+vi.mock("../../lib/db/agent-cost", () => costMock);
+
 const readsMock = vi.hoisted(() => ({
   listEnquiries: vi.fn(),
   getEnquiry: vi.fn(),
@@ -57,6 +66,8 @@ beforeEach(() => {
     profile: "leads",
     toolAllowlist: [...CONTEXT_READ_TOOL_NAMES, ...CONTEXT_WRITE_TOOL_NAMES],
   });
+  costMock.assertWithinCeiling.mockResolvedValue(undefined);
+  costMock.recordTokenUsage.mockResolvedValue(undefined);
 });
 
 describe("buildContextMcpServer", () => {
