@@ -71,7 +71,7 @@ export async function createDeletionRequest(
     const { rows } = await c.query<RequestRow>(
       `INSERT INTO context.deletion_requests
          (org_id, subject_kind, subject_ref, suppressed_at, erase_after, respond_by)
-       VALUES ($1, $2, $3, now(), now()::date + $4, now()::date + $5)
+       VALUES ($1, $2, $3, now(), now()::date + $4::int, now()::date + $5::int)
        RETURNING ${COLUMNS}`,
       [orgId, input.subjectKind, input.subjectRef, RETENTION_FLOOR_DAYS, GRIEVANCE_RESPONSE_DAYS],
     );
