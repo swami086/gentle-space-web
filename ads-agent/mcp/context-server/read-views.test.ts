@@ -16,13 +16,12 @@ const VIEWS = [
   "v_agent_campaigns",
 ] as const;
 
+// listings.* has no RLS — spaces uses SECURITY DEFINER; never grant those tables.
 const ALLOWED_BASE_TABLES = new Set([
   "adsagent.enquiries",
   "adsagent.enquiry_activities",
   "adsagent.proposals",
   "adsagent.campaigns",
-  "listings.listings",
-  "listings.listing_corridors",
 ]);
 
 describe.skipIf(!LIVE)("agent read views", () => {

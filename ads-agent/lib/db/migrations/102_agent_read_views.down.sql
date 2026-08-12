@@ -8,10 +8,8 @@ DROP VIEW IF EXISTS context.v_agent_spaces;
 DROP VIEW IF EXISTS context.v_agent_enquiry_activity;
 DROP VIEW IF EXISTS context.v_agent_enquiries;
 
-REVOKE SELECT ON
-  listings.listing_corridors,
-  listings.listings
-FROM agent_ro;
+REVOKE EXECUTE ON FUNCTION context._agent_spaces_scan() FROM agent_ro;
+DROP FUNCTION IF EXISTS context._agent_spaces_scan();
 
 REVOKE SELECT ON
   adsagent.campaigns,
@@ -20,6 +18,6 @@ REVOKE SELECT ON
   adsagent.enquiries
 FROM agent_ro;
 
-REVOKE USAGE ON SCHEMA listings, adsagent FROM agent_ro;
+REVOKE USAGE ON SCHEMA adsagent FROM agent_ro;
 
 COMMIT;
