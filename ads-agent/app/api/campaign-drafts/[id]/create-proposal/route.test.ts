@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, Proposal } from "@/lib/types";
 
-const { getDraftById, markDraftConverted, createProposal } = vi.hoisted(() => ({
+const { getDraftById, markDraftConverted, createProposal, requireApiRole } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   markDraftConverted: vi.fn(),
   createProposal: vi.fn(),
+  requireApiRole: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, markDraftConverted }));
 vi.mock("@/lib/db/proposals", () => ({ createProposal }));
+vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { POST } from "./route";
 
@@ -47,7 +49,13 @@ function proposal(overrides: Partial<Proposal> = {}): Proposal {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireApiRole.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+  });
+});
 
 describe("POST /api/campaign-drafts/[id]/create-proposal", () => {
   it("returns 404 when the draft does not exist", async () => {

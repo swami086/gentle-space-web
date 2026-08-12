@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getCronSettings, setCronEnabled } = vi.hoisted(() => ({
+const { getCronSettings, setCronEnabled, requireApiRole } = vi.hoisted(() => ({
   getCronSettings: vi.fn(),
   setCronEnabled: vi.fn(),
+  requireApiRole: vi.fn(),
 }));
 
 vi.mock("@/lib/db/settings", () => ({ getCronSettings, setCronEnabled }));
+vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { GET, PATCH } from "./route";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireApiRole.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "admin" },
+  });
+});
 
 describe("GET /api/settings", () => {
   it("returns the current cron settings", async () => {

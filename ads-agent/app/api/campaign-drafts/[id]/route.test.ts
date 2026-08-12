@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "@/lib/types";
 
-const { getDraftById, updateDraftFields, setDraftStatus } = vi.hoisted(() => ({
+const { getDraftById, updateDraftFields, setDraftStatus, requireApiRole } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   updateDraftFields: vi.fn(),
   setDraftStatus: vi.fn(),
+  requireApiRole: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, updateDraftFields, setDraftStatus }));
+vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { PATCH } from "./route";
 
@@ -33,7 +35,13 @@ function patchRequest(body: unknown) {
   return new Request("http://localhost", { method: "PATCH", body: JSON.stringify(body) });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireApiRole.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+  });
+});
 
 describe("PATCH /api/campaign-drafts/[id]", () => {
   it("returns 404 when the draft does not exist", async () => {

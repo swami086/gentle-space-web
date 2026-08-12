@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiRole } from "@/lib/auth/dal";
 import { getProposalById, updateProposalPayload } from "@/lib/db/proposals";
 import { validateDraftFields } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
@@ -6,6 +7,8 @@ import type { CampaignDraftFields } from "@/lib/types";
 const EDITABLE_FIELDS = ["dailyBudgetInr", "adGroupName", "keywords", "headlines", "descriptions", "finalUrl"] as const;
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireApiRole("operator");
+  if (!access.ok) return access.response;
   const { id } = await params;
   const proposal = await getProposalById(id);
   if (!proposal) return NextResponse.json({ error: "not found" }, { status: 404 });

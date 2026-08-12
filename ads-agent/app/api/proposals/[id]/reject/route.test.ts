@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, decideProposal } = vi.hoisted(() => ({
+const { getProposalById, decideProposal, requireApiRole } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   decideProposal: vi.fn(),
+  requireApiRole: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, decideProposal }));
+vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
 
 import { POST } from "./route";
 
@@ -26,7 +28,13 @@ function pendingProposal(): Proposal {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireApiRole.mockResolvedValue({
+    ok: true,
+    session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
+  });
+});
 
 describe("POST /api/proposals/[id]/reject", () => {
   it("returns 404 when the proposal does not exist", async () => {
