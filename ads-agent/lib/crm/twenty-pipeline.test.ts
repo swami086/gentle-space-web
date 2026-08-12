@@ -1,11 +1,22 @@
 // ads-agent/lib/crm/twenty-pipeline.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { callTwentyTool } = vi.hoisted(() => ({ callTwentyTool: vi.fn() }));
-vi.mock("../bifrost/mcp-client", () => ({ callTwentyTool }));
+const listOpportunitiesMock = vi.fn();
+const getOpportunityMock = vi.fn();
+const updateOpportunityStageMock = vi.fn();
+vi.mock("./twenty-client", () => ({
+  getTwentyClient: async () => ({
+    orgId: "org-1",
+    version: "1.9.0",
+    listOpportunities: listOpportunitiesMock,
+    getOpportunity: getOpportunityMock,
+    updateOpportunityStage: updateOpportunityStageMock,
+  }),
+}));
 
 import {
   PIPELINE_STAGES,
+  fetchLeadSignal,
   formatAmountLabelInr,
   getOpportunity,
   getPipelineValue,
@@ -16,17 +27,16 @@ import {
   updateOpportunityStage,
 } from "./twenty-pipeline";
 
+const scope = { kind: "org", orgId: "org-1" } as const;
 const PLATFORM = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
 
-const originalEnv = { ...process.env };
-
 beforeEach(() => {
-  process.env.TWENTY_API_KEY = "test-key";
-  callTwentyTool.mockReset();
+  listOpportunitiesMock.mockReset();
+  getOpportunityMock.mockReset();
+  updateOpportunityStageMock.mockReset();
 });
 
 afterEach(() => {
-  process.env = { ...originalEnv };
   vi.restoreAllMocks();
 });
 
@@ -50,8 +60,8 @@ describe("maskPhone", () => {
 });
 
 describe("listOpportunities", () => {
-  it("calls the list_opportunities MCP tool and maps records into typed rows", async () => {
-    callTwentyTool.mockResolvedValue({
+  it("calls the Twenty REST client and maps records into typed rows", async () => {
+    listOpportunitiesMock.mockResolvedValue({
       records: [
         {
           id: "opp-1",
@@ -68,9 +78,9 @@ describe("listOpportunities", () => {
       pageInfo: {},
     });
 
-    const rows = await listOpportunities(PLATFORM);
+    const rows = await listOpportunities(scope);
 
-    expect(callTwentyTool).toHaveBeenCalledWith("list_opportunities", { limit: 200 });
+    expect(listOpportunitiesMock).toHaveBeenCalledWith(200);
     expect(rows).toEqual([
       {
         id: "opp-1", name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT",
@@ -80,8 +90,8 @@ describe("listOpportunities", () => {
     ]);
   });
 
-  it("maps a bare array payload (live Twenty MCP shape) into typed rows", async () => {
-    callTwentyTool.mockResolvedValue([
+  it("maps a bare array payload into typed rows", async () => {
+    listOpportunitiesMock.mockResolvedValue([
       {
         id: "opp-1",
         name: "API Integration Deal",
@@ -91,66 +101,76 @@ describe("listOpportunities", () => {
         createdAt: "2026-01-25T16:26:00.000Z",
       },
     ]);
-    const rows = await listOpportunities(PLATFORM);
+    const rows = await listOpportunities(scope);
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("API Integration Deal");
     expect(rows[0].amountInr).toBe(75000);
   });
 
-  it("returns an empty list when Twenty is not configured", async () => {
-    delete process.env.TWENTY_API_KEY;
-    expect(await listOpportunities(PLATFORM)).toEqual([]);
-    expect(callTwentyTool).not.toHaveBeenCalled();
+  it("maps Twenty REST { data: { opportunities } } payloads", async () => {
+    listOpportunitiesMock.mockResolvedValue({
+      data: {
+        opportunities: [
+          { id: "opp-1", name: "REST Deal", stage: "TOUR", tier: "WARM", createdAt: "2026-08-01T00:00:00.000Z" },
+        ],
+      },
+    });
+    const rows = await listOpportunities(scope);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("REST Deal");
   });
 
-  it("returns an empty list when the MCP tool call throws, rather than throwing", async () => {
-    callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "list_opportunities" failed: 500'));
-    expect(await listOpportunities(PLATFORM)).toEqual([]);
+  it("returns an empty board and logs the org when the client throws", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    listOpportunitiesMock.mockRejectedValue(new Error("no Twenty connection for org org-1"));
+    await expect(listOpportunities(scope)).resolves.toEqual([]);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });
 
 describe("getOpportunity", () => {
-  it("calls get_opportunity with the id and maps the single record", async () => {
-    callTwentyTool.mockResolvedValue({
+  it("calls getOpportunity on the client and maps the single record", async () => {
+    getOpportunityMock.mockResolvedValue({
       id: "opp-1", name: "Office: Priya Sharma", stage: "SHORTLIST", tier: "HOT",
       amount: null, pointOfContact: null, source: "WhatsApp", listingName: null,
       createdAt: "2026-08-01T00:00:00.000Z",
     });
 
-    const row = await getOpportunity(PLATFORM, "opp-1");
+    const row = await getOpportunity(scope, "opp-1");
 
-    expect(callTwentyTool).toHaveBeenCalledWith("get_opportunity", { id: "opp-1" });
+    expect(getOpportunityMock).toHaveBeenCalledWith("opp-1");
     expect(row?.id).toBe("opp-1");
     expect(row?.amountInr).toBeNull();
     expect(row?.contactName).toBeNull();
   });
 
-  it("returns null when the MCP tool call throws", async () => {
-    callTwentyTool.mockRejectedValue(new Error("not found"));
-    expect(await getOpportunity(PLATFORM, "missing")).toBeNull();
+  it("returns null when the client throws", async () => {
+    getOpportunityMock.mockRejectedValue(new Error("not found"));
+    expect(await getOpportunity(scope, "missing")).toBeNull();
   });
 });
 
 describe("updateOpportunityStage", () => {
-  it("calls update_opportunity with id + stage and returns ok:true on success", async () => {
-    callTwentyTool.mockResolvedValue({ id: "opp-1", stage: "TOUR" });
+  it("calls updateOpportunityStage on the client and returns ok:true on success", async () => {
+    updateOpportunityStageMock.mockResolvedValue(undefined);
 
-    const result = await updateOpportunityStage(PLATFORM, "opp-1", "TOUR");
+    const result = await updateOpportunityStage(scope, "opp-1", "TOUR");
 
     expect(result).toEqual({ ok: true });
-    expect(callTwentyTool).toHaveBeenCalledWith("update_opportunity", { id: "opp-1", stage: "TOUR" });
+    expect(updateOpportunityStageMock).toHaveBeenCalledWith("opp-1", "TOUR");
   });
 
-  it("returns ok:false with an error message when the MCP tool call throws", async () => {
-    callTwentyTool.mockRejectedValue(new Error('twenty mcp tool "update_opportunity" failed: bad stage'));
-    const result = await updateOpportunityStage(PLATFORM, "opp-1", "TOUR");
+  it("returns ok:false with an error message when the client throws", async () => {
+    updateOpportunityStageMock.mockRejectedValue(new Error("bad stage"));
+    const result = await updateOpportunityStage(scope, "opp-1", "TOUR");
     expect(result).toEqual({ ok: false, error: expect.stringContaining("bad stage") });
   });
 });
 
 describe("getPipelineValue", () => {
   it("sums amountInr across all open opportunities", async () => {
-    callTwentyTool.mockResolvedValue({
+    listOpportunitiesMock.mockResolvedValue({
       records: [
         { id: "1", name: "A", stage: "NEW_BRIEF", tier: "HOT", amount: { amountMicros: 10000000000 }, pointOfContact: null, source: null, listingName: null, createdAt: "" },
         { id: "2", name: "B", stage: "RENEWAL", tier: "COLD", amount: { amountMicros: 5000000000 }, pointOfContact: null, source: null, listingName: null, createdAt: "" },
@@ -158,6 +178,39 @@ describe("getPipelineValue", () => {
       ],
     });
     expect(await getPipelineValue(PLATFORM)).toBe(15000);
+  });
+});
+
+describe("fetchLeadSignal", () => {
+  it("counts opportunities by tier from REST payloads", async () => {
+    listOpportunitiesMock.mockResolvedValue({
+      data: {
+        opportunities: [
+          { id: "1", name: "A", stage: "NEW_BRIEF", tier: "HOT", createdAt: "" },
+          { id: "2", name: "B", stage: "NEW_BRIEF", tier: "HOT", createdAt: "" },
+          { id: "3", name: "C", stage: "NEW_BRIEF", tier: "WARM", createdAt: "" },
+          { id: "4", name: "D", stage: "NEW_BRIEF", tier: "COLD", createdAt: "" },
+          { id: "5", name: "E", stage: "NEW_BRIEF", tier: "UNSCORED", createdAt: "" },
+          { id: "6", name: "F", stage: "NEW_BRIEF", tier: null, createdAt: "" },
+        ],
+      },
+    });
+    await expect(fetchLeadSignal(scope)).resolves.toEqual({
+      hotCount: 2,
+      warmCount: 1,
+      coldCount: 1,
+      unscoredCount: 2,
+    });
+  });
+
+  it("returns all zeros when readOpportunities fails", async () => {
+    listOpportunitiesMock.mockRejectedValue(new Error("no connection"));
+    await expect(fetchLeadSignal(scope)).resolves.toEqual({
+      hotCount: 0,
+      warmCount: 0,
+      coldCount: 0,
+      unscoredCount: 0,
+    });
   });
 });
 
@@ -175,7 +228,6 @@ describe("reshapeTwentyOpportunityToolResult", () => {
     source: "WhatsApp",
     listingName: "Koramangala",
     createdAt: "2026-08-01T00:00:00.000Z",
-    // Extra CRM fields that must never reach OpportunityCard positional arity
     companyId: "co-1",
     ownerId: "user-1",
     probability: 0.4,

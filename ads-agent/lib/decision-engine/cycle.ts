@@ -1,7 +1,7 @@
 import type { Scope } from "@/lib/db/scope-sql";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
 import { fetchMetaPerformance } from "../connectors/meta";
-import { fetchLeadSignal } from "../connectors/twenty";
+import { fetchLeadSignal } from "../crm/twenty-pipeline";
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
 import { writeAudit } from "../db/audit-log";
@@ -14,7 +14,7 @@ const EMPTY_LEAD_SIGNAL = { hotCount: 0, warmCount: 0, coldCount: 0, unscoredCou
 
 /** One platform's fetch failing (e.g. the Google Ads MCP server unreachable) must not abort every
  * other platform's snapshot for this tick — matches fetchLeadSignal's existing internal soft-fail
- * (lib/connectors/twenty.ts), applied here per-source instead of per-connector. */
+ * (lib/crm/twenty-pipeline.ts), applied here per-source instead of per-connector. */
 async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
@@ -30,10 +30,7 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
   );
 
-  const leadSignal =
-    scope.kind === "platform"
-      ? await softFail("twenty lead signal", () => fetchLeadSignal(scope), EMPTY_LEAD_SIGNAL)
-      : EMPTY_LEAD_SIGNAL;
+  const leadSignal = await softFail("twenty lead signal", () => fetchLeadSignal(scope), EMPTY_LEAD_SIGNAL);
 
   const [googlePerformance, metaPerformance, googleSearchTerms] = await Promise.all([
     softFail("google ads performance", fetchGoogleAdsPerformance, []),

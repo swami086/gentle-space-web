@@ -2,23 +2,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const scope = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
 
-const { guard, platformToolProvider } = vi.hoisted(() => ({
+const mockProvider = {
+  list_opportunities: vi.fn(),
+  get_spend_cpl_trend: vi.fn(),
+};
+
+const { guard, createPlatformToolProvider } = vi.hoisted(() => ({
   guard: vi.fn(),
-  platformToolProvider: {
-    list_opportunities: vi.fn(),
-    get_spend_cpl_trend: vi.fn(),
-  } as Record<string, ReturnType<typeof vi.fn>>,
+  createPlatformToolProvider: vi.fn(() => mockProvider),
 }));
 
 vi.mock("@/lib/auth/guard", () => ({ guard }));
-vi.mock("@/lib/openui/platform-tools", () => ({ platformToolProvider }));
+vi.mock("@/lib/openui/platform-tools", () => ({ createPlatformToolProvider }));
 
 import { POST } from "./route";
 
 beforeEach(() => {
   guard.mockReset();
-  platformToolProvider.list_opportunities.mockReset();
-  platformToolProvider.get_spend_cpl_trend.mockReset();
+  createPlatformToolProvider.mockClear();
+  mockProvider.list_opportunities.mockReset();
+  mockProvider.get_spend_cpl_trend.mockReset();
+  createPlatformToolProvider.mockReturnValue(mockProvider);
 });
 
 function req(body: unknown) {
@@ -31,11 +35,12 @@ function req(body: unknown) {
 describe("POST /api/openui/tools", () => {
   it("runs a registered tool for an authorized operator", async () => {
     guard.mockResolvedValue({ ok: true, session: {}, scope });
-    platformToolProvider.list_opportunities.mockResolvedValue([{ id: "1" }]);
+    mockProvider.list_opportunities.mockResolvedValue([{ id: "1" }]);
 
     const res = await POST(req({ name: "list_opportunities", args: {} }));
 
-    expect(platformToolProvider.list_opportunities).toHaveBeenCalledWith({});
+    expect(createPlatformToolProvider).toHaveBeenCalledWith(scope);
+    expect(mockProvider.list_opportunities).toHaveBeenCalledWith({});
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([{ id: "1" }]);
   });
@@ -47,7 +52,7 @@ describe("POST /api/openui/tools", () => {
     const res = await POST(req({ name: "list_opportunities", args: {} }));
 
     expect(res).toBe(forbidden);
-    expect(platformToolProvider.list_opportunities).not.toHaveBeenCalled();
+    expect(mockProvider.list_opportunities).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown tool name with 400", async () => {

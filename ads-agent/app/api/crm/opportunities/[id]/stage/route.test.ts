@@ -54,20 +54,23 @@ describe("PATCH /api/crm/opportunities/[id]/stage", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns 404 for non-platform scope without touching Twenty", async () => {
+  it("updates the stage for org scope using the guard-derived scope", async () => {
+    const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
     guard.mockResolvedValue({
       ok: true,
       session: { userId: "user-1" },
-      scope: { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+      scope: ORG,
     });
+    getOpportunity.mockResolvedValue({ id: "opp-1", stage: "NEW_BRIEF" });
+    updateOpportunityStage.mockResolvedValue({ ok: true });
 
     const res = await PATCH(req({ toStage: "TOUR", opportunityName: "Priya Sharma" }), {
       params: Promise.resolve({ id: "opp-1" }),
     });
 
-    expect(res.status).toBe(404);
-    expect(getOpportunity).not.toHaveBeenCalled();
-    expect(updateOpportunityStage).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(updateOpportunityStage).toHaveBeenCalledWith(ORG, "opp-1", "TOUR");
+    expect(writeAudit).toHaveBeenCalledWith(ORG, expect.objectContaining({ action: "opportunity.stage_changed" }));
   });
 
   it("returns 502 with the Twenty error when the update fails, without logging", async () => {

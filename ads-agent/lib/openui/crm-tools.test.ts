@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenUiOpportunityListResult } from "./crm-tools";
 
-const PLATFORM = { kind: "platform" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+const scope = { kind: "org", orgId: "org-1" } as const;
 
 const { listOpportunities, getOpportunity, updateOpportunityStage, writeAudit, toOpenUiOpportunityCard } = vi.hoisted(
   () => ({
@@ -38,7 +38,7 @@ vi.mock("../crm/twenty-pipeline", () => ({
 }));
 vi.mock("../db/audit-log", () => ({ writeAudit }));
 
-import { crmToolHandlers, crmToolSpecs, crmReadToolSpecs } from "./crm-tools";
+import { createCrmToolProvider, crmToolSpecs, crmReadToolSpecs } from "./crm-tools";
 
 beforeEach(() => {
   listOpportunities.mockReset();
@@ -62,8 +62,9 @@ describe("crmToolSpecs", () => {
   });
 });
 
-describe("crmToolHandlers.list_opportunities", () => {
+describe("createCrmToolProvider.list_opportunities", () => {
   it("returns OpenUI OpportunityCard rows (not raw Twenty/board fields)", async () => {
+    const provider = createCrmToolProvider(scope);
     listOpportunities.mockResolvedValue([
       {
         id: "1",
@@ -78,7 +79,7 @@ describe("crmToolHandlers.list_opportunities", () => {
         createdAt: "",
       },
     ]);
-    const result = (await crmToolHandlers.list_opportunities!(PLATFORM, {})) as OpenUiOpportunityListResult;
+    const result = (await provider.list_opportunities({})) as OpenUiOpportunityListResult;
     expect(toOpenUiOpportunityCard).toHaveBeenCalled();
     expect(result).toEqual({
       opportunities: [
@@ -87,23 +88,26 @@ describe("crmToolHandlers.list_opportunities", () => {
     });
     expect(result.opportunities[0]).not.toHaveProperty("id");
     expect(result.opportunities[0]).not.toHaveProperty("amountInr");
+    expect(listOpportunities).toHaveBeenCalledWith(scope);
   });
 });
 
-describe("crmToolHandlers.search_opportunities", () => {
+describe("createCrmToolProvider.search_opportunities", () => {
   it("filters by case-insensitive name substring then maps to OpenUI rows", async () => {
+    const provider = createCrmToolProvider(scope);
     listOpportunities.mockResolvedValue([
       { id: "1", name: "Priya Sharma", stage: "TOUR", tier: null, amountInr: null, contactName: null, maskedPhone: null, source: null, listingName: null, createdAt: "" },
       { id: "2", name: "Rohan Mehta", stage: "TOUR", tier: null, amountInr: null, contactName: null, maskedPhone: null, source: null, listingName: null, createdAt: "" },
     ]);
-    const result = (await crmToolHandlers.search_opportunities!(PLATFORM, { query: "priya" })) as OpenUiOpportunityListResult;
+    const result = (await provider.search_opportunities({ query: "priya" })) as OpenUiOpportunityListResult;
     expect(result.opportunities).toHaveLength(1);
     expect(result.opportunities[0]!.name).toBe("Priya Sharma");
   });
 });
 
-describe("crmToolHandlers.get_opportunity", () => {
+describe("createCrmToolProvider.get_opportunity", () => {
   it("delegates to getOpportunity by id and returns an OpenUI card row", async () => {
+    const provider = createCrmToolProvider(scope);
     getOpportunity.mockResolvedValue({
       id: "1",
       name: "Priya",
@@ -116,25 +120,26 @@ describe("crmToolHandlers.get_opportunity", () => {
       listingName: null,
       createdAt: "",
     });
-    const result = await crmToolHandlers.get_opportunity!(PLATFORM, { id: "1" });
-    expect(getOpportunity).toHaveBeenCalledWith(PLATFORM, "1");
+    const result = await provider.get_opportunity({ id: "1" });
+    expect(getOpportunity).toHaveBeenCalledWith(scope, "1");
     expect(result).toMatchObject({ name: "Priya", stage: "NEW_BRIEF" });
     expect(result).not.toHaveProperty("id");
   });
 });
 
-describe("crmToolHandlers.advance_opportunity_stage", () => {
+describe("createCrmToolProvider.advance_opportunity_stage", () => {
   it("updates the stage and writes an audit entry on success", async () => {
+    const provider = createCrmToolProvider(scope);
     getOpportunity.mockResolvedValue({ id: "1", stage: "NEW_BRIEF" });
     updateOpportunityStage.mockResolvedValue({ ok: true });
-    const result = await crmToolHandlers.advance_opportunity_stage!(PLATFORM, {
+    const result = await provider.advance_opportunity_stage({
       id: "1",
       opportunityName: "Priya Sharma",
       toStage: "SHORTLIST",
     });
     expect(result).toEqual({ ok: true });
-    expect(updateOpportunityStage).toHaveBeenCalledWith(PLATFORM, "1", "SHORTLIST");
-    expect(writeAudit).toHaveBeenCalledWith(PLATFORM, {
+    expect(updateOpportunityStage).toHaveBeenCalledWith(scope, "1", "SHORTLIST");
+    expect(writeAudit).toHaveBeenCalledWith(scope, {
       actorType: "agent",
       action: "opportunity.stage_changed",
       entityType: "opportunity",
@@ -144,9 +149,10 @@ describe("crmToolHandlers.advance_opportunity_stage", () => {
   });
 
   it("does not audit when the update fails", async () => {
+    const provider = createCrmToolProvider(scope);
     getOpportunity.mockResolvedValue({ id: "1", stage: "NEW_BRIEF" });
     updateOpportunityStage.mockResolvedValue({ ok: false, error: "boom" });
-    const result = await crmToolHandlers.advance_opportunity_stage!(PLATFORM, {
+    const result = await provider.advance_opportunity_stage({
       id: "1",
       opportunityName: "Priya Sharma",
       toStage: "SHORTLIST",
@@ -156,7 +162,8 @@ describe("crmToolHandlers.advance_opportunity_stage", () => {
   });
 
   it("rejects an unknown stage value rather than calling updateOpportunityStage", async () => {
-    const result = await crmToolHandlers.advance_opportunity_stage!(PLATFORM, {
+    const provider = createCrmToolProvider(scope);
+    const result = await provider.advance_opportunity_stage({
       id: "1",
       opportunityName: "Priya Sharma",
       toStage: "NOT_A_REAL_STAGE",

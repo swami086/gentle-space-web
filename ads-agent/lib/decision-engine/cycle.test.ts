@@ -38,7 +38,7 @@ vi.mock("../db/snapshots", () => ({
 vi.mock("../db/proposals", () => ({ createProposal }));
 vi.mock("../connectors/meta", () => ({ fetchMetaPerformance }));
 vi.mock("../connectors/google-ads", () => ({ fetchGoogleAdsPerformance, fetchGoogleSearchTerms }));
-vi.mock("../connectors/twenty", () => ({ fetchLeadSignal }));
+vi.mock("../crm/twenty-pipeline", () => ({ fetchLeadSignal }));
 vi.mock("./rules", () => ({ evaluateRules }));
 vi.mock("./rationale", () => ({ draftRationale }));
 vi.mock("../db/audit-log", () => ({ writeAudit }));
@@ -98,7 +98,7 @@ describe("runDecisionCycle", () => {
       ORG,
       expect.objectContaining({ campaignId: "camp-meta", spend: 300, conversions: 0 }),
     );
-    expect(fetchLeadSignal).not.toHaveBeenCalled();
+    expect(fetchLeadSignal).toHaveBeenCalledWith(ORG);
     expect(recordCrmSignalSnapshot).not.toHaveBeenCalled();
   });
 

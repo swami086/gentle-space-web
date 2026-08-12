@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
+process.env.MCP_ORG_ID = "test-org-id";
+
 const crmMock = vi.hoisted(() => ({
   crmToolProvider: {
     list_opportunities: vi.fn(),
@@ -15,7 +17,9 @@ const analyticsMock = vi.hoisted(() => ({
     list_pending_proposals: vi.fn(),
   },
 }));
-vi.mock("../../lib/openui/crm-tools", () => crmMock);
+vi.mock("../../lib/openui/crm-tools", () => ({
+  createCrmToolProvider: () => crmMock.crmToolProvider,
+}));
 vi.mock("../../lib/openui/analytics-tools", () => analyticsMock);
 
 import { afterEach, vi } from "vitest";
