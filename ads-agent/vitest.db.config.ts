@@ -13,6 +13,8 @@ export default defineConfig({
     hookTimeout: 30_000,
     env: {
       SKIP_DB_ROLE_CHECK: "1",
+      // withTenantTransaction defaults to getPool(); db tests only export TEST_DATABASE_URL.
+      ...(process.env.TEST_DATABASE_URL ? { DATABASE_URL: process.env.TEST_DATABASE_URL } : {}),
     },
   },
   resolve: {
