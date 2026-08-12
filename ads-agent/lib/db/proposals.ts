@@ -14,6 +14,9 @@ type ProposalRow = {
   created_at: Date;
   decided_at: Date | null;
   executed_at: Date | null;
+  scheduled_for: Date | null;
+  undo_until: Date | null;
+  batch_id: string | null;
 };
 
 function rowToProposal(row: ProposalRow): Proposal {
@@ -29,6 +32,9 @@ function rowToProposal(row: ProposalRow): Proposal {
     createdAt: row.created_at.toISOString(),
     decidedAt: row.decided_at?.toISOString() ?? null,
     executedAt: row.executed_at?.toISOString() ?? null,
+    scheduledFor: row.scheduled_for?.toISOString() ?? null,
+    undoUntil: row.undo_until?.toISOString() ?? null,
+    batchId: row.batch_id,
   };
 }
 

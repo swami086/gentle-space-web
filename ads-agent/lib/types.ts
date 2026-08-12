@@ -78,7 +78,14 @@ export type CampaignStrategyPayload = {
   recommendations: CampaignStrategyRecommendation[];
 };
 
-export type ProposalStatus = "pending" | "approved" | "rejected" | "executed" | "failed";
+export type ProposalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "executed"
+  | "failed"
+  | "scheduled"
+  | "executing";
 
 export type Proposal = {
   id: string;
@@ -92,6 +99,9 @@ export type Proposal = {
   createdAt: string;
   decidedAt: string | null;
   executedAt: string | null;
+  scheduledFor?: string | null;
+  undoUntil?: string | null;
+  batchId?: string | null;
 };
 
 export type NewProposal = {
