@@ -200,6 +200,11 @@ per-org settings, undo columns. **Release-blocking for any customer-facing deplo
 
 ## 4. Sequencing
 
+> **Canonical order lives in `2026-08-12-build-sequence.md`** (added 2026-08-12). The phases below
+> map to it as: Phase 0 → **S3**, Phase 1 → **S4**, Phase 2 → **S5**, Phase 3 → **S7**,
+> Phase 4 → **S11**, Phase 5 → **S13**, Phase 6 → **S15**, Phase 7 → **S17**. Where the two
+> disagree, the build sequence wins.
+
 **Phase 0 — Foundation.** Epic 0/1 (I). Nothing customer-facing ships before this; the
 current data model has no tenant isolation.
 

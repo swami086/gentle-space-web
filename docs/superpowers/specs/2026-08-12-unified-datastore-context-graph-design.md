@@ -392,6 +392,11 @@ authorisation over shared data.
 
 ## 8. Sequencing
 
+> **Canonical order lives in `2026-08-12-build-sequence.md`** (added 2026-08-12). Phases here map
+> as: A → **S2**, B → **S3**, C → **S4**, D → **S6**, E → **S8**, F → **S9–S16**. Note that the
+> canonical sequence adds an **S1** ahead of everything: fixing the four live defects found in
+> validation. Where the two disagree, the build sequence wins.
+
 **Phase A — Consolidation.** Merge `ads_agent` into the listings instance as a schema; per-schema
 DB users and grants. Closes D2.
 
@@ -555,3 +560,89 @@ a transfer impact assessment. A DPIA is likely required — AI processing combin
 and data not collected from the subject directly.
 
 No general localisation mandate applies to non-SDFs, so GCP region choice stays open.
+
+---
+
+## 12. Operations (added 2026-08-12)
+
+Closing the items the validation report recorded but no spec designed. Scoped to a solo operator:
+each is the smallest thing that prevents a specific failure, not a full platform.
+
+### 12.1 Freshness, and refusing to act on stale data
+
+Agents read a graph projected from a CDC-fed mirror. If CDC stalls they will propose confidently on
+stale data — a budget-pause justified by three-day-old spend looks identical to a correct one.
+Nothing currently surfaces lag to the agent, the proposal, or the approving human.
+
+- Every snapshot records `source_watermark` — the newest CDC commit timestamp it contains.
+- `graph_manifests` records `cdc_lag_seconds` observed at build time.
+- **Every context pack the MCP server returns carries `built_at` and current lag.** An agent cannot
+  obtain data without also obtaining its age.
+- Proposals store the lag at creation, and the approval screen renders it.
+- **Hard rule:** agents refuse to propose anything that changes spend when lag exceeds a threshold
+  (default 15 minutes). Refusing is correct behaviour, not an error.
+
+### 12.2 Rebuild backpressure and snapshot collection
+
+On-demand rebuilds have no ceiling as specified: a bulk listings sync marks every tenant stale at
+once and stampedes.
+
+- **Concurrency ceiling** on simultaneous rebuilds (default 2), enforced by claiming rows in
+  `graph_manifests` with `FOR UPDATE SKIP LOCKED`.
+- **Debounce window** (default 5 minutes) between a tenant being marked stale and a build starting,
+  so a bulk import coalesces into one rebuild per tenant.
+- **Priority by recent activity** — tenants with a user active today build first.
+- **Generation-based collection.** Keep the current and previous snapshot per tenant. A serving
+  process takes a **lease** (tenant, snapshot, expiry) before opening a file; collection removes
+  only snapshots older than the previous generation with no live lease. This replaces "collected
+  once no reader holds them", which never said how that is known.
+
+### 12.3 Snapshot storage is a tenancy boundary
+
+Each file holds one tenant's complete dataset, so wherever they live, that storage becomes a
+tenant-isolation boundary alongside RLS.
+
+- One GCS bucket, **one object prefix per tenant**.
+- The serving service account holds `objectViewer` **scoped to the prefix**, never bucket-wide.
+  A single shared read credential would make the file boundary decorative.
+- Server-side encryption with **CMEK per tenant**, so destroying a key erases every snapshot for
+  that tenant at once — which is what makes §11.2's crypto-shredding practical.
+
+### 12.4 Observability
+
+Four signals, one alert each, one channel. Anything more is unmaintainable by one person.
+
+| Signal | Alert when | Why |
+|---|---|---|
+| CDC lag | above the §12.1 threshold | agents silently degrade to guessing |
+| Rebuild queue depth and failures | depth grows across two checks, or any tenant is `error` | stale graphs, silently |
+| Agent cost per tenant per day | above ceiling, or 3× the tenant's trailing median | denial of wallet, and runaway loops |
+| Cross-tenant audit rows | any row not attributable to a scheduled job | the isolation boundary being crossed |
+
+One trace id propagates request → agent task → MCP call → SQL, so a bad proposal can be traced back
+to the data that produced it.
+
+### 12.5 Backup and restore
+
+The asymmetry that makes this cheap: **only Postgres holds anything irreplaceable.**
+
+- **Postgres** — point-in-time recovery, and a restore drill actually performed, not just enabled.
+- **ClickHouse** — derived. Rebuildable from Postgres by replay; back up configuration and schema,
+  not data.
+- **Snapshots** — derived, rebuildable, disposable.
+- **Per-tenant export** — a tenant's snapshot already *is* their export, which turns a compliance
+  obligation into a file copy.
+- **Twenty** — outside our backup boundary; it is the system of record for person and opportunity,
+  so its own retention applies.
+
+### 12.6 Rate limiting
+
+Two unauthenticated surfaces both call an LLM per request: the public enquiry form and `/api/spaces/search`.
+Each is a cost-attack vector where an attacker spends nothing and we spend per call.
+
+- Per-IP and per-org request limits on both.
+- Length caps on enquiry text and search queries before any model call.
+- A **hard per-tenant cost ceiling that halts inference** rather than warning — the control that
+  actually bounds loss.
+- Bot mitigation on the public form.
+- Pre-flight token estimation, so an oversized input is rejected before it is paid for.

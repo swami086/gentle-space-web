@@ -126,7 +126,8 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 | Spec | Covers |
 |---|---|
-| `2026-08-12-architecture-validation-report.md` | **Start here.** Verified defects, adversarial review, three-tier fix list |
+| `2026-08-12-build-sequence.md` | **Canonical build order (S1–S17).** Supersedes the old Phase 0–7 / Phase A–F / Stage 1–5 schemes |
+| `2026-08-12-architecture-validation-report.md` | **Start here.** Verified defects, adversarial review, three-tier fix list, §10 maps every finding to where it was closed |
 | `2026-08-12-data-model.md` | Runnable DDL: Postgres 18, ClickHouse, DuckDB snapshots, graph node/edge |
 | `2026-08-12-unified-datastore-context-graph-design.md` | Storage, tenancy, context graph, data protection |
 | `2026-08-12-backend-features-design.md` | ~40 backend features A–I, sequenced in 7 phases |

@@ -299,3 +299,41 @@ zero-retention configured.
 
 The ordering matters: Tier 1 protects data that exists today, Tier 2 avoids building things that
 must be torn out, and Tier 3 is what a tenant's own compliance review will ask for.
+
+---
+
+## 10. Findings closed in the specs (2026-08-12)
+
+Every finding is now either designed into a spec or scheduled as work. Nothing remains
+recorded-but-unaddressed.
+
+| Finding | Where it now lives |
+|---|---|
+| F-1 RLS pooling leak | tenancy spec §3a *and* datastore §5 — it belonged in the tenancy spec |
+| F-2 role vocabulary | data model §2, as an explicit `ALTER` plus the `member` → `operator` remap |
+| F-3 route authorisation | tenancy spec §4 (already designed); scheduled as **S1** |
+| F-4 cross-tenant path | datastore §5.1 — separate privileged service |
+| F-5 staleness signal | datastore §12.1 and agent spec §5 — context packs carry their own age |
+| F-6 operational surface | datastore §9, recorded as an accepted trade |
+| F-7 no decider recorded | data model §2; tenancy spec already added `decided_by`/`decided_via` |
+| F-8 rebuild backpressure | datastore §12.2 — concurrency ceiling, debounce, priority |
+| F-9 snapshot GC | datastore §12.2 — generation-based with reader leases |
+| F-10 three numbering schemes | `2026-08-12-build-sequence.md`, now canonical |
+| F-11 no data model | `2026-08-12-data-model.md` |
+| F-12 snapshot bucket IAM | datastore §12.3 — per-tenant prefix, scoped service account, CMEK |
+| F-13 observability | datastore §12.4 — four signals, one alert each |
+| F-14 backup and DR | datastore §12.5 — only Postgres holds anything irreplaceable |
+| F-15 rate limiting | datastore §12.6 and agent spec §6 |
+| F-16 erasure model | datastore §11.1 — suppression then scheduled erase |
+| F-17 snapshot TTL | datastore §11.2 and §12.3 |
+| F-18 graph is personal data | data model `graph_node.subject_ref`; datastore §11.2 |
+| F-19 `graph_query` | agent spec §5 — parameterised templates over tenant-scoped views |
+| F-20 table-owner RLS bypass | tenancy spec §3a, agent spec §5, data model §0 |
+| F-21 Kanban comment laundering | agent spec §7 — typed messages plus taint labels |
+| F-22 approval gate | UX spec §C — literal mutation diff, Unicode stripping, bulk cancel |
+| F-23 per-uid isolation | agent spec §6 |
+| F-24 denial of wallet | agent spec §6, datastore §12.6 |
+| F-25 token binds intent | agent spec §6 — tool allowlist in the token |
+
+The distinction to keep in mind: **designed is not done.** Every row above is a specification, not
+working code. S1 in the build sequence is the only item that touches software that exists today.

@@ -117,6 +117,14 @@ One HTTP MCP server, shared by all profiles, configured with an identity header 
 exactly the facts the agent is permitted to cite, which makes grounding auditable — if a claim
 is not in the pack, it was invented.
 
+**Every pack carries its own age** (added 2026-08-12). Agents read a graph projected from a CDC-fed
+mirror, so a stalled pipeline makes an agent propose confidently on stale data — and a budget change
+justified by three-day-old spend looks exactly like a correct one. Each pack therefore returns
+`built_at` and current CDC lag alongside the facts: an agent cannot obtain data without also
+obtaining how old it is. Above a lag threshold (default 15 minutes) agents **refuse to propose
+anything that changes spend**. Refusing is correct behaviour, not a failure. The lag at creation is
+stored on the proposal and shown to whoever approves it.
+
 **`graph_query` takes a template name and values — never query text** (revised 2026-08-12). The
 original design accepted free-form Cypher and injected a tenant predicate server-side. Security
 review found that structurally unsound: statement-type validation is a denylist, and read-only
@@ -272,6 +280,11 @@ thing that fails if the logic breaks:
 ---
 
 ## 10. Sequencing
+
+> **Canonical order lives in `2026-08-12-build-sequence.md`** (added 2026-08-12). Stages here map
+> as: Stage 1 → **S9**, Stage 2 → **S10**, Stage 3 → **S12**, Stage 4 → **S14**, Stage 5 → **S16**.
+> Nothing in this document starts before **S3** (tenancy), because the entire safety model rests on
+> row-level security. Where the two disagree, the build sequence wins.
 
 **Stage 1 — Context server, no agents.** Build the MCP server with the read tools,
 `create_proposal`, task-token tenant binding, and the four tests in §9. Verify by calling it

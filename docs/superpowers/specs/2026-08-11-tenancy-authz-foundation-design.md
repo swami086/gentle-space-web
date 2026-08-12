@@ -241,6 +241,55 @@ Thirty-one functions change signature. Adjacent `*.test.ts` files update in the 
 
 `getOverviewStats` additionally stops discarding `pendingProposalCount`; Epic 2 consumes it.
 
+### 3a. Database backstop — row-level security (added 2026-08-12)
+
+`scopeClause` is the front line. It is not sufficient on its own: a single missed call site, or any
+future code path that bypasses the data layer, reads across tenants with nothing to stop it. RLS is
+the layer that fails closed when the application layer has a bug.
+
+The framing to hold: *"RLS should act as an infrastructure safety net, not your primary
+authorization gate."* Both layers, neither alone.
+
+```sql
+-- One helper. Nothing sets the variable directly.
+CREATE OR REPLACE FUNCTION public.set_tenant(p_org_id UUID) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF p_org_id IS NULL THEN RAISE EXCEPTION 'set_tenant called with NULL org_id'; END IF;
+  -- Third argument true => transaction-scoped.
+  PERFORM set_config('app.current_tenant_id', p_org_id::text, true);
+END; $$;
+
+ALTER TABLE adsagent.proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE adsagent.proposals FORCE  ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON adsagent.proposals
+  USING      (org_id = public.current_tenant())
+  WITH CHECK (org_id = public.current_tenant());
+```
+
+Three details, each of which silently defeats the whole mechanism if missed.
+
+**The third argument to `set_config` is not optional.** Both apps construct `pg.Pool`, so
+connections are reused across requests. Without transaction scoping the setting persists on the
+connection, and the next request inherits the previous tenant's context — RLS then faithfully
+enforces the *wrong* tenant. No error, no log line. This is the failure mode most likely to reach
+production undetected.
+
+**`FORCE ROW LEVEL SECURITY`, not merely `ENABLE`.** Table owners ignore row security unless forced.
+An application connecting as the owner would set the tenant variable correctly and enforce nothing.
+
+**Connect as a non-owner role.** Application and agent connections use roles holding only the
+privileges they need; `BYPASSRLS` and superuser stay out of application code paths entirely. The MCP
+context server (agent spec) gets a `SELECT`-only role over tenant-scoped views.
+
+**`WITH CHECK` as well as `USING`.** `USING` stops a tenant reading another's rows; `WITH CHECK`
+stops it *writing* rows carrying another tenant's `org_id`.
+
+This extends the release gate below: the cross-tenant suite must run **against a pooled connection**
+and assert that a second request on a reused connection cannot see the first request's tenant.
+Full DDL for every table is in `2026-08-12-data-model.md` §1.
+
 ### 4. API layer
 
 Two guarantees on every mutation route: the caller is authorized, and the caller owns the entity.

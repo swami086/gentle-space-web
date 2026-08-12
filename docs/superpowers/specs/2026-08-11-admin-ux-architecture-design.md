@@ -376,6 +376,26 @@ a proposal in `approved`-but-unexecuted.
 Approve additionally requires a confirmation step that states the concrete consequence — platform, campaign
 name, and daily budget delta — not a generic "Are you sure?".
 
+**What the approver is shown must be the payload, not a description of it (added 2026-08-12).**
+Security review raised this once agents became proposers: human approval is the single load-bearing
+control in the whole system, and it can be lied to. Invisible-Unicode smuggling — tag-block
+(U+E0000–E007F), variation selectors, zero-width characters — makes rendered text differ from what
+executes, so an approver can read a harmless summary and authorise something else. Three
+requirements follow:
+
+- **Render the literal mutation, diffed against live state** — the actual field-level before/after
+  that will be sent to Google Ads. Never the proposing agent's prose summary. An agent's rationale
+  may sit *alongside* the diff, clearly labelled as its reasoning, never in place of it.
+- **Strip the smuggling character ranges** at every ingest and render boundary.
+- **Guard against approval fatigue**, which OWASP flags explicitly. Cap proposals per tenant per
+  day, and require a step-up confirmation above a spend threshold. A queue that becomes a
+  rubber stamp is the same as having no gate — and the volume risk is real once six agents propose
+  freely, which is precisely the calm queue this spec set out to protect.
+
+Bulk approve carries a related trap: each approved proposal gets its own undo window, so one wrong
+bulk action needs N separate cancels. Bulk approve must offer a **single bulk cancel** covering the
+whole batch for the duration of the window.
+
 **Attribution.** `proposals` gains `decided_by UUID REFERENCES users(id)`, `decided_via TEXT` (`ui`, `bulk`,
 `api`), and `canceled_at TIMESTAMPTZ`. Every transition writes an `audit_log` row.
 
