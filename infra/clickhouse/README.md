@@ -1,5 +1,30 @@
 # ClickHouse operations
 
+## Local dev
+
+```bash
+docker compose -f docker-compose.clickhouse.yml up -d
+curl -sf http://127.0.0.1:8123/ping   # expect: Ok.
+docker exec gentle-space-clickhouse ls /etc/clickhouse-server/config.d/listen.xml
+```
+
+If host `curl` gets **connection reset** but `docker exec … wget http://127.0.0.1:8123/ping`
+works, the bind mount is stale or empty — `listen.xml` never loaded, so HTTP only listens on
+container localhost while Docker forwards to eth0. Recreate:
+
+```bash
+docker compose -f docker-compose.clickhouse.yml down
+docker compose -f docker-compose.clickhouse.yml up -d
+```
+
+Apply migrations and run live tests:
+
+```bash
+export CLICKHOUSE_URL=http://127.0.0.1:8123 CLICKHOUSE_USER=etl_writer CLICKHOUSE_PASSWORD=etl
+npx tsx scripts/clickhouse/migrate.ts
+npx vitest run lib/clickhouse/graph-schema.test.ts
+```
+
 Two cron entries. Cron is a clock; it finds work and runs the job, and the job
 publishes or alerts (datastore §14.5).
 
