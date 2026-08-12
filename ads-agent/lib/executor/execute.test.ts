@@ -53,7 +53,7 @@ vi.mock("../connectors/google-ads", () => ({
 
 import { executeProposal } from "./execute";
 
-function approvedProposal(overrides: Partial<Proposal> = {}): Proposal {
+function executingProposal(overrides: Partial<Proposal> = {}): Proposal {
   return {
     id: "prop-1",
     kind: "pause",
@@ -61,11 +61,14 @@ function approvedProposal(overrides: Partial<Proposal> = {}): Proposal {
     payload: { campaignId: "camp-1" },
     triggeredRule: "kill_rule",
     rationale: "over budget",
-    status: "approved",
+    status: "executing",
     error: null,
     createdAt: "2026-08-03T00:00:00.000Z",
     decidedAt: "2026-08-03T01:00:00.000Z",
     executedAt: null,
+    scheduledFor: "2026-08-12T00:00:00.000Z",
+    undoUntil: "2026-08-12T00:05:00.000Z",
+    batchId: null,
     ...overrides,
   };
 }
@@ -94,13 +97,13 @@ describe("executeProposal", () => {
     await expect(executeProposal(ORG, "missing")).rejects.toThrow("proposal missing not found");
   });
 
-  it("throws when the proposal is not approved", async () => {
-    getProposalById.mockResolvedValue(approvedProposal({ status: "pending" }));
-    await expect(executeProposal(ORG, "prop-1")).rejects.toThrow("not approved");
+  it("throws when the proposal is not executing", async () => {
+    getProposalById.mockResolvedValue(executingProposal({ status: "scheduled" }));
+    await expect(executeProposal(ORG, "prop-1")).rejects.toThrow("not executing");
   });
 
   it("pauses the correct platform campaign and marks the proposal executed", async () => {
-    getProposalById.mockResolvedValue(approvedProposal());
+    getProposalById.mockResolvedValue(executingProposal());
     getCampaignById.mockResolvedValue(googleCampaign());
     pauseGoogleCampaign.mockResolvedValue(undefined);
 
@@ -113,7 +116,7 @@ describe("executeProposal", () => {
   });
 
   it("routes pause to the Meta connector for a meta campaign", async () => {
-    getProposalById.mockResolvedValue(approvedProposal());
+    getProposalById.mockResolvedValue(executingProposal());
     getCampaignById.mockResolvedValue(googleCampaign({ platform: "meta", externalId: "ext-meta-1" }));
     pauseMetaCampaign.mockResolvedValue(undefined);
 
@@ -123,7 +126,7 @@ describe("executeProposal", () => {
 
   it("creates a full Google campaign, records the local row, and marks it active", async () => {
     getProposalById.mockResolvedValue(
-      approvedProposal({
+      executingProposal({
         kind: "create_campaign",
         campaignId: null,
         payload: {
@@ -166,7 +169,7 @@ describe("executeProposal", () => {
 
   it("updates budget on the correct campaign", async () => {
     getProposalById.mockResolvedValue(
-      approvedProposal({
+      executingProposal({
         kind: "budget_change",
         payload: { campaignId: "camp-1", newDailyBudgetInr: 600 },
       }),
@@ -180,7 +183,7 @@ describe("executeProposal", () => {
 
   it("adds a negative keyword on the correct campaign", async () => {
     getProposalById.mockResolvedValue(
-      approvedProposal({
+      executingProposal({
         kind: "add_negative_keyword",
         payload: { campaignId: "camp-1", keywordText: "residential" },
       }),
@@ -193,7 +196,7 @@ describe("executeProposal", () => {
 
   it("no-ops a campaign_strategy proposal and marks it executed without touching any connector", async () => {
     getProposalById.mockResolvedValue(
-      approvedProposal({
+      executingProposal({
         kind: "campaign_strategy",
         campaignId: null,
         payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
@@ -209,7 +212,7 @@ describe("executeProposal", () => {
   });
 
   it("marks an unrecognized proposal kind as failed instead of silently executing it", async () => {
-    getProposalById.mockResolvedValue(approvedProposal({ kind: "future_kind" as never }));
+    getProposalById.mockResolvedValue(executingProposal({ kind: "future_kind" as never }));
 
     const result = await executeProposal(ORG, "prop-1");
 
@@ -223,7 +226,7 @@ describe("executeProposal", () => {
   });
 
   it("marks the proposal failed (never retried) when the connector call throws", async () => {
-    getProposalById.mockResolvedValue(approvedProposal());
+    getProposalById.mockResolvedValue(executingProposal());
     getCampaignById.mockResolvedValue(googleCampaign());
     pauseGoogleCampaign.mockRejectedValue(new Error("Google Ads API: rate limited"));
 
