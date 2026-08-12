@@ -1,0 +1,11 @@
+BEGIN;
+DROP FOREIGN TABLE IF EXISTS context.fdw_search_performed_daily;
+DROP FOREIGN TABLE IF EXISTS context.fdw_portal_event_daily;
+DROP FOREIGN TABLE IF EXISTS context.fdw_enquiry_fact;
+DROP FOREIGN TABLE IF EXISTS context.fdw_graph_edge;
+DROP FOREIGN TABLE IF EXISTS context.fdw_graph_node;
+DROP USER MAPPING IF EXISTS FOR agent_ro SERVER clickhouse_analytics;
+DROP USER MAPPING IF EXISTS FOR CURRENT_USER SERVER clickhouse_analytics;
+DROP SERVER IF EXISTS clickhouse_analytics CASCADE;
+DROP EXTENSION IF EXISTS pg_clickhouse;
+COMMIT;
