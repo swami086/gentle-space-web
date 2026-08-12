@@ -1,0 +1,4 @@
+<!-- ponytail: default image binds 127.0.0.1 only; Docker port forwards hit eth0 -->
+<clickhouse>
+  <listen_host>0.0.0.0</listen_host>
+</clickhouse>

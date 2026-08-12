@@ -1,0 +1,30 @@
+<clickhouse>
+  <profiles>
+    <etl>
+      <max_execution_time>300</max_execution_time>
+    </etl>
+    <tenant>
+      <max_execution_time>30</max_execution_time>
+      <!-- readonly=2 permits SET of the tenant setting but forbids writes. -->
+      <readonly>2</readonly>
+      <!-- Fail closed: the zero UUID matches no row, so an unset tenant sees nothing. -->
+      <SQL_current_tenant_id>'00000000-0000-0000-0000-000000000000'</SQL_current_tenant_id>
+    </tenant>
+  </profiles>
+  <users>
+    <etl_writer>
+      <password from_env="CLICKHOUSE_ETL_PASSWORD"/>
+      <networks><ip>::/0</ip></networks>
+      <profile>etl</profile>
+      <quota>default</quota>
+      <access_management>0</access_management>
+    </etl_writer>
+    <tenant_reader>
+      <password from_env="CLICKHOUSE_TENANT_PASSWORD"/>
+      <networks><ip>::/0</ip></networks>
+      <profile>tenant</profile>
+      <quota>default</quota>
+      <access_management>0</access_management>
+    </tenant_reader>
+  </users>
+</clickhouse>
