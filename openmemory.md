@@ -77,6 +77,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | S5a event backbone | ads-agent: migrations 040–044, relay/deletion-reconciler/health/prune; listings mirror (`lib/db/{scope,tx,outbox}.ts`); **gate** `ads-agent/lib/events/gate.db.test.ts` (6 tests: atomicity, at-least-once, idempotency, deletion recovery, tenant isolation) |
 | S9 MCP context server (in progress) | Branch `feat/s9-mcp-context-server` worktree `.worktrees/s9-mcp-context-server`. Task 1: `100` + `db.ts`. Task 2: `101` + `task-token.ts`. Task 3: `102` five `context.v_agent_*` views. Task 4: `104_agent_graph_views` + `graph-query.ts`. Task 5–10: read modules + `create-proposal` + `context-pack`. Task 11: `mcp/context-server/{tool-context,index}.ts` — `dispatchTool` single path, 8 read + 1 write. **Task 12:** `safety.test.ts` — S9 gate (6 live tests: tenant isolation, evidence enforcement, read-only graph, proposal round-trip, write denial, pooled-tenant isolation). Next: S9a tracing. |
 | S9a Langfuse tracing (Task 16) | Branch `feat/s9-t16-langfuse` worktree `.worktrees/s9-t16`. Compose: `langfuse-redis`, `langfuse-web` (`:3100`), `langfuse-worker` in `ads-agent/docker-compose.yml`; reuses repo-root ClickHouse + Garage (no second CH). `context-mcp` gets `LANGFUSE_OTLP_ENDPOINT`, project keys, `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`. Env template: `ads-agent/.env.langfuse.example`. Gate: `mcp/context-server/deployment.test.ts` (7 compose contract tests). |
+| S10 leads agent | Spec `2026-08-13-s10-leads-agent-design.md` + plan `2026-08-13-s10-leads-agent.md`; mint `POST /api/internal/agent/task-token`; Hermes skill `leads-enquiry-triage`; wake stub `scripts/wake-leads-agent.ts`; runbook `docs/superpowers/specs/2026-08-13-s10-leads-agent-runbook.md`. Branch `feat/s10-leads-agent` worktree `.worktrees/s10-leads-agent`. |
 | ClickHouse CDC + analytics (S6) | `infra/clickhouse/` Docker (Keeper, `listen.xml` bind `0.0.0.0`); `lib/clickhouse/{client,migrate,replicate,reconcile,project-derived}.ts`; migrations `000`–`007`; `analytics.enquiry_fact` ReplacingMergeTree + tenant row policy; watermark in `context.replication_state`; cron replicate/reconcile in `scripts/clickhouse/`; gate `lib/clickhouse/s6-gate.test.ts` |
 | Portal ingestion edge (S6a) | ads-agent: migrations 052–061, `057_session_links`; `lib/portal/{taxonomy,consent,consent-cache,config,ingest,session-links,rate-limit,rejections}.ts`; `POST /api/v1/{ingest,consent}`; raw zone `raw.portal_events` + rollups; `derived.portal_session_spaces` quarantine; gate `ads-agent/lib/portal/s6a-gate.test.ts` + `withdrawal-latency.test.ts` |
 | First-party portal consent (S6a T17) | `lib/portal/{session,emit}.ts`; `app/api/portal/consent/route.ts`; `components/consent/ConsentBanner.tsx`; search route emits `search_performed` via portal pipeline (`lib/portal/emit.ts`); `public.search_queries` renamed to `search_queries_retired_20260812` (migration 059) |
@@ -154,8 +155,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 ## Implementation plans (docs/superpowers/plans/)
 
-**Seven plans cover S1–S9a, written 2026-08-12 by seven parallel writers, one per document.** Nothing is
-implemented. Execute in build-sequence order via `superpowers:subagent-driven-development`.
+**Plans cover S1–S10; S1–S9a written 2026-08-12, S10 added 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
 
 | Plan | Steps | Tasks / waves / max width | PG migrations |
 |---|---|---|---|
@@ -166,6 +166,7 @@ implemented. Execute in build-sequence order via `superpowers:subagent-driven-de
 | `2026-08-12-s7-attribution.md` | 77 | 11 / 5 / 4 | `070`–`074` |
 | `2026-08-12-s8-s8a-context-graph-artifacts.md` | 80 | 17 / 7 / 5 | `080`–`087` + ClickHouse `010`–`019` |
 | `2026-08-12-s9-s9a-mcp-context-server-tracing.md` | 105 | 17 / 7 / **7** | `100`–`102` + **`103` FDW (B5 plan)** + `104`–`106` views/proposal/cost |
+| `2026-08-13-s10-leads-agent.md` | 633 | 5 / 3 / 3 | (none — reuses S9 `100`–`106`) |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under
