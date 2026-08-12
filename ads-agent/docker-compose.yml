@@ -99,6 +99,102 @@ services:
       - "8767:8767"
     restart: unless-stopped
 
+  context-mcp:
+    build: .
+    command: ["npx", "tsx", "scripts/run-context-mcp.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      # agent_ro only. DATABASE_URL is deliberately NOT set for this service:
+      # the owner connection would ignore row security unless FORCE is set on
+      # every table, and this server must not depend on that being true.
+      AGENT_RO_DATABASE_URL: postgres://agent_ro:agent_ro_local_dev@db:5432/ads_agent
+      AGENT_CLICKHOUSE_URL: http://clickhouse:8123
+      CONTEXT_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,context-mcp,host.docker.internal
+      CONTEXT_MCP_BIND: "0.0.0.0"
+      LANGFUSE_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      # The GenAI conventions are Development status as of Langfuse v1.41, so
+      # gen_ai.* attribute names can change without a major version bump.
+      # Dual-emission keeps a convention change from silently emptying a panel.
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+    ports:
+      - "8768:8768"
+    restart: unless-stopped
+
+  langfuse-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${LANGFUSE_REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "--pass", "${LANGFUSE_REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Langfuse is built on ClickHouse and was acquired by ClickHouse in January
+  # 2026, so self-hosting it adds an application rather than an engine -- the
+  # decisive property given the one-operator constraint (datastore §13.2). It
+  # points at the ClickHouse from S6 and the Garage S3 endpoint from S8a; it
+  # must never start its own.
+  langfuse-web:
+    image: langfuse/langfuse:3
+    depends_on:
+      db:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${LANGFUSE_DATABASE_URL}
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      REDIS_CONNECTION_STRING: redis://:${LANGFUSE_REDIS_PASSWORD}@langfuse-redis:6379
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://garage:3900
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      LANGFUSE_SALT: ${LANGFUSE_SALT}
+      SALT: ${LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+    ports:
+      - "3100:3000"
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      langfuse-web:
+        condition: service_started
+    environment:
+      DATABASE_URL: ${LANGFUSE_DATABASE_URL}
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      REDIS_CONNECTION_STRING: redis://:${LANGFUSE_REDIS_PASSWORD}@langfuse-redis:6379
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://garage:3900
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_SALT: ${LANGFUSE_SALT}
+      SALT: ${LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      TELEMETRY_ENABLED: "false"
+    restart: unless-stopped
+
 volumes:
   ads-agent-db-data:
   bifrost-data:

@@ -40,6 +40,9 @@ describe("withAgentTenantTx", () => {
     expect(statements[0]).toBe("BEGIN");
     expect(statements[1]).toBe("SELECT public.set_tenant($1)");
     expect(clientMock.query.mock.calls[1][1]).toEqual([ORG_A]);
+    expect(statements[2]).toBe(
+      `SET pg_clickhouse.session_settings = $$SQL_current_tenant_id '${ORG_A}'$$`,
+    );
     expect(statements.at(-1)).toBe("COMMIT");
   });
 
@@ -66,6 +69,9 @@ describe("withAgentTenantWriteTx", () => {
     expect(statements[0]).toBe("BEGIN");
     expect(statements[1]).toBe("SET TRANSACTION READ WRITE");
     expect(statements[2]).toBe("SELECT public.set_tenant($1)");
+    expect(statements[3]).toBe(
+      `SET pg_clickhouse.session_settings = $$SQL_current_tenant_id '${ORG_A}'$$`,
+    );
   });
 });
 
