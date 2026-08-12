@@ -184,6 +184,25 @@ CREATE POLICY tenant_isolation ON enquiry
 CREATE INDEX ON enquiry (org_id, created_at DESC);  -- tenant_id MUST lead
 ```
 
+> **CRITICAL — the pooling hazard.** Both apps use `pg.Pool`, so connections are reused across
+> requests. `set_config('app.current_tenant_id', $1)` **without** the third argument persists on the
+> connection after the transaction ends, and the next request to reuse that connection inherits the
+> previous tenant's context. RLS then faithfully enforces the *wrong* tenant — a silent cross-tenant
+> read with no error and no log line.
+>
+> Every call site must use the local form, inside a transaction:
+>
+> ```sql
+> BEGIN;
+> SELECT set_config('app.current_tenant_id', $1, true);  -- true = transaction-scoped
+> -- ... queries ...
+> COMMIT;
+> ```
+>
+> This must be wrapped in a single helper that no code path bypasses, and covered by the
+> cross-tenant test suite that the tenancy spec makes a release gate. If a connection pooler
+> (PgBouncer) is later placed in front in transaction mode, the same rule is what keeps it safe.
+
 **ClickHouse**
 
 ```sql
@@ -208,6 +227,27 @@ guide](https://clickhouse.com/resources/engineering/multi-tenant-saas-postgres-a
 3. **Compliance** — per-tenant export, deletion, and restore must be possible. Design for it now;
    shared-schema makes single-tenant point-in-time restore the hardest of the four.
 4. **Analytical** — dashboards never run on the OLTP primary. This is what ClickHouse is for.
+
+### 5.1 The cross-tenant path (added 2026-08-12)
+
+Aggregate insight across brokers — *which corridors convert best* — is a deliberate product goal.
+That contradicts every other statement in these specs, which say cross-tenant reads are impossible.
+Both cannot be true, so the exception is designed explicitly rather than discovered later.
+
+**A separate privileged analytics service**, and nothing else, may read across tenants:
+
+- Its own database role, distinct from the application role. The application role never gains
+  `BYPASSRLS`.
+- **Not reachable from the MCP context server**, so no agent can invoke it by any path. Agents
+  remain tenant-pinned with no exception.
+- Every cross-tenant query is written to an append-only audit log with the caller, the query, and
+  the row count returned.
+- It emits **aggregates only** into a separate store. Per-tenant rows never leave it, so a bug
+  cannot surface one broker's enquiries inside another broker's UI.
+- Reviewed against the compliance position (§11) before any personal data is aggregated.
+
+The rule to hold onto: cross-tenant access is a *separate service with separate credentials*, never
+a flag on the existing one.
 
 ### Agents and tenant context
 
@@ -399,6 +439,24 @@ could collapse onto one table model — worth revisiting after PG19 GA.
 garbage-collect. At small tenant counts this is trivial; it needs an operational answer before it
 is hundreds. The manifest table is the control plane for that.
 
+**Operational surface versus a solo operator (recorded 2026-08-12).** This design requires running
+Postgres, self-hosted ClickHouse, per-tenant DuckDB snapshots, a CDC pipeline, the `pg_clickhouse`
+FDW, the Hermes agent fleet, and two Next.js apps — operated by one person with AI assistance, on
+GCP, targeting 50–500 tenants within a year. The recommendation on review was ClickHouse Cloud to
+remove one system's operational burden, on the same reasoning GitLab used when it required *"low
+operational overhead… to minimise the on-call burden for our DBRE and Data Engineering teams"* — a
+team GitLab has and this project does not. **Self-hosting was chosen deliberately** for cost and
+control. Recorded here so the trade is explicit; not revisited elsewhere. The mitigation is that
+ClickHouse must not be on the critical path for the product to function: if it is down, the
+product degrades (no analytics, no fresh graph) rather than failing.
+
+**Everything before launch.** The critical path to a usable product is consolidation → tenancy →
+enquiry spine. ClickHouse, the graph, and the agents are leverage on top of a product that already
+works. The decision was to build the full architecture before launching, which is defensible with
+no deadline pressure, but it front-loads risk: none of the leverage is validated by real users
+until all of it exists. If motivation or runway becomes the binding constraint, cutting to
+Phases A–C is the lever.
+
 **AGE is not planner-integrated.** No cross-model query optimisation; the `label(e)[0]` failure and
 graph-fallback path in the current code are symptoms. Keep AGE scoped narrowly.
 
@@ -430,6 +488,70 @@ under shared-schema. Needs a designed answer before the first enterprise custome
 8. **SQL/PGQ adoption** — re-evaluate once PostgreSQL 19 is GA. If it performs, it could replace
    both AGE and hand-written traversal SQL with one standard syntax over the same tables.
 9. **Where snapshot files live** — local disk on a stateful service, or object storage read via
-   DuckDB's `httpfs` extension? Object storage suits ephemeral containers (Coolify/Render) and
-   removes per-instance file management, at the cost of network latency per query. Decide before
-   Phase E, since it shapes the build job's output target.
+   DuckDB's `httpfs` extension? Object storage removes per-instance file management on GCP, at the
+   cost of network latency per query, and makes bucket IAM a tenant-isolation boundary. Decide
+   before Phase E, since it shapes the build job's output target.
+
+---
+
+## 11. Data protection (added 2026-08-12)
+
+Hosting is GCP; the operator is an Indian entity; tenants are Indian brokers with some international
+clients expected. Both India's DPDP Act and GDPR are in scope. Full findings and sources are in
+`2026-08-12-architecture-validation-report.md` §7.1. What follows is only what changes this design.
+
+### 11.1 Erasure is suppression first, hard delete later
+
+**This inverts the assumption the rest of these specs were built on.**
+[Rule 8(3) of the DPDP Rules 2025](https://www.dpdpa.com/dpdparules/rule8.html) requires personal
+data, associated traffic data and processing logs to be retained **for at least one year**,
+expressly including data a processor holds on a fiduciary's behalf, and its own illustration
+confirms this applies *"even if X deletes her account."*
+
+So an erasure request must:
+
+1. **Suppress immediately** — tombstone the subject, block all access paths, remove from search,
+   graph projections and any agent context pack. From the user's perspective the data is gone.
+2. **Retain physically** for the statutory floor, access-blocked.
+3. **Hard-erase on a schedule** once the floor passes.
+
+Building delete-on-request would be non-compliant in the opposite direction from the usual mistake.
+A **deletion ledger** — request, per-store propagation status, completion timestamps — is what
+evidences the 90-day response obligation; cascading foreign-key deletes prove nothing.
+
+*How Rule 8(3) reconciles with the §12 erasure right is unsettled in the sources. Confirm with a
+lawyer before launch.*
+
+### 11.2 Consequences for each store
+
+- **PostgreSQL** — tombstone plus access block. Rule 6(1)(a) names encryption, masking and
+  tokenisation explicitly, so **RLS alone is not a sufficient safeguard**; personal columns need
+  encryption or tokenisation as well.
+- **ClickHouse** — hold pseudonymous IDs and metrics rather than enquirer PII wherever possible.
+  Where PII must land there, encrypt per data subject so a key destruction (crypto-shredding)
+  satisfies erasure without fighting ClickHouse's weak delete story.
+- **DuckDB snapshots** — the largest exposure in the whole design: immutable per-tenant files that
+  outlive deletion by construction. Either give every snapshot a **hard TTL** and regenerate from
+  Postgres, or encrypt per subject and destroy keys. Snapshot GC becomes a compliance control, not
+  just housekeeping.
+- **Context graph** — treat as personal data.
+  [EDPB Opinion 28/2024](https://www.edpb.europa.eu/system/files/2024-12/edpb_opinion_202428_ai-models_en.pdf)
+  holds that artefacts derived from personal data are not automatically anonymous. Every node and
+  edge derived from an enquirer carries **subject provenance** so it can be pruned on erasure.
+- **Access logs** — retained one year, and queryable by tenant, because breach notification has no
+  de-minimis threshold: every affected principal without delay and a Board report within 72 hours.
+
+### 11.3 Roles, and the trap in cross-tenant analytics
+
+For tenant enquiry data you are a **Data Processor** — brokers determine the purpose. But using
+enquirer data for your own product improvement makes you a **controller** for that processing, and
+that is exactly what the cross-tenant analytics service in §5.1 does. It therefore needs its own
+lawful basis and tenant authorisation, not merely an audit log. Aggregates-only is the design that
+keeps this defensible.
+
+The **LLM provider is a sub-processor**: list it, obtain tenant authorisation, and configure
+no-training and zero-retention. India has no EU adequacy decision, so EU-origin data needs SCCs and
+a transfer impact assessment. A DPIA is likely required — AI processing combined with data matching
+and data not collected from the subject directly.
+
+No general localisation mandate applies to non-SDFs, so GCP region choice stays open.

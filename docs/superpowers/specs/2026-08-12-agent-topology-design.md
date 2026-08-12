@@ -110,15 +110,29 @@ One HTTP MCP server, shared by all profiles, configured with an identity header 
 | `get_enquiry` | `enquiry_id: uuid` | thread, requirement, activity, derived signals |
 | `get_campaign_performance` | `window_days: int`, `corridor?: string` | `CampaignMetric[]` from ClickHouse |
 | `list_proposals` | `status?: 'pending'\|'scheduled'\|'approved'\|'rejected'` | `Proposal[]` |
-| `graph_query` | `cypher: string`, `params?: object` | `Row[]`, read-only, tenant-filtered |
+| `graph_query` | `template: <allowlisted name>`, `params: object` | `Row[]` from a tenant-scoped view |
 | `get_context_pack` | `entity: 'enquiry'\|'space'\|'campaign'`, `id: uuid` | the grounding allowlist (F4) |
 
 `get_context_pack` is what an agent calls before generating anything user-visible. It returns
 exactly the facts the agent is permitted to cite, which makes grounding auditable — if a claim
 is not in the pack, it was invented.
 
-`graph_query` accepts Cypher against PuppyGraph. The server rejects any statement that is not a
-read, and injects the tenant predicate rather than trusting the agent to include it.
+**`graph_query` takes a template name and values — never query text** (revised 2026-08-12). The
+original design accepted free-form Cypher and injected a tenant predicate server-side. Security
+review found that structurally unsound: statement-type validation is a denylist, and read-only
+statements still exfiltrate through subqueries against system catalogs, CTEs, `UNION` branches that
+escape a top-level predicate, and blind timing oracles that leak a bit at a time.
+[Cypher injection](https://neo4j.com/developer/kb/protecting-against-cypher-injection/) behaves the
+same way. Textual predicate injection cannot be made safe.
+
+Instead: a fixed set of named traversal templates, each a parameterised query the model can only
+supply *values* to, executed against **views that already embed the tenant predicate** — so there is
+nothing left to inject. New traversals are added by writing a template, not by the model composing
+one. Defence in depth: `default_transaction_read_only`, a `statement_timeout`, and a row cap.
+
+**The MCP server connects as a non-owner role with `SELECT` only.** Postgres table owners ignore row
+security unless `FORCE ROW LEVEL SECURITY` is set — a server connecting as owner would set the
+tenant variable correctly and enforce nothing. A CI test must assert that a cross-tenant read fails.
 
 ### The only write tool
 
@@ -160,6 +174,22 @@ handlers, and it is why kanban's `--tenant` is more than a label here.
 
 Tokens expire with the task. A crashed-and-reclaimed worker gets a fresh one.
 
+**The token must bind intent, not only scope** (added 2026-08-12). Binding `(task_id, profile,
+org_id)` scopes *which tenant*, but within the TTL an injected agent may still call any read tool.
+Embed the profile's tool allowlist in the token, revoke server-side on task completion, and deliver
+tokens over a unix socket using `SO_PEERCRED` rather than environment variables or files. Never log
+a token to Kanban.
+
+**One uid per agent profile, minimum.** Hermes runs all profiles under the operator's uid with no
+filesystem sandbox, so any agent able to read another's memory, argv, environment or the Kanban
+SQLite file inherits its tenancy — which defeats the token entirely. Per-profile uids are the floor;
+per-tenant containers are the target before external users exist.
+
+**Cost ceilings are a security control, not an optimisation.** The public enquiry form is
+unauthenticated and triggers multi-agent inference that fans out across Kanban hops. Per-tenant
+budget ceilings must **halt** inference rather than warn, with per-task caps on tool calls and agent
+hops behind a circuit breaker, length caps on enquiry text, and bot mitigation on the form.
+
 ---
 
 ## 7. Kanban task shapes
@@ -168,6 +198,20 @@ Status flow is `triage → todo → ready → running → blocked → review →
 
 **Comments are the inter-agent protocol.** A re-spawned worker reads the full comment thread as
 part of its context, so agents communicate by appending findings rather than by passing arguments.
+
+> **Comments launder untrusted text — mitigate deliberately** (added 2026-08-12). The `leads` agent
+> reads hostile-capable text (public enquiry forms, inbound email) and writes a comment; another
+> agent then consumes that comment as trusted peer output. This is documented inter-agent trust
+> escalation, with [100% success rates reported](https://arxiv.org/html/2603.09134v1) against
+> AutoGen, CrewAI and MetaGPT. Two controls, both required:
+>
+> - **Typed messages, not prose.** Inter-agent comments carry an enum intent plus record IDs, not
+>   free text an agent can be talked into obeying.
+> - **Taint labels, propagated transitively.** A message derived from untrusted input stays marked,
+>   and a tainted input can never produce a proposal without human review of the source text.
+>
+> Also strip tag-block (U+E0000–E007F), variation-selector and zero-width characters at every
+> ingest and render boundary, so a proposal cannot display differently from what it executes.
 
 Task conventions for this system:
 
