@@ -20,7 +20,16 @@ function arg(name: string): string {
 }
 
 function env(name: string): string {
-  const value = process.env[name]?.trim();
+  const aliases: Record<string, string[]> = {
+    COOLIFY_API_TOKEN: ["COOLIFY_ACCESS_TOKEN"],
+  };
+  let value = process.env[name]?.trim();
+  if (!value && aliases[name]) {
+    for (const alt of aliases[name]) {
+      value = process.env[alt]?.trim();
+      if (value) break;
+    }
+  }
   if (!value) throw new Error(`provision-twenty-instance: ${name} is not set`);
   return value;
 }
