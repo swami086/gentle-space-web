@@ -1,5 +1,9 @@
 import type { PoolClient } from "pg";
 import type { NewProposal, Proposal, ProposalKind, ProposalStatus } from "../types";
+
+export type ProposalListItem = Proposal & {
+  currentDailyBudgetInr: number | null;
+};
 import { withCrossTenantRead } from "./cross-tenant";
 import { scopeClause, type Scope } from "./scope-sql";
 import { withTenantTransaction } from "./tx";
@@ -61,21 +65,44 @@ export async function createProposal(scope: Scope, input: NewProposal): Promise<
   });
 }
 
-export async function listProposals(scope: Scope, status?: ProposalStatus): Promise<Proposal[]> {
-  const s = scopeClause(scope);
+type ProposalListRow = ProposalRow & {
+  current_daily_budget: string | null;
+};
+
+function rowToProposalListItem(row: ProposalListRow): ProposalListItem {
+  return {
+    ...rowToProposal(row),
+    currentDailyBudgetInr:
+      row.current_daily_budget === null ? null : Number(row.current_daily_budget),
+  };
+}
+
+const LIST_PROPOSALS_SQL = `
+  SELECT p.*, c.daily_budget AS current_daily_budget
+    FROM adsagent.proposals p
+    LEFT JOIN adsagent.campaigns c
+      ON c.id = p.campaign_id AND c.org_id = p.org_id`;
+
+export async function listProposals(
+  scope: Scope,
+  status?: ProposalStatus,
+): Promise<ProposalListItem[]> {
+  const s = scopeClause(scope, "p.org_id");
   return withTenantTransaction(scope, async (client) => {
     const { rows } = status
-      ? await client.query<ProposalRow>(
-          `SELECT * FROM adsagent.proposals
-            WHERE ${s.sql} AND status = $2
-            ORDER BY created_at DESC`,
+      ? await client.query<ProposalListRow>(
+          `${LIST_PROPOSALS_SQL}
+            WHERE ${s.sql} AND p.status = $2
+            ORDER BY p.created_at DESC`,
           [...s.params, status],
         )
-      : await client.query<ProposalRow>(
-          `SELECT * FROM adsagent.proposals WHERE ${s.sql} ORDER BY created_at DESC`,
+      : await client.query<ProposalListRow>(
+          `${LIST_PROPOSALS_SQL}
+            WHERE ${s.sql}
+            ORDER BY p.created_at DESC`,
           [...s.params],
         );
-    return rows.map(rowToProposal);
+    return rows.map(rowToProposalListItem);
   });
 }
 

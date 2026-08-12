@@ -30,7 +30,10 @@ const row = {
   error: null,
   created_at: new Date("2026-08-03T00:00:00.000Z"),
   decided_at: null,
-  executed_at: null,
+  scheduled_for: null,
+  undo_until: null,
+  batch_id: null,
+  current_daily_budget: "500",
 };
 
 beforeEach(() => query.mockReset());
@@ -58,7 +61,8 @@ describe("listProposals", () => {
     query.mockResolvedValue({ rows: [row] });
     await listProposals(ORG);
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("WHERE org_id = $1::uuid");
+    expect(sql).toContain("p.org_id = $1::uuid");
+    expect(sql).toContain("current_daily_budget");
     expect(params).toEqual([ORG.orgId]);
   });
 
@@ -66,7 +70,7 @@ describe("listProposals", () => {
     query.mockResolvedValue({ rows: [row] });
     await listProposals(ORG, "pending");
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("status = $2");
+    expect(sql).toContain("p.status = $2");
     expect(params).toEqual([ORG.orgId, "pending"]);
   });
 

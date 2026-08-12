@@ -4,10 +4,18 @@ import { requireRole } from "@/lib/auth/dal";
 import { scopeFromSession } from "@/lib/auth/scope";
 import type { ProposalStatus } from "@/lib/types";
 import { listProposals } from "@/lib/db/proposals";
+import { budgetDeltaInr } from "@/lib/decision-engine/budget-delta";
 import { TabStrip } from "@/components/pencil/TabStrip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const MARKETING_TABS = [
   { href: "/campaigns", label: "Board" },
@@ -16,6 +24,7 @@ const MARKETING_TABS = [
 
 const STATUS_TABS: { value: ProposalStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
   { value: "executed", label: "Executed" },
@@ -24,6 +33,12 @@ const STATUS_TABS: { value: ProposalStatus; label: string }[] = [
 
 function isProposalStatus(value: string): value is ProposalStatus {
   return STATUS_TABS.some((tab) => tab.value === value);
+}
+
+function formatBudgetDelta(delta: number | null): string {
+  if (delta === null) return "—";
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+  return `${sign}₹${Math.abs(delta).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 export default async function ProposalsPage({
@@ -57,27 +72,36 @@ export default async function ProposalsPage({
             <TableRow>
               <TableHead>Kind</TableHead>
               <TableHead>Triggered rule</TableHead>
+              <TableHead>Budget Δ</TableHead>
               <TableHead>Rationale</TableHead>
               <TableHead>Created</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {proposals.map((proposal) => (
-              <TableRow key={proposal.id}>
-                <TableCell>
-                  <Link href={`/proposals/${proposal.id}`} className="inline-block">
-                    <Badge variant="outline">{proposal.kind}</Badge>
-                  </Link>
-                </TableCell>
-                <TableCell>{proposal.triggeredRule}</TableCell>
-                <TableCell className="max-w-md truncate text-muted-foreground">
-                  {proposal.rationale ?? "(none)"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(proposal.createdAt).toLocaleString()}
-                </TableCell>
-              </TableRow>
-            ))}
+            {proposals.map((proposal) => {
+              const delta = budgetDeltaInr({
+                kind: proposal.kind,
+                payload: proposal.payload,
+                currentDailyBudgetInr: proposal.currentDailyBudgetInr,
+              });
+              return (
+                <TableRow key={proposal.id}>
+                  <TableCell>
+                    <Link href={`/proposals/${proposal.id}`} className="inline-block">
+                      <Badge variant="outline">{proposal.kind}</Badge>
+                    </Link>
+                  </TableCell>
+                  <TableCell>{proposal.triggeredRule}</TableCell>
+                  <TableCell className="font-mono text-sm">{formatBudgetDelta(delta)}</TableCell>
+                  <TableCell className="max-w-md truncate text-muted-foreground">
+                    {proposal.rationale ?? "(none)"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(proposal.createdAt).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}
