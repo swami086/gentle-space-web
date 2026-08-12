@@ -45,6 +45,8 @@ next-env.d.ts
 .firecrawl/
 backup-listings-*.sql
 
+backups/
+
 # OpenMemory - IDE/Assistant specific rules
 .cursor/rules/openmemory.mdc
 .worktrees/
