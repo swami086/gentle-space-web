@@ -790,6 +790,7 @@ retires the `runtime = "nodejs"` / "do not forward cancellation" workaround in
 | `agent.task_requested` | orchestrator or cron requests agent work | Kanban dispatcher |
 | `reminder.due` | cron finds a due reminder | notification · Today feed |
 | `deletion.requested` | an erasure request is accepted | one consumer per store (§14.4) |
+| `portal.event` | a broker's landing page sends a session event | **BigQuery raw zone** via native subscription (§14.6) |
 
 ### 14.3 Delivery semantics
 
@@ -828,3 +829,31 @@ Cron is a **clock**; Pub/Sub is **transport**. They are not alternatives.
   dead-lettering, and fan-out like everything else.
 
 The rule: nothing in a cron job does work that can fail slowly. It finds candidates and publishes.
+
+### 14.6 BigQuery — the raw event zone
+
+Broker landing pages send session clickstream. That lands in **BigQuery via a native Pub/Sub
+[BigQuery subscription](https://docs.cloud.google.com/pubsub/docs/bigquery)**, which writes through
+the Storage Write API *"without intermediate processing"* — no consumer to write or operate.
+
+**Why not the stores already here.** Firestore was considered and rejected for this: it bills per
+document write and its own best practices warn against *"high write rates to lexicographically close
+documents… known as hotspotting"*, which time-ordered events walk straight into. ClickHouse has no
+native Pub/Sub subscription, so it would need a custom consumer — real work for a solo operator where
+BigQuery needs none.
+
+**Why the earlier objection to BigQuery does not apply.** §9 rejected BigQuery as the analytical store
+because per-byte-scanned billing plus agent-generated queries is a denial-of-wallet risk. That
+objection was about *agents querying it*. Here it is a write-optimised raw zone that **only scheduled
+transforms read**, so scan volume is bounded and predictable. Agents must never be given access to it.
+
+**Nothing product-facing depends on it.** If BigQuery is unavailable, events accumulate in Pub/Sub and
+the product is unaffected — which is what makes a ninth system tolerable.
+
+Curated data flows onward from there: scheduled transforms populate Postgres tables the product reads
+and ClickHouse tables analytics reads. The raw zone is date-partitioned so retention expiry is a
+partition drop.
+
+**This whole path is gated on consent**, which is designed in
+`2026-08-12-portal-ingestion-consent-design.md`. Events arriving without valid consent for their
+stated purpose are rejected at the ingestion edge and never reach Pub/Sub.

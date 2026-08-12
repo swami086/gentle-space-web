@@ -405,7 +405,8 @@ CREATE TABLE context.outbox_events (
 
   topic         TEXT NOT NULL CHECK (topic IN (
                   'enquiry.received','enquiry.activity_logged','graph.tenant_stale',
-                  'agent.task_requested','reminder.due','deletion.requested')),
+                  'agent.task_requested','reminder.due','deletion.requested',
+                  'portal.event')),
   payload       JSONB NOT NULL,
   ordering_key  TEXT NOT NULL,          -- org_id::text; per-tenant ordering, never global
 
@@ -473,7 +474,7 @@ CREATE TABLE context.deletion_propagations (
   request_id  UUID NOT NULL REFERENCES context.deletion_requests(id) ON DELETE CASCADE,
   store       TEXT NOT NULL CHECK (store IN
                 ('postgres','clickhouse','duckdb_snapshot','graph','twenty',
-                 'vector_index','firestore','langfuse')),
+                 'vector_index','firestore','langfuse','bigquery')),
   state       TEXT NOT NULL DEFAULT 'pending'
                 CHECK (state IN ('pending','suppressed','erased','failed')),
   detail      TEXT,
