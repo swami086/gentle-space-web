@@ -1,6 +1,7 @@
 import type { ToolSpec } from "@openuidev/lang-core";
+import type { Scope } from "../db/scope-sql";
 import { campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
-import { crmToolProvider, crmToolSpecs } from "./crm-tools";
+import { createCrmToolProvider, crmToolSpecs } from "./crm-tools";
 import { analyticsToolProvider, analyticsToolSpecs } from "./analytics-tools";
 
 export type ToolProviderMap = Record<string, (args: Record<string, unknown>) => Promise<unknown>>;
@@ -33,9 +34,12 @@ export function composeToolSpecs(...specLists: ToolSpec[][]): ToolSpec[] {
  * The global Copilot's composed tool registry — campaign (start draft), CRM, and analytics.
  * Embedded Campaign Chat still owns rich SetupCard editing; Copilot only starts a draft + deep-link.
  */
-export const platformToolProvider: ToolProviderMap = composeToolProviders(
-  campaignToolProvider,
-  crmToolProvider,
-  analyticsToolProvider,
-);
+export function createPlatformToolProvider(scope: Scope): ToolProviderMap {
+  return composeToolProviders(
+    campaignToolProvider,
+    createCrmToolProvider(scope),
+    analyticsToolProvider,
+  );
+}
+
 export const platformToolSpecs: ToolSpec[] = composeToolSpecs(campaignToolSpecs, crmToolSpecs, analyticsToolSpecs);

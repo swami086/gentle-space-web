@@ -96,8 +96,22 @@ snapshot; the executor marks the proposal failed) until the MCP server is runnin
 
 ### Twenty CRM
 
-Reuse the main app's already-live instance — no new setup. `TWENTY_BASE_URL`
-and `TWENTY_API_KEY` match the root repo's `.env.local`.
+Local dev uses the shared instance at `infra/twenty` (`TWENTY_BASE_URL=http://localhost:3020`).
+Per-org instances are registered in `context.twenty_connections` and reached only via
+`getTwentyClient(orgId)` (see `lib/crm/twenty-client.ts`).
+
+**Required in `.env.local` for coverage check + interim guard:**
+
+- `SHARED_TWENTY_BASE_URL` — local: `http://localhost:3020`; production shared: `https://crm.gentlespacesolutions.com`
+- `PLATFORM_ORG_ID` — internal org uuid from `public.orgs` (seed: `00000000-0000-0000-0000-000000000001`)
+
+**Provisioning a dedicated org instance (Coolify):** copy `COOLIFY_*` and `TWENTY_*` from
+`.env.example`. The Coolify MCP token maps to `COOLIFY_API_TOKEN` (or `COOLIFY_ACCESS_TOKEN`).
+
+```bash
+npx tsx --env-file=.env.local scripts/check-twenty-coverage.ts
+npx tsx --env-file=.env.local scripts/provision-twenty-instance.ts --org-id <uuid> --slug gentle-space
+```
 
 ### Bifrost (chat + rationale)
 

@@ -35,8 +35,8 @@ function getJwks() {
 async function ensureShadowRows(session: Session): Promise<void> {
   if (!session.orgId) return; // pending users have no org yet, nothing to shadow
   await getPool().query(
-    `INSERT INTO orgs (id, name, kind) VALUES ($1, 'Gentle Space (internal)', 'internal')
-     ON CONFLICT (id) DO NOTHING`,
+    `INSERT INTO orgs (id, name, kind, slug) VALUES ($1, 'Gentle Space (internal)', 'internal', 'gentle-space')
+     ON CONFLICT (id) DO UPDATE SET slug = COALESCE(orgs.slug, EXCLUDED.slug)`,
     [session.orgId],
   );
   await getPool().query(

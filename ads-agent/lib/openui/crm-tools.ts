@@ -14,8 +14,6 @@ import type { ToolProviderMap } from "./platform-tools";
 
 const STAGE_LABELS = new Map(PIPELINE_STAGES.map((s) => [s.value, s.label] as const));
 
-type ScopedToolHandler = (scope: Scope, args: Record<string, unknown>) => Promise<unknown>;
-
 /** OpenUI OpportunityCard Zod shape — rows inside the Query envelope (see toOpenUiListResult). */
 function toOpenUiRows(rows: Opportunity[]): OpenUiOpportunityCardRow[] {
   return rows.map(toOpenUiOpportunityCard);
@@ -33,64 +31,47 @@ function toOpenUiListResult(rows: Opportunity[]): OpenUiOpportunityListResult {
   return { opportunities: toOpenUiRows(rows) };
 }
 
-export const crmToolHandlers: Record<string, ScopedToolHandler> = {
-  list_opportunities: async (scope) => toOpenUiListResult(await listOpportunities(scope)),
-  search_opportunities: async (scope, args) => {
-    const query = String(args.query ?? "").toLowerCase();
-    const all = await listOpportunities(scope);
-    const filtered = !query ? all : all.filter((o) => o.name.toLowerCase().includes(query));
-    return toOpenUiListResult(filtered);
-  },
-  get_opportunity: async (scope, args) => {
-    const row = await getOpportunity(scope, String(args.id ?? ""));
-    return row ? toOpenUiOpportunityCard(row) : null;
-  },
-  advance_opportunity_stage: async (scope, args) => {
-    const id = String(args.id ?? "");
-    const opportunityName = String(args.opportunityName ?? "");
-    const toStage = String(args.toStage ?? "");
-    const label = STAGE_LABELS.get(toStage as (typeof PIPELINE_STAGES)[number]["value"]);
-    if (!label) return { ok: false, error: `unknown stage "${toStage}"` };
+export function createCrmToolProvider(scope: Scope): ToolProviderMap {
+  return {
+    list_opportunities: async () => toOpenUiListResult(await listOpportunities(scope)),
+    search_opportunities: async (args: Record<string, unknown>) => {
+      const query = String(args.query ?? "").toLowerCase();
+      const all = await listOpportunities(scope);
+      const filtered = !query ? all : all.filter((o) => o.name.toLowerCase().includes(query));
+      return toOpenUiListResult(filtered);
+    },
+    get_opportunity: async (args: Record<string, unknown>) => {
+      const row = await getOpportunity(scope, String(args.id ?? ""));
+      return row ? toOpenUiOpportunityCard(row) : null;
+    },
+    advance_opportunity_stage: async (args: Record<string, unknown>) => {
+      const id = String(args.id ?? "");
+      const opportunityName = String(args.opportunityName ?? "");
+      const toStage = String(args.toStage ?? "");
+      const label = STAGE_LABELS.get(toStage as (typeof PIPELINE_STAGES)[number]["value"]);
+      if (!label) return { ok: false, error: `unknown stage "${toStage}"` };
 
-    const existing = await getOpportunity(scope, id);
-    const previousStage = existing?.stage ?? null;
+      const existing = await getOpportunity(scope, id);
+      const previousStage = existing?.stage ?? null;
 
-    const result = await updateOpportunityStage(scope, id, toStage as (typeof PIPELINE_STAGES)[number]["value"]);
-    if (result.ok) {
-      await writeAudit(scope, {
-        actorType: "agent",
-        action: "opportunity.stage_changed",
-        entityType: "opportunity",
-        before: { stage: previousStage },
-        after: { stage: toStage, opportunityName },
-      });
-    }
-    return result;
-  },
-};
-
-function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolProviderMap {
-  return Object.fromEntries(
-    Object.entries(handlers).map(([name, fn]) => [
-      name,
-      (args: Record<string, unknown>) => {
-        const orgId = process.env.ADS_AGENT_ORG_ID;
-        if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-        // Twenty is platform-only; the internal org id doubles as the platform tenant id today.
-        return fn({ kind: "platform", orgId }, args);
-      },
-    ]),
-  );
+      const result = await updateOpportunityStage(
+        scope,
+        id,
+        toStage as (typeof PIPELINE_STAGES)[number]["value"],
+      );
+      if (result.ok) {
+        await writeAudit(scope, {
+          actorType: "agent",
+          action: "opportunity.stage_changed",
+          entityType: "opportunity",
+          before: { stage: previousStage },
+          after: { stage: toStage, opportunityName },
+        });
+      }
+      return result;
+    },
+  };
 }
-
-/**
- * Server-side OpenUI toolProvider map. Client reaches these only via createHttpToolProvider →
- * POST /api/openui/tools (MCP stays on the backend inside listOpportunities/getOpportunity).
- * Official OpenUI Generate→Execute: the LLM emits Query("list_opportunities"); the Renderer runs
- * the tool — data never round-trips through the model as OpportunityCard positionals.
- * @see https://www.openui.com/docs/openui-lang/how-it-works
- */
-export const crmToolProvider: ToolProviderMap = bindScopedHandlers(crmToolHandlers);
 
 /** Read-only specs for CRM Assistant / Copilot prompts (mutations stay Confirm→PATCH). */
 export const crmReadToolSpecs: ToolSpec[] = [

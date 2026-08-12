@@ -2,8 +2,14 @@ import { createServer } from "node:http";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { hostHeaderValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
-import { crmToolProvider } from "../../lib/openui/crm-tools";
+import { createCrmToolProvider } from "../../lib/openui/crm-tools";
 import { analyticsToolProvider } from "../../lib/openui/analytics-tools";
+
+// The app-data MCP server runs as a local developer tool with no session, so
+// its tenant comes from the environment and is explicit rather than implied.
+const orgId = process.env.MCP_ORG_ID;
+if (!orgId) throw new Error("app-data-mcp-server: MCP_ORG_ID is required");
+const crmToolProvider = createCrmToolProvider({ kind: "org", orgId });
 
 /** Host-header allowlist for the DNS-rebinding guard, driven by APP_DATA_MCP_ALLOWED_HOSTS
  * (comma-separated). Defaults to localhost-only for the tsx-on-host workflow; docker-compose.yml

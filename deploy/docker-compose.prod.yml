@@ -147,6 +147,26 @@ services:
       retries: 10
     restart: unless-stopped
 
+  outbox-relay:
+    build: ../ads-agent
+    command: ["npx", "tsx", "scripts/run-outbox-relay.ts"]
+    depends_on:
+      ads-db:
+        condition: service_healthy
+    networks:
+      - default
+    environment:
+      # Its own role, not the application's — the relay reads across tenants.
+      OUTBOX_RELAY_DATABASE_URL: ${OUTBOX_RELAY_DATABASE_URL}
+      GOOGLE_CLOUD_PROJECT: ${VERTEX_PROJECT_ID:-propane-galaxy-498403-n8}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/outbox-relay.json
+      OUTBOX_RELAY_POLL_MS: ${OUTBOX_RELAY_POLL_MS:-500}
+      OUTBOX_RELAY_BATCH_SIZE: ${OUTBOX_RELAY_BATCH_SIZE:-100}
+      OUTBOX_RELAY_PER_ORG_CEILING: ${OUTBOX_RELAY_PER_ORG_CEILING:-25}
+    volumes:
+      - ../deploy/secrets/outbox-relay.json:/secrets/outbox-relay.json:ro
+    restart: unless-stopped
+
 networks:
   twenty_default:
     external: true

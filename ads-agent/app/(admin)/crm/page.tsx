@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole, requireSession } from "@/lib/auth/dal";
 import { scopeFromSession } from "@/lib/auth/scope";
@@ -30,7 +29,6 @@ export default async function CrmPage() {
   if (!access.ok) return <ForbiddenNotice />;
 
   const scope = await scopeFromSession(await requireSession());
-  if (scope.kind !== "platform") notFound();
 
   const opportunities = await listOpportunities(scope);
   const columns = PIPELINE_STAGES.map((stage) => ({

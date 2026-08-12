@@ -20,10 +20,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 
-  if (scope.kind !== "platform") {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-
   const existing = await getOpportunity(scope, id);
   const previousStage = existing?.stage ?? null;
 

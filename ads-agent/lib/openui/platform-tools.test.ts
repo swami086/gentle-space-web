@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { composeToolProviders, composeToolSpecs, platformToolProvider, platformToolSpecs } from "./platform-tools";
+import { composeToolProviders, composeToolSpecs, createPlatformToolProvider, platformToolSpecs } from "./platform-tools";
 import type { ToolSpec } from "@openuidev/lang-core";
+
+const scope = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
 
 describe("composeToolProviders", () => {
   it("merges multiple domain tool-provider maps into one", () => {
@@ -38,8 +40,9 @@ describe("composeToolSpecs", () => {
   });
 });
 
-describe("platformToolProvider / platformToolSpecs", () => {
+describe("createPlatformToolProvider / platformToolSpecs", () => {
   it("includes every CRM and analytics tool", () => {
+    const platformToolProvider = createPlatformToolProvider(scope);
     const names = platformToolSpecs.map((s) => s.name);
     expect(names).toContain("start_campaign_draft");
     expect(names).toContain("list_opportunities");

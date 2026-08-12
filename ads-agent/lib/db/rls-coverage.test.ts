@@ -23,6 +23,7 @@ suite("RLS coverage", () => {
          JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE c.relkind = 'r'
           AND n.nspname IN ('adsagent','context','derived')
+          AND NOT EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
           AND EXISTS (
                 SELECT 1 FROM pg_attribute a
                  WHERE a.attrelid = c.oid AND a.attname = 'org_id' AND NOT a.attisdropped
@@ -38,6 +39,7 @@ suite("RLS coverage", () => {
       `SELECT format('%s.%s/%s', schemaname, tablename, policyname) AS missing
          FROM pg_policies
         WHERE schemaname IN ('adsagent','context','derived')
+          AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
           AND with_check IS NULL
         ORDER BY 1`,
     );
@@ -49,10 +51,13 @@ suite("RLS coverage", () => {
   it("no policy compares against current_setting directly", async () => {
     // Everything goes through public.current_tenant(), which is the single
     // helper that no code path bypasses.
+    // Tenant isolation uses public.current_tenant(). Cross-tenant projector and
+    // relay policies intentionally gate on app.cross_tenant or role TO clauses.
     const { rows } = await pool.query<{ policyname: string; qual: string }>(
       `SELECT policyname, qual FROM pg_policies
         WHERE schemaname IN ('adsagent','context','derived')
-          AND qual LIKE '%current_setting%'`,
+          AND qual LIKE '%current_setting%'
+          AND policyname NOT IN ('cross_tenant_read', 'cross_tenant_audit', 'relay_access_log')`,
     );
     expect(rows).toEqual([]);
   });

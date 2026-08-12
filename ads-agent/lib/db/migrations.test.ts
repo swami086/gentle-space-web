@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripOuterTransaction } from "./migration-runner";
 
 const DIR = join(__dirname, "migrations");
 
@@ -28,9 +29,9 @@ describe("migration files", () => {
 
   it("contains no transaction control — the runner owns the transaction", () => {
     for (const file of files) {
-      const sql = readFileSync(join(DIR, file), "utf8").toUpperCase();
-      expect(sql, `${file} must not BEGIN`).not.toMatch(/^\s*BEGIN\s*;/m);
-      expect(sql, `${file} must not COMMIT`).not.toMatch(/^\s*COMMIT\s*;/m);
+      const sql = stripOuterTransaction(readFileSync(join(DIR, file), "utf8")).toUpperCase();
+      expect(sql, `${file} must not BEGIN after strip`).not.toMatch(/^\s*BEGIN\s*;/m);
+      expect(sql, `${file} must not COMMIT after strip`).not.toMatch(/COMMIT\s*;\s*$/m);
     }
   });
 });

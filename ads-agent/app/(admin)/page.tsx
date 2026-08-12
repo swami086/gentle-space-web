@@ -4,8 +4,7 @@ import { requireRole, requireSession } from "@/lib/auth/dal";
 import { scopeFromSession } from "@/lib/auth/scope";
 import { countAuditToday, listAudit } from "@/lib/db/audit-log";
 import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
-import { fetchLeadSignal } from "@/lib/connectors/twenty";
-import { getPipelineValue } from "@/lib/crm/twenty-pipeline";
+import { fetchLeadSignal, getPipelineValue } from "@/lib/crm/twenty-pipeline";
 import { StatCardView } from "@/lib/openui/shared-metric-cards";
 
 function formatInr(value: number): string {
@@ -22,8 +21,8 @@ export default async function HomePage() {
   const [overview, spendCplTrend, leadSignal, pipelineValueInr, aiActionsToday, recentActions] = await Promise.all([
     getOverviewStats(scope),
     getSpendCplTrend(scope, 30),
-    isPlatform ? fetchLeadSignal(scope) : Promise.resolve({ hotCount: 0, warmCount: 0, coldCount: 0, unscoredCount: 0 }),
-    isPlatform ? getPipelineValue(scope) : Promise.resolve(0),
+    fetchLeadSignal(scope),
+    getPipelineValue(scope),
     countAuditToday(scope),
     listAudit(scope, 5),
   ]);

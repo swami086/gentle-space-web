@@ -15,6 +15,7 @@ vi.mock("./client", () => ({
   }),
 }));
 vi.mock("node:fs", () => ({
+  existsSync: vi.fn(() => false),
   readFileSync: vi.fn((p: string) => {
     if (String(p).endsWith(".up.sql")) return "ALTER TABLE public.users SET role = role;";
     return "CREATE TABLE IF NOT EXISTS placeholder (id UUID);";
@@ -34,6 +35,8 @@ describe("migrate", () => {
   it("returns no pending migrations when the ledger is current", async () => {
     const ran = await migrate();
     expect(ran).toEqual([]);
+    expect(query).toHaveBeenCalledWith("CREATE EXTENSION IF NOT EXISTS age");
+    expect(query).toHaveBeenCalledWith("CREATE EXTENSION IF NOT EXISTS vector");
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS public.schema_migrations"),
     );

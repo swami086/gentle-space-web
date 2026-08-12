@@ -1,0 +1,4 @@
+BEGIN;
+DROP INDEX IF EXISTS public.orgs_slug_key;
+ALTER TABLE public.orgs DROP COLUMN IF EXISTS slug;
+COMMIT;
