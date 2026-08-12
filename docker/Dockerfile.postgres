@@ -3,15 +3,23 @@ USER root
 # Confirmed against `git ls-remote https://github.com/apache/age.git` at build time --
 # AGE's branch names differ from its tag names, so this must not be guessed.
 ARG AGE_BRANCH=release/PG18/1.8.0
+ARG PG_CLICKHOUSE_REF=v0.10.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential ca-certificates git postgresql-server-dev-18 \
       libreadline-dev zlib1g-dev flex bison \
+      libcurl4-openssl-dev uuid-dev liblz4-dev libzstd-dev libssl-dev \
     && update-ca-certificates \
     && git clone --branch "${AGE_BRANCH}" --depth 1 https://github.com/apache/age.git /tmp/age \
     && cd /tmp/age \
     && make PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
     && make install PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
     && rm -rf /tmp/age \
+    && cd /tmp \
+    && git clone --branch "${PG_CLICKHOUSE_REF}" --depth 1 https://github.com/ClickHouse/pg_clickhouse.git /tmp/pg_clickhouse \
+    && cd /tmp/pg_clickhouse \
+    && make PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+    && make install PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+    && rm -rf /tmp/pg_clickhouse \
     && apt-get purge -y --auto-remove build-essential git postgresql-server-dev-18 \
     && rm -rf /var/lib/apt/lists/* \
     && echo "shared_preload_libraries = 'age'" >> /usr/share/postgresql/postgresql.conf.sample
