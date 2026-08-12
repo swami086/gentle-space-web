@@ -4,7 +4,8 @@ import type {
   NewPerformanceSnapshot,
   PerformanceSnapshot,
 } from "../types";
-import { getPool } from "./client";
+import { scopeClause, type Scope } from "./scope-sql";
+import { withTenantTransaction } from "./tx";
 
 type PerformanceSnapshotRow = {
   id: string;
@@ -30,32 +31,52 @@ function rowToPerformanceSnapshot(row: PerformanceSnapshotRow): PerformanceSnaps
   };
 }
 
-export async function recordPerformanceSnapshot(input: NewPerformanceSnapshot): Promise<void> {
+export async function recordPerformanceSnapshot(
+  scope: Scope,
+  input: NewPerformanceSnapshot,
+): Promise<void> {
   const cpl = input.conversions > 0 ? input.spend / input.conversions : null;
-  await getPool().query(
-    `INSERT INTO performance_snapshots
-       (campaign_id, spend, clicks, impressions, conversions, cpl, raw)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
-    [
-      input.campaignId,
-      input.spend,
-      input.clicks,
-      input.impressions,
-      input.conversions,
-      cpl,
-      JSON.stringify(input.raw ?? {}),
-    ],
-  );
+  const s = scopeClause(scope, "c.org_id");
+  await withTenantTransaction(scope, async (client) => {
+    // org_id comes from the parent campaign, inside the caller's scope, so a
+    // snapshot cannot be attached to another tenant's campaign. It is also
+    // stored on the row, so the row carries its own RLS policy.
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO adsagent.performance_snapshots
+         (org_id, campaign_id, spend, clicks, impressions, conversions, cpl, raw)
+       SELECT c.org_id, c.id, $3, $4, $5, $6, $7, $8::jsonb
+         FROM adsagent.campaigns c
+        WHERE ${s.sql} AND c.id = $2
+       RETURNING id`,
+      [
+        ...s.params,
+        input.campaignId,
+        input.spend,
+        input.clicks,
+        input.impressions,
+        input.conversions,
+        cpl,
+        JSON.stringify(input.raw ?? {}),
+      ],
+    );
+    if (!rows[0]) throw new Error(`campaign ${input.campaignId} not found`);
+  });
 }
 
-export async function recentPerformanceSnapshots(days: number): Promise<PerformanceSnapshot[]> {
-  const { rows } = await getPool().query<PerformanceSnapshotRow>(
-    `SELECT * FROM performance_snapshots
-     WHERE captured_at >= NOW() - INTERVAL '${days} days'
-     ORDER BY campaign_id, captured_at DESC`,
-    [],
-  );
-  return rows.map(rowToPerformanceSnapshot);
+export async function recentPerformanceSnapshots(
+  scope: Scope,
+  days: number,
+): Promise<PerformanceSnapshot[]> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<PerformanceSnapshotRow>(
+      `SELECT * FROM adsagent.performance_snapshots
+        WHERE ${s.sql} AND captured_at >= NOW() - ($2 || ' days')::interval
+        ORDER BY campaign_id, captured_at DESC`,
+      [...s.params, days],
+    );
+    return rows.map(rowToPerformanceSnapshot);
+  });
 }
 
 type CrmSignalSnapshotRow = {
@@ -80,17 +101,39 @@ function rowToCrmSignalSnapshot(row: CrmSignalSnapshotRow): CrmSignalSnapshot {
   };
 }
 
-export async function recordCrmSignalSnapshot(input: NewCrmSignalSnapshot): Promise<void> {
-  await getPool().query(
-    `INSERT INTO crm_signal_snapshots (campaign_id, hot_count, warm_count, cold_count, unscored_count)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [input.campaignId, input.hotCount, input.warmCount, input.coldCount, input.unscoredCount],
+export async function recordCrmSignalSnapshot(
+  scope: Scope,
+  input: NewCrmSignalSnapshot,
+): Promise<void> {
+  // campaign_id is nullable here, so there is no parent to inherit from; the
+  // caller's own org_id is the owner.
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `INSERT INTO adsagent.crm_signal_snapshots
+         (org_id, campaign_id, hot_count, warm_count, cold_count, unscored_count)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6)`,
+      [
+        ...s.params,
+        input.campaignId,
+        input.hotCount,
+        input.warmCount,
+        input.coldCount,
+        input.unscoredCount,
+      ],
+    ),
   );
 }
 
-export async function latestCrmSignalSnapshot(): Promise<CrmSignalSnapshot | null> {
-  const { rows } = await getPool().query<CrmSignalSnapshotRow>(
-    `SELECT * FROM crm_signal_snapshots ORDER BY captured_at DESC LIMIT 1`,
-  );
-  return rows[0] ? rowToCrmSignalSnapshot(rows[0]) : null;
+export async function latestCrmSignalSnapshot(scope: Scope): Promise<CrmSignalSnapshot | null> {
+  const s = scopeClause(scope);
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<CrmSignalSnapshotRow>(
+      `SELECT * FROM adsagent.crm_signal_snapshots
+        WHERE ${s.sql}
+        ORDER BY captured_at DESC LIMIT 1`,
+      [...s.params],
+    );
+    return rows[0] ? rowToCrmSignalSnapshot(rows[0]) : null;
+  });
 }

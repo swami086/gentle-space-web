@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./tx", () => ({
+  withTenantTransaction: (_scope: unknown, fn: (c: { query: typeof query }) => unknown) => fn({ query }),
+}));
 
+import type { Scope } from "./scope-sql";
 import {
   createCampaignRecord,
   getCampaignById,
@@ -12,98 +15,75 @@ import {
   updateCampaignStatus,
 } from "./campaigns";
 
+const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
 const row = {
   id: "camp-1",
   platform: "google",
   external_id: null,
-  name: "Whitefield Office Search",
+  name: "HSR search",
   status: "proposed",
-  daily_budget: "500",
-  corridor: "whitefield",
+  daily_budget: "700",
+  corridor: "HSR",
   created_at: new Date("2026-08-03T00:00:00.000Z"),
 };
 
 beforeEach(() => query.mockReset());
 
 describe("createCampaignRecord", () => {
-  it("inserts and returns the mapped campaign", async () => {
+  it("stamps org_id and numbers the rest from $2", async () => {
     query.mockResolvedValue({ rows: [row] });
-    const result = await createCampaignRecord({
+    await createCampaignRecord(ORG, {
       platform: "google",
-      name: "Whitefield Office Search",
-      dailyBudget: 500,
-      corridor: "whitefield",
+      name: "HSR search",
+      dailyBudget: 700,
+      corridor: "HSR",
     });
-    expect(result).toEqual({
-      id: "camp-1",
-      platform: "google",
-      externalId: null,
-      name: "Whitefield Office Search",
-      status: "proposed",
-      dailyBudget: 500,
-      corridor: "whitefield",
-      createdAt: "2026-08-03T00:00:00.000Z",
-    });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO campaigns"), [
-      "google",
-      "Whitefield Office Search",
-      500,
-      "whitefield",
-    ]);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("INSERT INTO adsagent.campaigns");
+    expect(sql).toContain("(org_id, platform, name, daily_budget, corridor)");
+    expect(params).toEqual([ORG.orgId, "google", "HSR search", 700, "HSR"]);
   });
 });
 
 describe("listCampaigns", () => {
-  it("maps every row", async () => {
-    query.mockResolvedValue({ rows: [row, { ...row, id: "camp-2" }] });
-    const result = await listCampaigns();
-    expect(result).toHaveLength(2);
-    expect(result[1].id).toBe("camp-2");
+  it("scopes the listing", async () => {
+    query.mockResolvedValue({ rows: [row] });
+    await listCampaigns(ORG);
+    expect(query.mock.calls[0][0]).toContain("WHERE org_id = $1::uuid");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId]);
   });
 });
 
 describe("getCampaignById", () => {
-  it("returns null when no row matches", async () => {
+  it("returns null outside the caller's scope", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(getCampaignById("missing")).resolves.toBeNull();
-  });
-
-  it("returns the mapped campaign when found", async () => {
-    query.mockResolvedValue({ rows: [row] });
-    await expect(getCampaignById("camp-1")).resolves.toMatchObject({ id: "camp-1" });
+    await expect(getCampaignById(ORG, "camp-x")).resolves.toBeNull();
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "camp-x"]);
   });
 });
 
 describe("markCampaignActive", () => {
-  it("sets external_id and status to active", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await markCampaignActive("camp-1", "ext-123");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("UPDATE campaigns"), [
-      "camp-1",
-      "ext-123",
-    ]);
-    expect(query.mock.calls[0][0]).toContain("status = 'active'");
+    await markCampaignActive(ORG, "camp-1", "ext-1");
+    expect(query.mock.calls[0][0]).toContain("org_id = $1::uuid");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "camp-1", "ext-1"]);
   });
 });
 
 describe("updateCampaignBudget", () => {
-  it("updates daily_budget", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await updateCampaignBudget("camp-1", 750);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("daily_budget = $2"), [
-      "camp-1",
-      750,
-    ]);
+    await updateCampaignBudget(ORG, "camp-1", 900);
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "camp-1", 900]);
   });
 });
 
 describe("updateCampaignStatus", () => {
-  it("updates status", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await updateCampaignStatus("camp-1", "paused");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("status = $2"), [
-      "camp-1",
-      "paused",
-    ]);
+    await updateCampaignStatus(ORG, "camp-1", "paused");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "camp-1", "paused"]);
   });
 });

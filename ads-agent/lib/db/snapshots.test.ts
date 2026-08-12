@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./tx", () => ({
+  withTenantTransaction: (_scope: unknown, fn: (c: { query: typeof query }) => unknown) => fn({ query }),
+}));
 
+import type { Scope } from "./scope-sql";
 import {
   latestCrmSignalSnapshot,
   recentPerformanceSnapshots,
@@ -10,109 +13,89 @@ import {
   recordPerformanceSnapshot,
 } from "./snapshots";
 
+const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+
 beforeEach(() => query.mockReset());
 
 describe("recordPerformanceSnapshot", () => {
-  it("computes cpl from spend/conversions and inserts raw as jsonb", async () => {
-    query.mockResolvedValue({ rows: [] });
-    await recordPerformanceSnapshot({
+  it("derives org_id from the parent campaign inside the caller's scope", async () => {
+    query.mockResolvedValue({ rows: [{ id: "snap-1" }] });
+    await recordPerformanceSnapshot(ORG, {
       campaignId: "camp-1",
-      spend: 4000,
-      clicks: 120,
-      impressions: 5000,
-      conversions: 2,
-      raw: { source: "google" },
+      spend: 1000,
+      clicks: 50,
+      impressions: 900,
+      conversions: 4,
+      raw: {},
     });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO performance_snapshots"), [
-      "camp-1",
-      4000,
-      120,
-      5000,
-      2,
-      2000,
-      JSON.stringify({ source: "google" }),
-    ]);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("INSERT INTO adsagent.performance_snapshots");
+    expect(sql).toContain("FROM adsagent.campaigns c");
+    expect(sql).toContain("org_id = $1::uuid");
+    expect(params[0]).toBe(ORG.orgId);
+    expect(params[1]).toBe("camp-1");
+    // cpl = spend / conversions
+    expect(params[6]).toBe(250);
   });
 
-  it("stores a null cpl when there are zero conversions", async () => {
-    query.mockResolvedValue({ rows: [] });
-    await recordPerformanceSnapshot({
+  it("stores a null cpl when there were no conversions", async () => {
+    query.mockResolvedValue({ rows: [{ id: "snap-1" }] });
+    await recordPerformanceSnapshot(ORG, {
       campaignId: "camp-1",
-      spend: 500,
-      clicks: 10,
-      impressions: 200,
+      spend: 1000,
+      clicks: 50,
+      impressions: 900,
       conversions: 0,
     });
-    expect(query.mock.calls[0][1][5]).toBeNull();
+    expect(query.mock.calls[0][1][6]).toBeNull();
+  });
+
+  it("throws when the campaign is outside the caller's scope", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await expect(
+      recordPerformanceSnapshot(ORG, {
+        campaignId: "camp-x",
+        spend: 1,
+        clicks: 1,
+        impressions: 1,
+        conversions: 1,
+      }),
+    ).rejects.toThrow("campaign camp-x not found");
   });
 });
 
 describe("recentPerformanceSnapshots", () => {
-  it("queries with the given day window", async () => {
-    query.mockResolvedValue({
-      rows: [
-        {
-          id: "snap-1",
-          campaign_id: "camp-1",
-          captured_at: new Date("2026-08-03T00:00:00.000Z"),
-          spend: "1000",
-          clicks: 20,
-          impressions: 400,
-          conversions: 1,
-          cpl: "1000",
-        },
-      ],
-    });
-    const result = await recentPerformanceSnapshots(3);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("INTERVAL '3 days'"), []);
-    expect(result[0]).toMatchObject({ id: "snap-1", spend: 1000, cpl: 1000 });
+  it("parameterises the day window instead of interpolating it", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await recentPerformanceSnapshots(ORG, 7);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain("INTERVAL '7");
+    expect(sql).toContain("($2 || ' days')::interval");
+    expect(params).toEqual([ORG.orgId, 7]);
   });
 });
 
 describe("recordCrmSignalSnapshot", () => {
-  it("inserts counts with nullable campaignId", async () => {
+  it("stamps the caller's org_id directly, since campaign_id is nullable", async () => {
     query.mockResolvedValue({ rows: [] });
-    await recordCrmSignalSnapshot({
+    await recordCrmSignalSnapshot(ORG, {
       campaignId: null,
-      hotCount: 3,
-      warmCount: 5,
-      coldCount: 2,
-      unscoredCount: 1,
+      hotCount: 1,
+      warmCount: 2,
+      coldCount: 3,
+      unscoredCount: 4,
     });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO crm_signal_snapshots"), [
-      null,
-      3,
-      5,
-      2,
-      1,
-    ]);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("INSERT INTO adsagent.crm_signal_snapshots");
+    expect(params).toEqual([ORG.orgId, null, 1, 2, 3, 4]);
   });
 });
 
 describe("latestCrmSignalSnapshot", () => {
-  it("returns null when no snapshot exists", async () => {
+  it("scopes the read", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(latestCrmSignalSnapshot()).resolves.toBeNull();
-  });
-
-  it("maps the most recent row", async () => {
-    query.mockResolvedValue({
-      rows: [
-        {
-          id: "sig-1",
-          campaign_id: null,
-          captured_at: new Date("2026-08-03T00:00:00.000Z"),
-          hot_count: 4,
-          warm_count: 6,
-          cold_count: 3,
-          unscored_count: 0,
-        },
-      ],
-    });
-    await expect(latestCrmSignalSnapshot()).resolves.toMatchObject({
-      id: "sig-1",
-      hotCount: 4,
-      warmCount: 6,
-    });
+    await expect(latestCrmSignalSnapshot(ORG)).resolves.toBeNull();
+    expect(query.mock.calls[0][0]).toContain("org_id = $1::uuid");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId]);
   });
 });
