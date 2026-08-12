@@ -31,10 +31,12 @@ beforeEach(() => {
 });
 
 describe("migrate", () => {
-  it("applies schema.sql and returns no pending migrations when the ledger is current", async () => {
+  it("returns no pending migrations when the ledger is current", async () => {
     const ran = await migrate();
     expect(ran).toEqual([]);
-    expect(query).toHaveBeenCalledWith("CREATE TABLE IF NOT EXISTS placeholder (id UUID);");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS public.schema_migrations"),
+    );
   });
 
   it("propagates query errors", async () => {

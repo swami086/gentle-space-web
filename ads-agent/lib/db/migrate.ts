@@ -5,8 +5,8 @@ import { getPool } from "./client";
 const MIGRATIONS_DIR = path.join(process.cwd(), "lib/db/migrations");
 
 /**
- * Applies the idempotent baseline (schema.sql), then every numbered migration
- * not already recorded in public.schema_migrations, each in its own transaction.
+ * Applies every numbered migration not already recorded in public.schema_migrations,
+ * each in its own transaction.
  *
  * The ledger lives in the database, not in a file, so it travels with the
  * pg_dump that S2 restores into the adsagent schema — which is what stops the
@@ -15,9 +15,6 @@ const MIGRATIONS_DIR = path.join(process.cwd(), "lib/db/migrations");
  */
 export async function migrate(): Promise<string[]> {
   const pool = getPool();
-
-  const baselinePath = path.join(process.cwd(), "lib/db/schema.sql");
-  await pool.query(readFileSync(baselinePath, "utf-8"));
 
   await pool.query(
     `CREATE TABLE IF NOT EXISTS public.schema_migrations (
