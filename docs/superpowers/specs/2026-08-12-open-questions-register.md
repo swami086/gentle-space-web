@@ -24,12 +24,10 @@ see the gap.
 | B2 | Retention floor start date — does `erase_after` run from the deletion request or from last activity | **S4**, and now every artifact incl. call audio | data model Q3 | from last activity — the more conservative read, and the one that survives an audit |
 | B3 | Corridor vocabulary — who defines the canonical list, and how are scraped free-text areas mapped | **S7** (attribution is per-corridor) | data model Q2 **+** backend Q3 — *merged, was asked twice* | none; D1 does not work without it |
 | B4 | Encryption mechanism — `pgcrypto` versus KMS envelope encryption | S3 (§6.3), shapes erasure in three specs | data model Q1 | pgcrypto; revisit only if key-destruction-as-erasure is wanted |
-| B5 | **`pg_clickhouse` — who builds it, or does the MCP server read ClickHouse over HTTP instead** | **S9**. Both plans point at each other and neither builds it | datastore §3 **+** agent spec §5 | **Build it at S9.** Reading ClickHouse over HTTP removes the RLS backstop, and `agent_ro` plus `FORCE ROW LEVEL SECURITY` is the entire reason F-19's template design is safe. Isolation would have to move into the template layer, unbacked by the database |
 | B6 | **Which plan owns `evidence` and `proposed_by` on `adsagent.proposals`** | S9, and S1–S3's reserved range | data model §2 | **S9 owns them** and S1–S3 releases its reservation of `014`–`019`. They exist for agent provenance, which has no reader until S10 |
 
-**B5 and B6 were found by writing the plans, not by reading the specs.** Neither is visible in any single
-document — B5 only appears when S6a's "not mine, it's S9's" meets S9's four references to a wrapper
-nobody creates, and B6 only when S1–S3's deferral meets S9's migration `104`.
+**B6 was found by writing the plans, not by reading the specs.** It is not visible in any single
+document — B6 only when S1–S3's deferral meets S9's migration `105` (renumbered from `104`; see B5).
 
 ## Open, not yet blocking
 
@@ -49,6 +47,7 @@ nobody creates, and B6 only when S1–S3's deferral meets S9's migration `104`.
 
 | # | Question | Answer | Closed |
 |---|---|---|---|
+| B5 | `pg_clickhouse` built at S9 | Resolved 2026-08-12: extension in `docker/Dockerfile.postgres`, migration `103_pg_clickhouse_fdw`, gate `fdw-tenant.gate.test.ts`. Spec: `2026-08-12-pg-clickhouse-fdw-design.md`. | 2026-08-12 |
 | B1 | Postgres/Twenty field boundary — which system owns each enquiry field, and which wins on conflict | **Twenty owns who, Postgres owns what happened.** Identity fields: Twenty wins. Everything else: Postgres wins, Twenty is a projection. Full table in the Twenty tenancy spec §3 | 2026-08-12, closes dataflow A-1 |
 | C1 | Is Twenty CRM data per-org or one shared pipeline | **Shared today, per-org by design.** Each org gets its own provisioned instance (TW1). The client-level platform-only guard is an *interim* containment that stays until every org has one, then is removed. Revised from "shared, permanently" — the original answer treated today's state as the end state | 2026-08-12, revised same day |
 | C5 | Do brokers use Twenty's UI | **No.** It is a headless engine kept for dedup, stages and export. Its UI is not part of the product | 2026-08-12 |

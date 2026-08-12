@@ -164,7 +164,7 @@ implemented. Execute in build-sequence order via `superpowers:subagent-driven-de
 | `2026-08-12-s6-s6a-clickhouse-portal-ingestion.md` | 137 | 20 / 7 / 4 | `050`–`061` + ClickHouse `000`–`007` |
 | `2026-08-12-s7-attribution.md` | 77 | 11 / 5 / 4 | `070`–`074` |
 | `2026-08-12-s8-s8a-context-graph-artifacts.md` | 80 | 17 / 7 / 5 | `080`–`087` + ClickHouse `010`–`019` |
-| `2026-08-12-s9-s9a-mcp-context-server-tracing.md` | 105 | 17 / 7 / **7** | `100`–`105` |
+| `2026-08-12-s9-s9a-mcp-context-server-tracing.md` | 105 | 17 / 7 / **7** | `100`–`102` + **`103` FDW (B5 plan)** + `104`–`106` views/proposal/cost |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under
@@ -187,7 +187,7 @@ whereas `toUUIDOrZero` yields the zero UUID and matches nothing, which is what f
 - **Built-in escalations:** if AGE fails to build against PG18 (S1–S3 Task 5), STOP rather than proceeding to consolidation — the listings search boost depends on it and the fallback is a design decision. S2 must not decommission the old instances at its own end; they stay running until S3 has passed on the new one.
 - **`dal.ts:44` inserts the literal `'member'`** on every verified request. Migration `001` narrows the CHECK to `admin|operator|viewer`, so that line must change in the same commit or every login breaks.
 - Model slugs available to subagents are exactly two: `composer-2.5-fast` (mechanical — the plan text already contains the code) and `inherit` (judgement required). Skills are named per task in the plans themselves.
-- **Spec defects and gaps found by writing the plans** are recorded in `docs/superpowers/specs/2026-08-12-open-questions-register.md` — new blocking questions **B5** (`pg_clickhouse`: nobody builds it, S9 assumes it) and **B6** (`evidence`/`proposed_by` ownership), plus 16 spec defects D1–D16. D16 records a *non*-defect, so nobody "fixes" `public.proposals` into a break.
+- **Spec defects and gaps found by writing the plans** are recorded in `docs/superpowers/specs/2026-08-12-open-questions-register.md` — blocking question **B6** (`evidence`/`proposed_by` ownership) remains open; **B5 closed 2026-08-12** (`pg_clickhouse` FDW shipped on `feat/s9-mcp-context-server`: migration `103_pg_clickhouse_fdw`, HTTP driver port 8123, gate `ads-agent/mcp/context-server/fdw-tenant.gate.test.ts` 4/4). Plus 16 spec defects D1–D16. D16 records a *non*-defect, so nobody "fixes" `public.proposals` into a break.
 
 ## Strategy / research
 
