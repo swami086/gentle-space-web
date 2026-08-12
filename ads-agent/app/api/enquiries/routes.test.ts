@@ -15,6 +15,8 @@ const listActivities = vi.fn();
 const getRequirement = vi.fn();
 const upsertRequirement = vi.fn();
 const createRevision = vi.fn();
+const applyRevision = vi.fn();
+const extractRequirementDiff = vi.fn();
 const withTenantTransaction = vi.fn(
   async (_scope: unknown, fn: (c: unknown) => Promise<unknown>) => fn({}),
 );
@@ -50,6 +52,10 @@ vi.mock("@/lib/db/enquiry-requirements", () => ({
   getRequirement,
   upsertRequirement,
   createRevision,
+  applyRevision,
+}));
+vi.mock("@/lib/enquiries/requirement-extraction", () => ({
+  extractRequirementDiff,
 }));
 vi.mock("@/lib/db/tx", () => ({ withTenantTransaction }));
 
@@ -73,6 +79,8 @@ beforeEach(() => {
     getRequirement,
     upsertRequirement,
     createRevision,
+    applyRevision,
+    extractRequirementDiff,
   ]) {
     fn.mockReset();
   }
@@ -288,5 +296,86 @@ describe("PATCH /api/enquiries/[id]/requirements", () => {
     );
     expect(res.status).toBe(200);
     expect(createRevision.mock.calls[0][1]).toMatchObject({ source: "manual" });
+  });
+});
+
+describe("POST /api/enquiries/[id]/requirements/extract", () => {
+  it("creates a pending revision from call notes without applying (C3)", async () => {
+    getEnquiryById.mockResolvedValue({ id: "enq-1" });
+    extractRequirementDiff.mockResolvedValue({ desksMin: 38, desksMax: 38 });
+    createRevision.mockResolvedValue({ id: "rev-1", applied: false });
+    const { POST } = await import("./[id]/requirements/extract/route");
+    const res = await POST(
+      new Request("http://x", {
+        method: "POST",
+        body: JSON.stringify({ notes: "They settled on 38 desks" }),
+      }),
+      { params: Promise.resolve({ id: "enq-1" }) },
+    );
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual({
+      revision: { id: "rev-1", applied: false },
+      proposed: { desksMin: 38, desksMax: 38 },
+    });
+    expect(createRevision).toHaveBeenCalledWith(scope, {
+      enquiryId: "enq-1",
+      source: "call_notes",
+      proposed: { desksMin: 38, desksMax: 38 },
+    });
+    expect(upsertRequirement).not.toHaveBeenCalled();
+    expect(applyRevision).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty proposed patch when extraction finds nothing", async () => {
+    getEnquiryById.mockResolvedValue({ id: "enq-1" });
+    extractRequirementDiff.mockResolvedValue({});
+    const { POST } = await import("./[id]/requirements/extract/route");
+    const res = await POST(
+      new Request("http://x", {
+        method: "POST",
+        body: JSON.stringify({ notes: "Nice weather today" }),
+      }),
+      { params: Promise.resolve({ id: "enq-1" }) },
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ revision: null, proposed: {} });
+    expect(createRevision).not.toHaveBeenCalled();
+  });
+
+  it("404s when the enquiry is not this tenant's", async () => {
+    getEnquiryById.mockResolvedValue(null);
+    const { POST } = await import("./[id]/requirements/extract/route");
+    const res = await POST(
+      new Request("http://x", {
+        method: "POST",
+        body: JSON.stringify({ notes: "38 desks" }),
+      }),
+      { params: Promise.resolve({ id: "enq-other" }) },
+    );
+    expect(res.status).toBe(404);
+    expect(extractRequirementDiff).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/enquiries/[id]/requirements/revisions/[revisionId]/apply", () => {
+  it("applies the revision with the confirming user", async () => {
+    getEnquiryById.mockResolvedValue({ id: "enq-1" });
+    applyRevision.mockResolvedValue({ enquiryId: "enq-1", desksMin: 38 });
+    const { POST } = await import("./[id]/requirements/revisions/[revisionId]/apply/route");
+    const res = await POST(new Request("http://x", { method: "POST" }), {
+      params: Promise.resolve({ id: "enq-1", revisionId: "rev-1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(applyRevision).toHaveBeenCalledWith(scope, "rev-1", "user-7");
+  });
+
+  it("404s when the revision is missing or already applied", async () => {
+    getEnquiryById.mockResolvedValue({ id: "enq-1" });
+    applyRevision.mockResolvedValue(null);
+    const { POST } = await import("./[id]/requirements/revisions/[revisionId]/apply/route");
+    const res = await POST(new Request("http://x", { method: "POST" }), {
+      params: Promise.resolve({ id: "enq-1", revisionId: "rev-gone" }),
+    });
+    expect(res.status).toBe(404);
   });
 });
