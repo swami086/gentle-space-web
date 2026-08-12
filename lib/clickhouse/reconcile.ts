@@ -93,10 +93,10 @@ export async function reconcileEnquiries(
   );
   const sampleMismatches: string[] = [];
   if (sample.rows.length > 0) {
+    const idList = sample.rows.map((r) => `'${r.id}'`).join(",");
     const mirrored = await chQuery<{ enquiry_id: string; reply_state: string }>(
       `SELECT toString(enquiry_id) AS enquiry_id, reply_state FROM analytics.enquiry_fact FINAL
-        WHERE enquiry_id IN ({ids:Array(UUID)})`,
-      { params: { ids: JSON.stringify(sample.rows.map((r) => r.id)) } },
+        WHERE enquiry_id IN (${idList})`,
     );
     const mirroredById = new Map(mirrored.map((r) => [r.enquiry_id, r.reply_state]));
     for (const row of sample.rows) {

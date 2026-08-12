@@ -51,7 +51,7 @@ function pgConnectionParts(): { hostPort: string; database: string; user: string
   if (!raw) throw new Error("DATABASE_URL is not set");
   const url = new URL(raw);
   return {
-    hostPort: `${url.hostname}:${url.port || "5432"}`,
+    hostPort: `${process.env.CLICKHOUSE_PG_HOST ?? url.hostname}:${url.port || "5432"}`,
     database: url.pathname.replace(/^\//, ""),
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
@@ -84,7 +84,7 @@ export async function replicateEnquiries(
         watermark,
         cutoff,
       },
-      settings: { send_progress_in_http_headers: "0" },
+      settings: { send_progress_in_http_headers: "0", wait_end_of_query: "1" },
     },
   ).then(async (inserted) => {
     // INSERT ... SELECT returns no rows; count what the window contained so the
