@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/dal";
-import { updateOpportunityStage, PIPELINE_STAGES, type PipelineStageValue } from "@/lib/crm/twenty-pipeline";
-import { logAiAction } from "@/lib/db/ai-action-log";
+import { scopeForSession } from "@/lib/auth/scope-interim";
+import { getOpportunity, updateOpportunityStage, PIPELINE_STAGES, type PipelineStageValue } from "@/lib/crm/twenty-pipeline";
+import { writeAudit } from "@/lib/db/audit-log";
 
 const STAGE_LABELS = new Map(PIPELINE_STAGES.map((s) => [s.value, s.label] as const));
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireApiRole("operator");
   if (!access.ok) return access.response;
+  const scope = await scopeForSession(access.session);
 
   const { id } = await params;
   const { toStage, opportunityName } = (await req.json()) as { toStage?: string; opportunityName?: string };
@@ -19,9 +21,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 
+  const existing = await getOpportunity(id);
+  const previousStage = existing?.stage ?? null;
+
   const result = await updateOpportunityStage(id, toStage as PipelineStageValue);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
 
-  await logAiAction({ domain: "crm", summary: `Advanced ${opportunityName ?? id} to ${label}` });
+  await writeAudit(scope, {
+    actorType: "human",
+    actorUserId: access.session.userId,
+    action: "opportunity.stage_changed",
+    entityType: "opportunity",
+    before: { stage: previousStage },
+    after: { stage: toStage, opportunityName: opportunityName ?? id },
+  });
   return NextResponse.json({ ok: true });
 }

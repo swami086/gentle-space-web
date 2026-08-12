@@ -13,7 +13,7 @@ const {
   fetchLeadSignal,
   evaluateRules,
   draftRationale,
-  logAiAction,
+  writeAudit,
 } = vi.hoisted(() => ({
   listCampaigns: vi.fn(),
   recordPerformanceSnapshot: vi.fn(),
@@ -26,7 +26,7 @@ const {
   fetchLeadSignal: vi.fn(),
   evaluateRules: vi.fn(),
   draftRationale: vi.fn(),
-  logAiAction: vi.fn(),
+  writeAudit: vi.fn(),
 }));
 
 vi.mock("../db/campaigns", () => ({ listCampaigns }));
@@ -41,7 +41,7 @@ vi.mock("../connectors/google-ads", () => ({ fetchGoogleAdsPerformance, fetchGoo
 vi.mock("../connectors/twenty", () => ({ fetchLeadSignal }));
 vi.mock("./rules", () => ({ evaluateRules }));
 vi.mock("./rationale", () => ({ draftRationale }));
-vi.mock("../db/ai-action-log", () => ({ logAiAction }));
+vi.mock("../db/audit-log", () => ({ writeAudit }));
 
 import { runDecisionCycle } from "./cycle";
 
@@ -165,7 +165,15 @@ describe("runDecisionCycle", () => {
 
     await runDecisionCycle(ORG);
 
-    expect(logAiAction).toHaveBeenCalledWith({ domain: "marketing", summary: "Created 1 proposal" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({
+        actorType: "agent",
+        action: "cycle.run",
+        entityType: "cycle",
+        after: expect.objectContaining({ proposalsCreated: 1, summary: "Created 1 proposal" }),
+      }),
+    );
   });
 
   it("does not log when no proposals are created", async () => {
@@ -179,7 +187,7 @@ describe("runDecisionCycle", () => {
 
     await runDecisionCycle(ORG);
 
-    expect(logAiAction).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
   });
 
   it("still records the Meta snapshot when fetchGoogleAdsPerformance rejects (MCP server unreachable)", async () => {

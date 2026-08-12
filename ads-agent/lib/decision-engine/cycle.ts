@@ -2,7 +2,7 @@ import type { Scope } from "@/lib/db/scope-sql";
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
-import { logAiAction } from "../db/ai-action-log";
+import { writeAudit } from "../db/audit-log";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
 import { fetchMetaPerformance } from "../connectors/meta";
 import { fetchLeadSignal } from "../connectors/twenty";
@@ -79,9 +79,12 @@ export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated
   }
 
   if (proposalsCreated > 0) {
-    await logAiAction({
-      domain: "marketing",
-      summary: `Created ${proposalsCreated} proposal${proposalsCreated === 1 ? "" : "s"}`,
+    const summary = `Created ${proposalsCreated} proposal${proposalsCreated === 1 ? "" : "s"}`;
+    await writeAudit(scope, {
+      actorType: "agent",
+      action: "cycle.run",
+      entityType: "cycle",
+      after: { proposalsCreated, summary },
     });
   }
 

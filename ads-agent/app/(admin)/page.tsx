@@ -3,7 +3,7 @@ import { SpendCplChart } from "@/components/SpendCplChart";
 import { requireRole, requireSession } from "@/lib/auth/dal";
 import { scopeForSession } from "@/lib/auth/scope-interim";
 import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
-import { countAiActionsToday, listRecentAiActions } from "@/lib/db/ai-action-log";
+import { countAuditToday, listAudit } from "@/lib/db/audit-log";
 import { fetchLeadSignal } from "@/lib/connectors/twenty";
 import { getPipelineValue } from "@/lib/crm/twenty-pipeline";
 import { StatCardView } from "@/lib/openui/shared-metric-cards";
@@ -23,12 +23,14 @@ export default async function HomePage() {
     getSpendCplTrend(scope, 30),
     fetchLeadSignal(),
     getPipelineValue(),
-    countAiActionsToday(),
-    listRecentAiActions(5),
+    countAuditToday(scope),
+    listAudit(scope, 5),
   ]);
 
-  const marketingActivity = recentActions.find((a) => a.domain === "marketing");
-  const crmActivity = recentActions.find((a) => a.domain === "crm");
+  const marketingActivity = recentActions.find((a) => a.entityType === "cycle" || a.action === "cycle.run");
+  const crmActivity = recentActions.find(
+    (a) => a.entityType === "opportunity" || a.action === "opportunity.stage_changed",
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,13 +66,17 @@ export default async function HomePage() {
             <div className="rounded-lg bg-surface p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Marketing</p>
               <p className="mt-1 text-sm text-foreground">
-                {marketingActivity?.summary ?? "No marketing automation activity yet."}
+                {marketingActivity
+                  ? `${marketingActivity.actorType}: ${marketingActivity.action}`
+                  : "No marketing automation activity yet."}
               </p>
             </div>
             <div className="rounded-lg bg-surface p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Leads & CRM</p>
               <p className="mt-1 text-sm text-foreground">
-                {crmActivity?.summary ?? "No CRM activity yet."}
+                {crmActivity
+                  ? `${crmActivity.actorType}: ${crmActivity.action}`
+                  : "No CRM activity yet."}
               </p>
             </div>
           </div>
