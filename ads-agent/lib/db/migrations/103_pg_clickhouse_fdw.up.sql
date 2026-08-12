@@ -4,15 +4,18 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pg_clickhouse;
 
--- Binary driver → native protocol port 9000. From the PG container use
--- host.docker.internal (Task 2). Override with ALTER SERVER in non-local envs.
+-- HTTP driver → port 8123. Required for pg_clickhouse.session_settings
+-- (e.g. SQL_current_tenant_id): the binary/native driver rejects custom
+-- SQL_* settings as "Unknown setting". HTTP passes them to ClickHouse.
+-- From the PG container use host.docker.internal (Task 2). Override with
+-- ALTER SERVER in non-local envs.
 DROP SERVER IF EXISTS clickhouse_analytics CASCADE;
 CREATE SERVER clickhouse_analytics
   FOREIGN DATA WRAPPER clickhouse_fdw
   OPTIONS (
-    driver 'binary',
+    driver 'http',
     host 'host.docker.internal',
-    port '9000',
+    port '8123',
     dbname 'gentle_space'
   );
 
