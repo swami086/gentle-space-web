@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.postgres
-    image: gentle-space-pg:pg16-age
+    image: gentle-space-pg:pg18-age
     container_name: gentle-space-pg
     command: ["postgres", "-c", "shared_preload_libraries=age"]
     ports:

@@ -1,16 +1,18 @@
-FROM pgvector/pgvector:pg16
+FROM pgvector/pgvector:pg18
 USER root
-ARG AGE_BRANCH=release/PG16/1.6.0
+# Confirmed against `git ls-remote https://github.com/apache/age.git` at build time --
+# AGE's branch names differ from its tag names, so this must not be guessed.
+ARG AGE_BRANCH=release/PG18/1.8.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential ca-certificates git postgresql-server-dev-16 \
+      build-essential ca-certificates git postgresql-server-dev-18 \
       libreadline-dev zlib1g-dev flex bison \
     && update-ca-certificates \
     && git clone --branch "${AGE_BRANCH}" --depth 1 https://github.com/apache/age.git /tmp/age \
     && cd /tmp/age \
-    && make PG_CONFIG=/usr/lib/postgresql/16/bin/pg_config \
-    && make install PG_CONFIG=/usr/lib/postgresql/16/bin/pg_config \
+    && make PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
+    && make install PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config \
     && rm -rf /tmp/age \
-    && apt-get purge -y --auto-remove build-essential git postgresql-server-dev-16 \
+    && apt-get purge -y --auto-remove build-essential git postgresql-server-dev-18 \
     && rm -rf /var/lib/apt/lists/* \
     && echo "shared_preload_libraries = 'age'" >> /usr/share/postgresql/postgresql.conf.sample
 USER postgres
