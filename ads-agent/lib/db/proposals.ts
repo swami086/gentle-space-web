@@ -1,4 +1,6 @@
+import type { PoolClient } from "pg";
 import type { NewProposal, Proposal, ProposalKind, ProposalStatus } from "../types";
+import { withCrossTenantRead } from "./cross-tenant";
 import { scopeClause, type Scope } from "./scope-sql";
 import { withTenantTransaction } from "./tx";
 
@@ -146,4 +148,135 @@ export async function updateProposalPayload(
     if (!rows[0]) throw new Error(`proposal ${id} not found`);
     return rowToProposal(rows[0]);
   });
+}
+
+export async function scheduleProposal(
+  scope: Scope,
+  id: string,
+  opts: {
+    decidedBy: string;
+    decidedVia: "ui" | "bulk" | "api" | "system";
+    undoWindowSeconds: number;
+    batchId?: string | null;
+  },
+): Promise<Proposal | null> {
+  const s = scopeClause(scope);
+  const n = s.params.length;
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<ProposalRow>(
+      `UPDATE adsagent.proposals
+          SET status = 'scheduled',
+              decided_at = NOW(),
+              decided_by = $${n + 2},
+              decided_via = $${n + 3},
+              scheduled_for = NOW(),
+              undo_until = NOW() + ($${n + 4}::int * interval '1 second'),
+              batch_id = $${n + 5}
+        WHERE ${s.sql} AND id = $${n + 1}
+        RETURNING *`,
+      [
+        ...s.params,
+        id,
+        opts.decidedBy,
+        opts.decidedVia,
+        opts.undoWindowSeconds || 0,
+        opts.batchId ?? null,
+      ],
+    );
+    return rows[0] ? rowToProposal(rows[0]) : null;
+  });
+}
+
+export async function cancelScheduledProposal(scope: Scope, id: string): Promise<Proposal | null> {
+  const s = scopeClause(scope);
+  const n = s.params.length;
+  return withTenantTransaction(scope, async (client) => {
+    const { rows } = await client.query<ProposalRow>(
+      `UPDATE adsagent.proposals
+          SET status = 'pending',
+              scheduled_for = NULL,
+              undo_until = NULL,
+              batch_id = NULL,
+              decided_at = NULL,
+              decided_by = NULL,
+              decided_via = NULL
+        WHERE ${s.sql}
+          AND id = $${n + 1}
+          AND status = 'scheduled'
+          AND undo_until > now()
+        RETURNING *`,
+      [...s.params, id],
+    );
+    return rows[0] ? rowToProposal(rows[0]) : null;
+  });
+}
+
+export async function cancelScheduledBatch(scope: Scope, batchId: string): Promise<number> {
+  const s = scopeClause(scope);
+  const n = s.params.length;
+  return withTenantTransaction(scope, async (client) => {
+    const { rowCount } = await client.query(
+      `UPDATE adsagent.proposals
+          SET status = 'pending',
+              scheduled_for = NULL,
+              undo_until = NULL,
+              batch_id = NULL,
+              decided_at = NULL,
+              decided_by = NULL,
+              decided_via = NULL
+        WHERE ${s.sql}
+          AND batch_id = $${n + 1}::uuid
+          AND status = 'scheduled'
+          AND undo_until > now()`,
+      [...s.params, batchId],
+    );
+    return rowCount ?? 0;
+  });
+}
+
+/** Cross-tenant read + per-org write: RLS blocks a cross-tenant UPDATE. */
+export async function selectDueScheduledProposals(
+  client: PoolClient,
+  limit: number,
+): Promise<Array<{ id: string; orgId: string }>> {
+  const { rows } = await client.query<{ id: string; org_id: string }>(
+    `SELECT id, org_id
+       FROM adsagent.proposals
+      WHERE status = 'scheduled'
+        AND undo_until <= now()
+      ORDER BY undo_until
+      LIMIT $1
+        FOR UPDATE SKIP LOCKED`,
+    [limit],
+  );
+  return rows.map((row) => ({ id: row.id, orgId: row.org_id }));
+}
+
+/** Cross-tenant worker claim: FOR UPDATE SKIP LOCKED, set executing, return ids+org_id */
+export async function claimDueScheduledProposals(
+  limit: number,
+): Promise<Array<{ id: string; orgId: string }>> {
+  const due = await withCrossTenantRead("proposal-undo-worker", (client) =>
+    selectDueScheduledProposals(client, limit),
+  );
+
+  const claimed: Array<{ id: string; orgId: string }> = [];
+  for (const row of due) {
+    const scope: Scope = { kind: "org", orgId: row.orgId };
+    const updated = await withTenantTransaction(scope, async (client) => {
+      const { rows } = await client.query<{ id: string; org_id: string }>(
+        `UPDATE adsagent.proposals
+            SET status = 'executing'
+          WHERE org_id = $1::uuid
+            AND id = $2::uuid
+            AND status = 'scheduled'
+            AND undo_until <= now()
+          RETURNING id, org_id`,
+        [row.orgId, row.id],
+      );
+      return rows[0];
+    });
+    if (updated) claimed.push({ id: updated.id, orgId: updated.org_id });
+  }
+  return claimed;
 }
