@@ -13,7 +13,8 @@ services:
       POSTGRES_PASSWORD: gentle
       POSTGRES_DB: gentle_space_listings
     volumes:
-      - gentle_space_pgdata:/var/lib/postgresql/data
+      # PG18+ stores data under /var/lib/postgresql/<major>/docker (not .../data).
+      - gentle_space_pgdata:/var/lib/postgresql
 
 volumes:
   gentle_space_pgdata:

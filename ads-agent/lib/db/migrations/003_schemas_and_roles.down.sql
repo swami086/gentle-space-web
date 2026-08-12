@@ -1,0 +1,12 @@
+REASSIGN OWNED BY listings_rw, adsagent_rw, context_rw, shared_rw, derived_rw, agent_ro TO CURRENT_USER;
+DROP OWNED BY listings_rw, adsagent_rw, context_rw, shared_rw, derived_rw, agent_ro;
+DROP ROLE IF EXISTS listings_rw;
+DROP ROLE IF EXISTS adsagent_rw;
+DROP ROLE IF EXISTS context_rw;
+DROP ROLE IF EXISTS shared_rw;
+DROP ROLE IF EXISTS derived_rw;
+DROP ROLE IF EXISTS agent_ro;
+DROP SCHEMA IF EXISTS derived CASCADE;
+DROP SCHEMA IF EXISTS context CASCADE;
+DROP SCHEMA IF EXISTS adsagent CASCADE;
+DROP SCHEMA IF EXISTS listings CASCADE;
