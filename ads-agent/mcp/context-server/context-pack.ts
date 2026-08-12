@@ -1,8 +1,9 @@
 // ads-agent/mcp/context-server/context-pack.ts
 import { z } from "zod";
-import { STALE_LAG_SECONDS } from "./create-proposal";
 import { withAgentTenantTx, type TenantTx } from "./db";
 import type { TaskTokenClaims } from "./task-token";
+
+export const STALE_LAG_SECONDS = 900; // ponytail: must stay in sync with create-proposal.ts
 
 export const PACK_ENTITIES = ["enquiry", "space", "campaign"] as const;
 export type PackEntity = (typeof PACK_ENTITIES)[number];
