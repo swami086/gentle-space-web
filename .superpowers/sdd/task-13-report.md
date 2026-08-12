@@ -1,91 +1,34 @@
-# Task 13 Report — Token metering and per-tenant cost ceiling
+# Task 13 Report — List + detail UI (delta, preflight, diff, undo)
 
-**Branch:** `feat/s9-t13-agent-cost`  
-**Worktree:** `.worktrees/s9-t13`  
-**Status:** ✅ Complete (C1 fixed)
+**Status:** Complete  
+**Branch:** `feat/s11-t13`
 
-## Summary
+## Delivered
 
-Implemented per-tenant daily cost ceilings with fail-closed enforcement. Token usage is recorded through a `SECURITY DEFINER` function (never direct INSERT), spend is read from a tenant-scoped view beside the usage table (not from Langfuse), and `assertWithinCeiling` halts when spend meets or exceeds the ceiling or when no ceiling row exists.
+- **List page** (`proposals/page.tsx`): Added **Scheduled** status tab; **Budget Δ** column via `budgetDeltaInr` + campaign join in `listProposals`.
+- **Detail page** (`proposals/[id]/page.tsx`): Server-side `runPreflight`, `semanticDiff`, `brokerRationale` for pending/scheduled; undo banner when `scheduled` + active window.
+- **PreflightPanel.tsx**: Structured check list with pass/block/warn icons.
+- **DiffTable.tsx**: Before/after field table from `semanticDiff`.
+- **ProposalActions.tsx**: Approve/reject for pending; **Cancel** + live countdown when `scheduled` and `undoUntil > now`.
+- **proposals.ts**: `listProposals` LEFT JOIN campaigns for `currentDailyBudgetInr`; exported `ProposalListItem`.
 
-**C1 fix:** `v_agent_spend_today` uses `security_invoker = true`; migration 106 now grants `SELECT` on `context.agent_cost_ceilings` and `context.agent_token_usage` to `agent_ro` (Task 3 / migration 102 pattern). Both tables have FORCE RLS + tenant policy, so reads are safe when paired with `set_tenant`.
+## Tests
 
-## Files
+- `npx vitest run lib/db/proposals.test.ts` — PASS (updated SQL expectations for join + alias).
+- `npx vitest run lib/decision-engine/budget-delta.test.ts` — PASS.
 
-| Action | Path |
-|--------|------|
-| Create | `ads-agent/lib/db/migrations/106_agent_token_usage.up.sql` |
-| Create | `ads-agent/lib/db/migrations/106_agent_token_usage.down.sql` |
-| Create | `ads-agent/lib/db/agent-cost.ts` |
-| Create | `ads-agent/lib/db/agent-cost.test.ts` |
-| Create | `ads-agent/lib/db/agent-cost.gate.test.ts` |
-| Modify | `ads-agent/mcp/context-server/read-views.test.ts` (allowlist + view list) |
+## Manual checks
 
-## Deviations from brief
+1. Open `/proposals?status=pending` — Budget Δ column shows `—` or signed INR.
+2. Open a pending proposal detail — **Changes** (DiffTable) + **Pre-flight checks** (PreflightPanel) render; Approve/Reject visible.
+3. Approve a proposal → lands on scheduled tab; detail shows undo banner + Cancel with countdown.
+4. Cancel within window → returns to pending; countdown disappears.
 
-1. **Migration number** — Per `.superpowers/sdd/OVERRIDES.md`, migration is `106_agent_token_usage` (105 is `create_proposal`).
-2. **Task 17 wiring** — No changes to tool-context/dispatch; ceiling and metering are library-only as specified.
-3. **Base-table grants** — Brief SQL omitted them; added per Task 3 precedent (review C1).
+## Concerns
 
-## Test results
+- Preflight on detail re-fetches org settings/credits each render (matches approve route pattern; no caching).
+- Undo countdown uses client `setInterval`; server-rendered banner seconds may drift 1s until refresh.
 
-```
-cd ads-agent && npx vitest run lib/db/agent-cost.test.ts
-Test Files  1 passed (1)
-Tests       6 passed (6)
+## Commit
 
-DATABASE_URL=... AGENT_RO_DATABASE_URL=... npx vitest run lib/db/agent-cost.gate.test.ts
-Test Files  1 passed (1)
-Tests       2 passed (2)
-```
-
-## Migration result
-
-Applied `106_agent_token_usage.up.sql` against `postgres://gentle:gentle@localhost:5433/gentle_space_listings` via `docker exec gentle-space-pg psql` (host `psql` not on PATH).
-
-```
-CREATE TABLE context.agent_token_usage
-CREATE TABLE context.agent_cost_ceilings  (273 org rows seeded at $5/day)
-CREATE VIEW  context.v_agent_spend_today
-CREATE FUNCTION context.record_agent_token_usage
-```
-
-Recorded in `public.schema_migrations`: `105_agent_create_proposal`, `106_agent_token_usage`.
-
-Note: full `migrate.ts` run failed at `040_outbox_events` because the DB predates the ledger; 106 was applied directly.
-
-## Live grant proof (C1)
-
-Before fix:
-
-```
-has_table_privilege('agent_ro', 'context.agent_cost_ceilings', 'SELECT') → f
-has_table_privilege('agent_ro', 'context.agent_token_usage', 'SELECT')   → f
-```
-
-Applied on live DB:
-
-```sql
-GRANT SELECT ON context.agent_cost_ceilings, context.agent_token_usage TO agent_ro;
-```
-
-After fix:
-
-```
-has_table_privilege('agent_ro', 'context.agent_cost_ceilings', 'SELECT') → t
-has_table_privilege('agent_ro', 'context.agent_token_usage', 'SELECT')   → t
-```
-
-As `agent_ro` after `set_tenant`:
-
-```sql
-SELECT spent_usd, ceiling_usd FROM context.v_agent_spend_today;
---  spent_usd | ceiling_usd
--- -----------+-------------
---  0.001000  |    5.000000
-```
-
-## Commits
-
-- `1f6bb30` — feat(agent-cost): per-tenant daily ceiling that halts, from the token metrics
-- *(this commit)* — fix(agent-cost): grant agent_ro SELECT on cost RLS bases for invoker view
+`feat(s11): render preflight, diffs, budget delta, undo UI`
