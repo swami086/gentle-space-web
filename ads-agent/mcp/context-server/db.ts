@@ -28,6 +28,18 @@ export async function closeAgentReadPool(): Promise<void> {
 
 export type TenantTx = { query: PoolClient["query"] };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertOrgIdUuid(orgId: string): void {
+  if (!UUID_RE.test(orgId)) throw new Error("invalid orgId");
+}
+
+async function pinClickHouseTenant(client: PoolClient, orgId: string): Promise<void> {
+  assertOrgIdUuid(orgId);
+  await client.query("LOAD 'pg_clickhouse'");
+  await client.query(`SET pg_clickhouse.session_settings = $$SQL_current_tenant_id '${orgId}'$$`);
+}
+
 async function inTransaction<T>(
   orgId: string,
   readWrite: boolean,
@@ -41,6 +53,7 @@ async function inTransaction<T>(
     // setting is transaction-local. Both apps use pg.Pool; without that the
     // setting persists on the connection and the next call inherits this tenant.
     await client.query("SELECT public.set_tenant($1)", [orgId]);
+    await pinClickHouseTenant(client, orgId);
     const result = await fn(client);
     await client.query("COMMIT");
     return result;
