@@ -1,6 +1,8 @@
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
-import { requireRole } from "@/lib/auth/dal";
-import { getOverviewStats } from "@/lib/db/dashboard";
+import { SpendCplChart } from "@/components/SpendCplChart";
+import { requireRole, requireSession } from "@/lib/auth/dal";
+import { scopeForSession } from "@/lib/auth/scope-interim";
+import { getOverviewStats, getSpendCplTrend } from "@/lib/db/dashboard";
 import { countAiActionsToday, listRecentAiActions } from "@/lib/db/ai-action-log";
 import { fetchLeadSignal } from "@/lib/connectors/twenty";
 import { getPipelineValue } from "@/lib/crm/twenty-pipeline";
@@ -14,8 +16,11 @@ export default async function HomePage() {
   const access = await requireRole("viewer");
   if (!access.ok) return <ForbiddenNotice />;
 
-  const [overview, leadSignal, pipelineValueInr, aiActionsToday, recentActions] = await Promise.all([
-    getOverviewStats(),
+  const scope = await scopeForSession(await requireSession());
+
+  const [overview, spendCplTrend, leadSignal, pipelineValueInr, aiActionsToday, recentActions] = await Promise.all([
+    getOverviewStats(scope),
+    getSpendCplTrend(scope, 30),
     fetchLeadSignal(),
     getPipelineValue(),
     countAiActionsToday(),
@@ -39,6 +44,13 @@ export default async function HomePage() {
         <StatCardView label="Hot Leads (7d)" value={String(leadSignal.hotCount)} />
         <StatCardView label="Pipeline Value" value={formatInr(pipelineValueInr)} />
         <StatCardView label="AI Actions Today" value={String(aiActionsToday)} />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-foreground">Spend &amp; CPL (30d)</h2>
+        <div className="rounded-lg bg-surface p-4">
+          <SpendCplChart data={spendCplTrend} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">

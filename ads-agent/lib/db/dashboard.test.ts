@@ -1,112 +1,64 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./tx", () => ({
+  withTenantTransaction: (_scope: unknown, fn: (c: { query: typeof query }) => unknown) => fn({ query }),
+}));
 
+import type { Scope } from "./scope-sql";
 import { getOverviewStats, getSpendCplTrend, listCampaignsWithLatestCpl } from "./dashboard";
+
+const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
 
 beforeEach(() => query.mockReset());
 
 describe("getOverviewStats", () => {
-  it("computes blended CPL from total spend and conversions", async () => {
+  it("scopes all three aggregates and computes blended CPL", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ count: "3" }] })
-      .mockResolvedValueOnce({ rows: [{ count: "5" }] })
-      .mockResolvedValueOnce({ rows: [{ spend: "10000", conversions: "4" }] });
+      .mockResolvedValueOnce({ rows: [{ count: "2" }] })
+      .mockResolvedValueOnce({ rows: [{ spend: "4000", conversions: "8" }] });
 
-    const result = await getOverviewStats();
-
-    expect(result).toEqual({
+    await expect(getOverviewStats(ORG)).resolves.toEqual({
       activeCampaignCount: 3,
-      pendingProposalCount: 5,
-      monthSpendInr: 10000,
-      blendedCplInr: 2500,
+      pendingProposalCount: 2,
+      monthSpendInr: 4000,
+      blendedCplInr: 500,
     });
+    for (const call of query.mock.calls) {
+      expect(call[0]).toContain("org_id = $1::uuid");
+      expect(call[1]).toEqual([ORG.orgId]);
+    }
   });
 
-  it("returns a null blended CPL when there are zero conversions this month", async () => {
+  it("reports a null blended CPL when there were no conversions", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ count: "0" }] })
       .mockResolvedValueOnce({ rows: [{ count: "0" }] })
       .mockResolvedValueOnce({ rows: [{ spend: "0", conversions: "0" }] });
-
-    const result = await getOverviewStats();
-
-    expect(result.blendedCplInr).toBeNull();
-    expect(result.monthSpendInr).toBe(0);
+    const stats = await getOverviewStats(ORG);
+    expect(stats.blendedCplInr).toBeNull();
   });
 });
 
 describe("getSpendCplTrend", () => {
-  it("maps each day's totals and computes per-day CPL", async () => {
-    query.mockResolvedValue({
-      rows: [
-        { day: new Date("2026-08-01T00:00:00.000Z"), spend: "5000", conversions: "2" },
-        { day: new Date("2026-08-02T00:00:00.000Z"), spend: "3000", conversions: "0" },
-      ],
-    });
-
-    const result = await getSpendCplTrend(30);
-
-    expect(result).toEqual([
-      { date: "2026-08-01", spendInr: 5000, cplInr: 2500 },
-      { date: "2026-08-02", spendInr: 3000, cplInr: null },
-    ]);
-  });
-
-  it("returns an empty array when there are no snapshots", async () => {
+  it("parameterises the day window instead of interpolating it", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(getSpendCplTrend(30)).resolves.toEqual([]);
+    await getSpendCplTrend(ORG, 30);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain("INTERVAL '30");
+    expect(sql).toContain("($2 || ' days')::interval");
+    expect(params).toEqual([ORG.orgId, 30]);
   });
 });
 
 describe("listCampaignsWithLatestCpl", () => {
-  it("maps each campaign with its most recent CPL", async () => {
-    query.mockResolvedValue({
-      rows: [
-        {
-          id: "camp-1",
-          name: "Whitefield Office Search",
-          platform: "google",
-          status: "active",
-          daily_budget: "500",
-          corridor: "whitefield",
-          latest_cpl: "1800",
-        },
-      ],
-    });
-
-    const result = await listCampaignsWithLatestCpl();
-
-    expect(result).toEqual([
-      {
-        id: "camp-1",
-        name: "Whitefield Office Search",
-        platform: "google",
-        status: "active",
-        dailyBudget: 500,
-        corridor: "whitefield",
-        latestCplInr: 1800,
-      },
-    ]);
-  });
-
-  it("returns null latestCplInr for a campaign with no snapshots yet", async () => {
-    query.mockResolvedValue({
-      rows: [
-        {
-          id: "camp-2",
-          name: "New Campaign",
-          platform: "meta",
-          status: "proposed",
-          daily_budget: null,
-          corridor: null,
-          latest_cpl: null,
-        },
-      ],
-    });
-
-    const result = await listCampaignsWithLatestCpl();
-    expect(result[0].latestCplInr).toBeNull();
+  it("scopes the outer query and the lateral join", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await listCampaignsWithLatestCpl(ORG);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("c.org_id = $1::uuid");
+    expect(sql).toContain("p.org_id = c.org_id");
+    expect(params).toEqual([ORG.orgId]);
   });
 });

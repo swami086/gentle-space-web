@@ -8,11 +8,11 @@ import type { ToolProviderMap } from "./platform-tools";
 type ScopedToolHandler = (scope: Scope, args: Record<string, unknown>) => Promise<unknown>;
 
 export const analyticsToolHandlers: Record<string, ScopedToolHandler> = {
-  get_spend_cpl_trend: async (_scope, args) => {
+  get_spend_cpl_trend: async (scope, args) => {
     const days = typeof args.days === "number" ? args.days : 7;
-    return getSpendCplTrend(days);
+    return getSpendCplTrend(scope, days);
   },
-  list_campaigns_with_cpl: async (_scope) => listCampaignsWithLatestCpl(),
+  list_campaigns_with_cpl: async (scope) => listCampaignsWithLatestCpl(scope),
   list_pending_proposals: async (scope) => listProposals(scope, "pending"),
 };
 

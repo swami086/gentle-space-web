@@ -31,14 +31,14 @@ describe("analyticsToolHandlers.get_spend_cpl_trend", () => {
   it("defaults to 7 days when no days arg is given", async () => {
     getSpendCplTrend.mockResolvedValue([{ date: "2026-08-01", spendInr: 1000, cplInr: 100 }]);
     const result = await analyticsToolHandlers.get_spend_cpl_trend(ORG, {});
-    expect(getSpendCplTrend).toHaveBeenCalledWith(7);
+    expect(getSpendCplTrend).toHaveBeenCalledWith(ORG, 7);
     expect(result).toEqual([{ date: "2026-08-01", spendInr: 1000, cplInr: 100 }]);
   });
 
   it("uses the given days arg", async () => {
     getSpendCplTrend.mockResolvedValue([]);
     await analyticsToolHandlers.get_spend_cpl_trend(ORG, { days: 30 });
-    expect(getSpendCplTrend).toHaveBeenCalledWith(30);
+    expect(getSpendCplTrend).toHaveBeenCalledWith(ORG, 30);
   });
 });
 
@@ -46,6 +46,7 @@ describe("analyticsToolHandlers.list_campaigns_with_cpl", () => {
   it("delegates to listCampaignsWithLatestCpl", async () => {
     listCampaignsWithLatestCpl.mockResolvedValue([{ id: "1" }]);
     expect(await analyticsToolHandlers.list_campaigns_with_cpl(ORG, {})).toEqual([{ id: "1" }]);
+    expect(listCampaignsWithLatestCpl).toHaveBeenCalledWith(ORG);
   });
 });
 
