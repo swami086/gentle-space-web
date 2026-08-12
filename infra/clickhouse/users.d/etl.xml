@@ -17,7 +17,8 @@
       <networks><ip>::/0</ip></networks>
       <profile>etl</profile>
       <quota>default</quota>
-      <access_management>0</access_management>
+      <!-- ponytail: 1 so versioned DDL can CREATE ROW POLICY; still no arbitrary user admin -->
+      <access_management>1</access_management>
     </etl_writer>
     <tenant_reader>
       <password from_env="CLICKHOUSE_TENANT_PASSWORD"/>
