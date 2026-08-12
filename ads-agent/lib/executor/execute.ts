@@ -6,6 +6,7 @@ import {
   updateCampaignStatus,
 } from "../db/campaigns";
 import { getProposalById, markProposalExecuted, markProposalFailed } from "../db/proposals";
+import type { Scope } from "../db/scope-sql";
 import {
   addGoogleNegativeKeyword,
   createFullGoogleCampaign,
@@ -87,9 +88,10 @@ async function executeAddNegativeKeyword(payload: NegativeKeywordPayload): Promi
 }
 
 export async function executeProposal(
+  scope: Scope,
   proposalId: string,
 ): Promise<{ status: "executed" | "failed"; error?: string }> {
-  const proposal = await getProposalById(proposalId);
+  const proposal = await getProposalById(scope, proposalId);
   if (!proposal) throw new Error(`proposal ${proposalId} not found`);
   if (proposal.status !== "approved") {
     throw new Error(`proposal ${proposalId} is not approved (status: ${proposal.status})`);
@@ -119,11 +121,11 @@ export async function executeProposal(
         // falling through to markProposalExecuted having done nothing.
         throw new Error(`executeProposal: unhandled proposal kind "${proposal.kind}"`);
     }
-    await markProposalExecuted(proposalId);
+    await markProposalExecuted(scope, proposalId);
     return { status: "executed" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await markProposalFailed(proposalId, message);
+    await markProposalFailed(scope, proposalId, message);
     return { status: "failed", error: message };
   }
 }

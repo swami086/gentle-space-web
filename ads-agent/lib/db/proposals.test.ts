@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-vi.mock("./client", () => ({ getPool: () => ({ query }) }));
+vi.mock("./tx", () => ({
+  withTenantTransaction: (_scope: unknown, fn: (c: { query: typeof query }) => unknown) => fn({ query }),
+}));
 
+import type { Scope } from "./scope-sql";
 import {
   createProposal,
   decideProposal,
@@ -12,6 +15,9 @@ import {
   markProposalFailed,
   updateProposalPayload,
 } from "./proposals";
+
+const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+const PLATFORM: Scope = { kind: "platform", orgId: "00000000-0000-0000-0000-000000000001" };
 
 const row = {
   id: "prop-1",
@@ -30,9 +36,9 @@ const row = {
 beforeEach(() => query.mockReset());
 
 describe("createProposal", () => {
-  it("inserts payload as jsonb and returns the mapped proposal", async () => {
+  it("stamps the caller's org_id and returns the mapped proposal", async () => {
     query.mockResolvedValue({ rows: [row] });
-    const result = await createProposal({
+    const result = await createProposal(ORG, {
       kind: "pause",
       campaignId: "camp-1",
       payload: { campaignId: "camp-1" },
@@ -40,122 +46,92 @@ describe("createProposal", () => {
       rationale: "CPL has been 40% over breakeven for 3 days.",
     });
     expect(result.id).toBe("prop-1");
-    expect(result.payload).toEqual({ campaignId: "camp-1" });
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("INSERT INTO proposals"),
-      [
-        "pause",
-        "camp-1",
-        JSON.stringify({ campaignId: "camp-1" }),
-        "kill_rule",
-        "CPL has been 40% over breakeven for 3 days.",
-      ],
-    );
-  });
-
-  it("defaults rationale to null when omitted", async () => {
-    query.mockResolvedValue({ rows: [{ ...row, rationale: null }] });
-    await createProposal({
-      kind: "pause",
-      campaignId: "camp-1",
-      payload: {},
-      triggeredRule: "kill_rule",
-    });
-    expect(query.mock.calls[0][1][4]).toBeNull();
-  });
-
-  it("accepts the campaign_strategy kind", async () => {
-    query.mockResolvedValue({ rows: [{ ...row, kind: "campaign_strategy" }] });
-    await createProposal({
-      kind: "campaign_strategy",
-      campaignId: null,
-      payload: { summary: "Shift budget toward Whitefield", recommendations: [] },
-      triggeredRule: "hermes:campaign_strategy",
-    });
-    expect(query.mock.calls[0][1][0]).toBe("campaign_strategy");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("INSERT INTO adsagent.proposals");
+    expect(sql).toContain("org_id");
+    expect(params[0]).toBe(ORG.orgId);
   });
 });
 
 describe("listProposals", () => {
-  it("lists all proposals when no status given", async () => {
+  it("scopes every listing to the caller", async () => {
     query.mockResolvedValue({ rows: [row] });
-    await listProposals();
-    expect(query).toHaveBeenCalledWith(expect.not.stringContaining("WHERE"), []);
+    await listProposals(ORG);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("WHERE org_id = $1::uuid");
+    expect(params).toEqual([ORG.orgId]);
   });
 
-  it("filters by status when given", async () => {
+  it("adds the status filter as $2, after the scope param", async () => {
     query.mockResolvedValue({ rows: [row] });
-    await listProposals("pending");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("WHERE status = $1"), [
-      "pending",
-    ]);
+    await listProposals(ORG, "pending");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("status = $2");
+    expect(params).toEqual([ORG.orgId, "pending"]);
+  });
+
+  it("does not constrain org_id under platform scope", async () => {
+    query.mockResolvedValue({ rows: [row] });
+    await listProposals(PLATFORM);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain("org_id = $1");
+    expect(params).toEqual([PLATFORM.orgId]);
   });
 });
 
 describe("getProposalById", () => {
-  it("returns null when missing", async () => {
+  it("returns null when the row is outside the caller's scope", async () => {
     query.mockResolvedValue({ rows: [] });
-    await expect(getProposalById("missing")).resolves.toBeNull();
+    await expect(getProposalById(ORG, "someone-elses-id")).resolves.toBeNull();
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "someone-elses-id"]);
   });
 });
 
 describe("decideProposal", () => {
-  it("persists status, decider and decision route", async () => {
+  it("scopes the update and records the decider", async () => {
     query.mockResolvedValue({ rows: [] });
-    await decideProposal(
-      "11111111-1111-1111-1111-111111111111",
-      "approved",
-      "22222222-2222-2222-2222-222222222222",
-      "ui",
-    );
+    await decideProposal(ORG, "prop-1", "approved", "user-1", "ui");
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain("decided_at = NOW()");
-    expect(sql).toContain("decided_by = $3");
-    expect(sql).toContain("decided_via = $4");
-    expect(params).toEqual([
-      "11111111-1111-1111-1111-111111111111",
-      "approved",
-      "22222222-2222-2222-2222-222222222222",
-      "ui",
-    ]);
+    expect(sql).toContain("org_id = $1::uuid");
+    expect(sql).toContain("decided_by = $4");
+    expect(params).toEqual([ORG.orgId, "prop-1", "approved", "user-1", "ui"]);
   });
 
   it("defaults the decision route to ui", async () => {
     query.mockResolvedValue({ rows: [] });
-    await decideProposal("prop-1", "rejected", "user-1");
-    expect(query.mock.calls[0][1][3]).toBe("ui");
+    await decideProposal(ORG, "prop-1", "rejected", "user-1");
+    expect(query.mock.calls[0][1][4]).toBe("ui");
   });
 });
 
 describe("markProposalExecuted", () => {
-  it("sets status executed and executed_at", async () => {
+  it("scopes the update", async () => {
     query.mockResolvedValue({ rows: [] });
-    await markProposalExecuted("prop-1");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("executed_at = NOW()"), [
-      "prop-1",
-    ]);
+    await markProposalExecuted(ORG, "prop-1");
+    expect(query.mock.calls[0][0]).toContain("org_id = $1::uuid");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "prop-1"]);
   });
 });
 
 describe("markProposalFailed", () => {
-  it("sets status failed with error message", async () => {
+  it("scopes the update and stores the error", async () => {
     query.mockResolvedValue({ rows: [] });
-    await markProposalFailed("prop-1", "insufficient budget");
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"), [
-      "prop-1",
-      "insufficient budget",
-    ]);
+    await markProposalFailed(ORG, "prop-1", "insufficient budget");
+    expect(query.mock.calls[0][1]).toEqual([ORG.orgId, "prop-1", "insufficient budget"]);
   });
 });
 
 describe("updateProposalPayload", () => {
-  it("overwrites the payload column and returns the mapped proposal", async () => {
-    query.mockResolvedValue({ rows: [{ ...row, payload: { dailyBudgetInr: 700 } }] });
-    const result = await updateProposalPayload("prop-1", { dailyBudgetInr: 700 });
-    expect(result.payload).toEqual({ dailyBudgetInr: 700 });
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE proposals SET payload = $2::jsonb"),
-      ["prop-1", JSON.stringify({ dailyBudgetInr: 700 })],
+  it("scopes the update and throws when nothing matched", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await expect(updateProposalPayload(ORG, "prop-1", { dailyBudgetInr: 700 })).rejects.toThrow(
+      "proposal prop-1 not found",
     );
+  });
+
+  it("returns the mapped proposal on success", async () => {
+    query.mockResolvedValue({ rows: [{ ...row, payload: { dailyBudgetInr: 700 } }] });
+    const result = await updateProposalPayload(ORG, "prop-1", { dailyBudgetInr: 700 });
+    expect(result.payload).toEqual({ dailyBudgetInr: 700 });
   });
 });

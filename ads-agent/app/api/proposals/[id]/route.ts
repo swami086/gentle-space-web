@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/dal";
+import { scopeForSession } from "@/lib/auth/scope-interim";
 import { getProposalById, updateProposalPayload } from "@/lib/db/proposals";
 import { validateDraftFields } from "@/lib/decision-engine/campaign-draft-rules";
 import type { CampaignDraftFields } from "@/lib/types";
@@ -9,8 +10,9 @@ const EDITABLE_FIELDS = ["dailyBudgetInr", "adGroupName", "keywords", "headlines
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireApiRole("operator");
   if (!access.ok) return access.response;
+  const scope = await scopeForSession(access.session);
   const { id } = await params;
-  const proposal = await getProposalById(id);
+  const proposal = await getProposalById(scope, id);
   if (!proposal) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (proposal.kind !== "create_campaign") {
     return NextResponse.json({ error: "only create_campaign proposals are editable" }, { status: 400 });
@@ -30,6 +32,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (patch[field] !== undefined) nextPayload[field] = patch[field];
   }
 
-  const updated = await updateProposalPayload(id, nextPayload);
+  const updated = await updateProposalPayload(scope, id, nextPayload);
   return NextResponse.json({ payload: updated.payload });
 }

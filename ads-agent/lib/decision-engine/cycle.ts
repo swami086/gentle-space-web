@@ -1,5 +1,6 @@
 import { listCampaigns } from "../db/campaigns";
 import { createProposal } from "../db/proposals";
+import type { Scope } from "../db/scope-sql";
 import { recordCrmSignalSnapshot, recordPerformanceSnapshot, recentPerformanceSnapshots } from "../db/snapshots";
 import { logAiAction } from "../db/ai-action-log";
 import { fetchGoogleAdsPerformance, fetchGoogleSearchTerms } from "../connectors/google-ads";
@@ -21,7 +22,7 @@ async function softFail<T>(label: string, fn: () => Promise<T>, fallback: T): Pr
   }
 }
 
-export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> {
+export async function runDecisionCycle(scope: Scope): Promise<{ proposalsCreated: number }> {
   const campaigns = await listCampaigns();
   const byExternalId = new Map(
     campaigns.filter((c) => c.externalId !== null).map((c) => [c.externalId as string, c]),
@@ -73,7 +74,7 @@ export async function runDecisionCycle(): Promise<{ proposalsCreated: number }> 
   let proposalsCreated = 0;
   for (const proposal of newProposals) {
     const rationale = await draftRationale(proposal);
-    await createProposal({ ...proposal, rationale });
+    await createProposal(scope, { ...proposal, rationale });
     proposalsCreated++;
   }
 

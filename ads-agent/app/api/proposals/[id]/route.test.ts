@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, updateProposalPayload, requireApiRole } = vi.hoisted(() => ({
+const { getProposalById, updateProposalPayload, requireApiRole, scopeForSession } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   updateProposalPayload: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, updateProposalPayload }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 
 import { PATCH } from "./route";
+
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function pendingCreateCampaignProposal(overrides: Partial<Proposal> = {}): Proposal {
   return {
@@ -49,6 +53,7 @@ beforeEach(() => {
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
   });
+  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("PATCH /api/proposals/[id]", () => {
@@ -88,6 +93,7 @@ describe("PATCH /api/proposals/[id]", () => {
     const res = await PATCH(patchRequest({ dailyBudgetInr: 700 }), { params: Promise.resolve({ id: "prop-1" }) });
 
     expect(updateProposalPayload).toHaveBeenCalledWith(
+      TEST_SCOPE,
       "prop-1",
       expect.objectContaining({ corridor: "whitefield", dailyBudgetInr: 700 }),
     );

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/dal";
+import { scopeForSession } from "@/lib/auth/scope-interim";
 import {
   appendDraftMessage,
   getDraftById,
@@ -15,8 +16,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const access = await requireApiRole("operator");
   if (!access.ok) return access.response;
 
+  const scope = await scopeForSession(access.session);
   const { id } = await params;
-  const draft = await getDraftById(id);
+  const draft = await getDraftById(scope, id);
   if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (draft.status === "converted") {
     return NextResponse.json({ error: "draft already converted to a proposal" }, { status: 409 });
@@ -25,8 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { content } = (await req.json()) as { content: string };
   if (!content?.trim()) return NextResponse.json({ error: "content is required" }, { status: 400 });
 
-  await appendDraftMessage(id, "user", content);
-  const history = await listDraftMessages(id);
+  await appendDraftMessage(scope, id, "user", content);
+  const history = await listDraftMessages(scope, id);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -52,13 +54,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }
         }
 
-        await appendDraftMessage(id, "assistant", reply);
+        await appendDraftMessage(scope, id, "assistant", reply);
 
         let updatedDraft = draft;
         if (fieldUpdates) {
-          updatedDraft = await updateDraftFields(id, fieldUpdates);
-          await setDraftStatus(id, isDraftReady(updatedDraft) ? "ready" : "chatting");
-          updatedDraft = (await getDraftById(id))!;
+          updatedDraft = await updateDraftFields(scope, id, fieldUpdates);
+          await setDraftStatus(scope, id, isDraftReady(updatedDraft) ? "ready" : "chatting");
+          updatedDraft = (await getDraftById(scope, id))!;
         }
 
         send({ done: true, reply, draft: updatedDraft });

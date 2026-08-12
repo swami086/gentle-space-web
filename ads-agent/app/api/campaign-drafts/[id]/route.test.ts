@@ -1,17 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft } from "@/lib/types";
 
-const { getDraftById, updateDraftFields, setDraftStatus, requireApiRole } = vi.hoisted(() => ({
+const { getDraftById, updateDraftFields, setDraftStatus, requireApiRole, scopeForSession } = vi.hoisted(() => ({
   getDraftById: vi.fn(),
   updateDraftFields: vi.fn(),
   setDraftStatus: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById, updateDraftFields, setDraftStatus }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 
 import { PATCH } from "./route";
+
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function draft(overrides: Partial<CampaignDraft> = {}): CampaignDraft {
   return {
@@ -41,6 +45,7 @@ beforeEach(() => {
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
   });
+  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("PATCH /api/campaign-drafts/[id]", () => {
@@ -73,8 +78,8 @@ describe("PATCH /api/campaign-drafts/[id]", () => {
 
     const res = await PATCH(patchRequest({ corridor: "whitefield" }), { params: Promise.resolve({ id: "draft-1" }) });
 
-    expect(updateDraftFields).toHaveBeenCalledWith("draft-1", { corridor: "whitefield" });
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "ready");
+    expect(updateDraftFields).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", { corridor: "whitefield" });
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "ready");
     expect(res.status).toBe(200);
     expect((await res.json()).draft).toEqual(draft());
   });
@@ -86,6 +91,6 @@ describe("PATCH /api/campaign-drafts/[id]", () => {
 
     await PATCH(patchRequest({ headlines: [] }), { params: Promise.resolve({ id: "draft-1" }) });
 
-    expect(setDraftStatus).toHaveBeenCalledWith("draft-1", "chatting");
+    expect(setDraftStatus).toHaveBeenCalledWith(TEST_SCOPE, "draft-1", "chatting");
   });
 });

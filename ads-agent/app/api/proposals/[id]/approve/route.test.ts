@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/lib/types";
 
-const { getProposalById, decideProposal, executeProposal, requireApiRole } = vi.hoisted(() => ({
+const { getProposalById, decideProposal, executeProposal, requireApiRole, scopeForSession } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   decideProposal: vi.fn(),
   executeProposal: vi.fn(),
   requireApiRole: vi.fn(),
+  scopeForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, decideProposal }));
 vi.mock("@/lib/executor/execute", () => ({ executeProposal }));
 vi.mock("@/lib/auth/dal", () => ({ requireApiRole }));
+vi.mock("@/lib/auth/scope-interim", () => ({ scopeForSession }));
 
 import { POST } from "./route";
+
+const TEST_SCOPE = { kind: "org" as const, orgId: "org-1" };
 
 function pendingProposal(): Proposal {
   return {
@@ -36,6 +40,7 @@ beforeEach(() => {
     ok: true,
     session: { userId: "u-1", email: "a@b.com", orgId: "org-1", role: "operator" },
   });
+  scopeForSession.mockResolvedValue(TEST_SCOPE);
 });
 
 describe("POST /api/proposals/[id]/approve", () => {
@@ -58,8 +63,8 @@ describe("POST /api/proposals/[id]/approve", () => {
 
     const res = await POST(new Request("http://localhost"), { params: Promise.resolve({ id: "prop-1" }) });
 
-    expect(decideProposal).toHaveBeenCalledWith("prop-1", "approved", "u-1", "ui");
-    expect(executeProposal).toHaveBeenCalledWith("prop-1");
+    expect(decideProposal).toHaveBeenCalledWith(TEST_SCOPE, "prop-1", "approved", "u-1", "ui");
+    expect(executeProposal).toHaveBeenCalledWith(TEST_SCOPE, "prop-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, result: { status: "executed" } });
   });
