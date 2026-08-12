@@ -27,9 +27,9 @@ OpenAI.
 ## Local setup
 
 1. `npm install`
-2. `docker compose up -d` (starts this service's own Postgres on host port 5434)
-3. `cp .env.example .env.local` and fill in `DATABASE_URL` (already correct for the compose default), Bifrost vars (chat + rationale — see Bifrost below), plus credentials below
-4. `npm run migrate` (applies `lib/db/schema.sql`)
+2. From the **repo root**, start consolidated Postgres: `docker compose -f docker-compose.listings.yml up -d` (PG18 + AGE on host port **5433**). The `docker compose up -d` in this folder still starts Bifrost/MCP services but its `:5434` Postgres is **legacy** — do not point `DATABASE_URL` at it after S1–S3 consolidation.
+3. `cp .env.example .env.local` and fill in Bifrost vars (chat + rationale — see Bifrost below), plus credentials below. `DATABASE_URL` defaults to `gentle_space_listings` on `:5433`.
+4. `npm run migrate` (applies numbered migrations under `lib/db/migrations/`)
 5. `npm run dev` (admin UI at http://localhost:3030)
 6. In a second terminal: `npm run worker` (cron worker; starts with `cron_settings.enabled = false`, flip it on in `/settings`)
 
