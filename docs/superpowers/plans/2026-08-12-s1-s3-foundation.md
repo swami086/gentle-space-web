@@ -45,7 +45,7 @@ Every task inherits these. Copied verbatim into every reviewer dispatch.
 | U5 | `snapshots` | 1 importer |
 | U6 | `credits` | 1 importer |
 | U7 | `ai-action-log` → `audit-log` | 4 importers |
-| — | `twenty-pipeline` | **Excluded.** Blocked on the tenancy spec's open question Q4 |
+| U8 | `twenty-pipeline` | 8 non-test consumers. **No longer excluded** — Q4 answered: Twenty is shared *today*, per-org by design. Converts like the rest *and* gains a platform-only guard inside the client, which is **interim** containment until every org has its own instance. Guard must throw, not return empty. See tenancy spec "Q4 resolution" and `2026-08-12-twenty-tenancy-ownership-design.md` |
 
 **Skill and model per role.** Always specify the model explicitly; an omitted model inherits the session's, usually the most expensive.
 

@@ -42,7 +42,17 @@ reply into, no state to change, and no history to render.
 
 - **BD1 — Hybrid CRM ownership.** Twenty stays system of record for the person and the
   opportunity. The admin app owns an activity log (calls, notes, state, reminders) in
-  `ads_agent`, keyed by Twenty opportunity id. A summary syncs back to Twenty as Notes.
+  `ads_agent`. A summary syncs back to Twenty as Notes.
+
+  **Resolved 2026-08-12** — the field boundary dataflow review A-1 demanded is now written down in
+  full: `2026-08-12-twenty-tenancy-ownership-design.md` §3. The rule is *Twenty owns who, Postgres
+  owns what happened*; on identity fields Twenty wins, on everything else Postgres wins and Twenty is
+  a projection.
+
+  **Correction to the original wording:** activity is **not** keyed by Twenty opportunity id. Local
+  rows reference `adsagent.contacts.id`, never a Twenty identifier, because Twenty's deduplication can
+  merge a person and invalidate its ids at any time. Keying on Twenty ids would spread that breakage
+  across every table; keying locally confines it to one (TW5).
 
   Forced by Twenty's API. Per [twentyhq/twenty#8948](https://github.com/twentyhq/twenty/discussions/8948),
   custom timeline events cannot be created — attempts produce entries with no description —
@@ -66,10 +76,16 @@ reply into, no state to change, and no history to render.
 - **BD5 — No AI relationship summary.** AI is used for call preparation, requirement
   extraction, and decision explanations. It does not narrate the account.
 
-- **BD6 — Enquiry shadow records live in `ads_agent`.** The marketing site keeps writing to
-  Twenty. `ads-agent` syncs opportunities into a local `enquiry` table that carries the state
-  Twenty cannot hold. Existing `lib/connectors/twenty.ts` and `lib/bifrost/twenty-mcp-tools.ts`
-  are the integration points.
+- **BD6 — Enquiries live in `ads_agent`.** ~~Shadow records synced from Twenty.~~ **Reversed
+  2026-08-12** (Twenty tenancy spec, TW4): the enquiry is not a shadow of a Twenty opportunity, it is
+  the record, and Twenty is the projection. Enquiries commit to Postgres first — including from the
+  marketing site, which is simply the Gentle Space org's own capture path — and the opportunity is
+  created asynchronously through the outbox. The old direction made Twenty a synchronous dependency
+  on enquiry capture, meaning a Twenty outage would lose enquiries.
+
+  Integration points change with it: `lib/connectors/twenty.ts` and `lib/crm/twenty.ts` collapse into
+  one tenant-resolving client, and `lib/bifrost/twenty-mcp-tools.ts` is **deleted** — the sidecar
+  holds a single API key and cannot route per tenant.
 
 - **BD7 — `campaigns.corridor` is currently dead** and must become real. Its only code
   reference is a comment in `connectors/twenty.ts:18` noting Twenty has no corridor field.
@@ -86,7 +102,7 @@ Each item: what the screen needs → what exists → what to build → which sys
 
 | # | Feature | Exists | Build |
 |---|---|---|---|
-| A1 | `enquiry` table shadowing Twenty opportunities | nothing | table + sync worker keyed on opportunity id |
+| A1 | `enquiries` table — the record, not a shadow | nothing | table + `adsagent.contacts`; the projection worker keys on **local** `contact_id`, never a Twenty id (TW5) |
 | A2 | Reply-state lifecycle (waiting on you / you called / closed) | Twenty pipeline stages are *deal* stages, not reply states | separate state column, mapped not conflated |
 | A3 | Activity log (calls, notes, state changes) | nothing | `enquiry_activity` table, append-only |
 | A4 | Structured requirement fields (desks, move-in, budget, must-haves) | free text only | typed columns + revision history |
@@ -103,7 +119,7 @@ somewhere to write to, and a revision trail so the change is reversible.
 
 | # | Feature | Exists | Build |
 |---|---|---|---|
-| B1 | Website form → enquiry | posts to Twenty only | also create the local shadow record |
+| B1 | Website form → enquiry | posts to Twenty only, synchronously | **invert it**: commit the enquiry to Postgres, emit an outbox event, project to Twenty asynchronously (TW4) |
 | B2 | Inbound email → enquiry thread | nothing | inbound parse webhook, thread matching |
 | B3 | Inbound WhatsApp → enquiry thread | spec only (`2026-08-03-whatsapp-ai-lead-qualification-design.md`) | Business API webhook |
 | B4 | Message store with channel provenance | nothing | `enquiry_message` table; the screens label "via website form" / "via email" |

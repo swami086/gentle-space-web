@@ -45,7 +45,14 @@ One instance, four schemas, one database role per schema plus grants.
 | `listings` | listings, sync, search, enrichment | `listings_rw` |
 | `adsagent` | campaigns, proposals, enquiries, credits | `adsagent_rw` |
 | `context` | control plane, agent state, compliance ledgers | `context_rw` |
-| `public` | shared reference data (`orgs`, `users`, `corridor`) | `shared_rw` |
+| `public` | shared reference data (`orgs`, `users`, `corridors`) | `shared_rw` |
+| `derived` | tables projected **into** Postgres from observational stores | `derived_rw` |
+
+**The `derived` schema is a quarantine** (added 2026-08-12, dataflow review A-5). Clickstream is owned
+by ClickHouse, so anything projected back into Postgres from it — "spaces this visitor viewed before
+enquiring", for instance — is a convenience, not a record. Tables here are truncatable and rebuildable
+at any time, are never the input to another derivation, and must never be the sole justification for a
+proposal. Without this boundary, observational data quietly acquires the authority of fact.
 
 **The MCP context server connects as a distinct read-only, non-owner role** (`agent_ro`) holding
 `SELECT` on tenant-scoped views only. This is what makes `FORCE ROW LEVEL SECURITY` meaningful.
@@ -160,8 +167,16 @@ CREATE TABLE adsagent.enquiries (
   id                    UUID PRIMARY KEY DEFAULT uuidv7(),
   org_id                public.org_ref NOT NULL REFERENCES public.orgs(id),
 
-  twenty_opportunity_id TEXT UNIQUE,          -- system of record key
-  twenty_person_id      TEXT,
+  -- Revised 2026-08-12 (Twenty tenancy spec, TW5). The enquiry references the
+  -- local contact row, never a Twenty person id: Twenty's dedup can merge a
+  -- person and invalidate its ids, and that breakage must stay in one table.
+  contact_id            UUID REFERENCES adsagent.contacts(id),
+
+  -- The opportunity mirrors this enquiry, so its id lives here — but it is a
+  -- projection reference, not a key. Unique per org, not globally: every org
+  -- has its own Twenty instance issuing its own ids (closes register O8).
+  twenty_opportunity_id TEXT,
+  CONSTRAINT enquiries_twenty_opportunity_unique UNIQUE (org_id, twenty_opportunity_id),
 
   listing_id            UUID REFERENCES listings.listings(id),
   listing_url           TEXT,                 -- as captured, before resolution
@@ -474,7 +489,7 @@ CREATE TABLE context.deletion_propagations (
   request_id  UUID NOT NULL REFERENCES context.deletion_requests(id) ON DELETE CASCADE,
   store       TEXT NOT NULL CHECK (store IN
                 ('postgres','clickhouse','duckdb_snapshot','graph','twenty',
-                 'vector_index','firestore','langfuse','clickhouse_raw')),
+                 'vector_index','objectstore','langfuse','clickhouse_raw')),
   state       TEXT NOT NULL DEFAULT 'pending'
                 CHECK (state IN ('pending','suppressed','erased','failed')),
   detail      TEXT,
@@ -597,39 +612,54 @@ exactly that.
 
 ---
 
-## 8a. Firestore — artifact content (added 2026-08-12)
+## 8a. Artifact store — object store payloads, Postgres index (revised 2026-08-12)
 
-Not a schema in the SQL sense; Firestore is schemaless by design. What is fixed is the **path
-convention**, because that is what carries tenancy.
+Replaces Firestore. Payload **bytes** live in a self-hosted S3-compatible object store; the small
+fixed **metadata** lives in Postgres. The split is not a preference — an object store has no query
+API, only prefix listing, and erasure has to answer *"every artifact mentioning this person"*. That
+question needs an index, and the index needs to commit in the same transaction as the deletion
+ledger.
 
+```sql
+CREATE TABLE context.artifacts (
+  id            UUID PRIMARY KEY DEFAULT uuidv7(),
+  org_id        UUID NOT NULL REFERENCES public.orgs(id),
+  -- artifacts/{org_id}/{content_type}/{id}; built by the tenant helper, never from a request param.
+  storage_key   TEXT NOT NULL UNIQUE,
+  content_type  TEXT NOT NULL CHECK (content_type IN
+                  ('talking_points','draft','context_pack','trace_payload','call_recording')),
+  media_type    TEXT NOT NULL DEFAULT 'application/json',
+  byte_size     BIGINT NOT NULL,
+  -- sha256 of the bytes: detects silent corruption and divergence between the two stores.
+  checksum      TEXT   NOT NULL,
+  subject_refs  UUID[] NOT NULL DEFAULT '{}',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  erase_after   TIMESTAMPTZ NOT NULL,
+  -- Set when the bytes are gone. The row survives as a tombstone so a dangling
+  -- reference renders "content erased" instead of an unexplained 404.
+  erased_at     TIMESTAMPTZ
+);
+
+CREATE INDEX ON context.artifacts USING GIN (subject_refs);          -- per-subject erasure
+CREATE INDEX ON context.artifacts (erase_after) WHERE erased_at IS NULL;  -- retention sweep
+CREATE INDEX ON context.artifacts (org_id, content_type, created_at DESC);
+ALTER TABLE context.artifacts ENABLE ROW LEVEL SECURITY;
 ```
-artifacts/{org_id}/agent_outputs/{artifact_id}
-artifacts/{org_id}/trace_payloads/{span_id}
-artifacts/{org_id}/context_packs/{pack_id}
-```
 
-Every document carries these fields regardless of its payload shape, so the compliance and cost
-machinery can operate without knowing the shape:
+`content_type` includes `call_recording` because the product places outbound calls. Audio is exactly
+the payload that vindicated the object store: opaque, large, and with no reason to sit in a database
+backup.
 
-| Field | Type | Why |
-|---|---|---|
-| `org_id` | string | redundant with the path, and checked on read — a mismatch is a bug, not a miss |
-| `subject_refs` | string[] | data subjects whose personal data appears, so erasure can find it |
-| `created_at` | timestamp | retention floor arithmetic |
-| `erase_after` | timestamp | scheduled hard delete, per DPDP Rule 8(3) |
-| `content_type` | string | `talking_points \| draft \| context_pack \| trace_payload` |
-| `payload` | map | the variable part — deliberately unconstrained |
+Referenced from Postgres by `artifacts.id`, never by foreign key from `proposals.evidence` — evidence
+holds identifiers as text so an erased artifact does not block a delete.
 
-Referenced from Postgres by URL, never by foreign key: `adsagent.proposals.evidence` and trace spans
-hold `artifacts/{org_id}/…` paths. A dangling reference after erasure is expected and must render as
-"content erased", not as an error.
+**Write order matters.** Bytes to the object store first, then the Postgres row. That way a crash
+between the two leaves an unreferenced object, which the orphan sweep reclaims. The reverse order
+leaves a row pointing at nothing, which is indistinguishable from corruption.
 
-**Access:** Admin SDK, server-side only, with the `{org_id}` segment supplied by the tenant helper —
-never from a request parameter. Reads pass through one accessor that counts operations per tenant per
-day against the cost ceiling.
-
-**Erasure:** recursive delete on `artifacts/{org_id}` for tenant offboarding; query by `subject_refs`
-for per-subject erasure. Both write to `context.deletion_propagations` with `store = 'firestore'`.
+**Erasure:** prefix delete on `artifacts/{org_id}/` for tenant offboarding; `subject_refs @> ARRAY[$1]`
+for per-subject erasure. Both write `context.deletion_propagations` with `store = 'objectstore'`, and
+the metadata row's `erased_at` is set in the same transaction as that ledger write.
 
 ## 9. DuckDB per-tenant snapshot
 

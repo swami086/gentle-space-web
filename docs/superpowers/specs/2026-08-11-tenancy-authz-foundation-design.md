@@ -235,7 +235,7 @@ export function scopeClause(scope: Scope, column = "org_id"): { sql: string; par
 | `credits.ts` | `listMemberBalances`, `getSpendByFeature`, `getSpendByModel`, `getSpendTrend` | Already take `orgId`; converted to `Scope` for consistency |
 | `credits.ts` | `listOrgBalances` | **Platform scope only.** Throws if called with org scope |
 | `audit-log.ts` (new) | `writeAudit`, `listAudit`, `countAuditToday` | Supersedes `ai-action-log.ts` |
-| `twenty-pipeline.ts` | `listOpportunities`, `getOpportunity`, `updateOpportunityStage`, `getPipelineValue` | **Blocked on Q4** — see Open questions |
+| `twenty-pipeline.ts` | `listOpportunities`, `getOpportunity`, `updateOpportunityStage`, `getPipelineValue` | Converts normally **and** gains the platform-only guard — Q4 resolved, see below |
 
 Thirty-one functions change signature. Adjacent `*.test.ts` files update in the same commit.
 
@@ -439,12 +439,50 @@ statements.
 | # | Question | Blocks | Default if unanswered |
 |---|---|---|---|
 | Q2 | Should `operator` have an approval value threshold above which `admin` is required? | Role table | Column ships nullable; NULL means no threshold |
-| Q4 | Is Twenty CRM data per-org, or one shared pipeline? | `twenty-pipeline.ts` scoping | **Hard blocker.** If shared, `/leads` must be hidden from external orgs until Twenty is partitioned |
+| ~~Q4~~ | ~~Is Twenty CRM data per-org, or one shared pipeline?~~ | — | **ANSWERED: shared.** See below |
 | Q6 | Do external orgs self-register, or does staff provision them? | `ensureShadowRows`, onboarding | Staff-provisioned |
 
-**Q4 is the one that can stall the release gate.** Twenty is an external system; if its pipeline is not
-partitioned by org, no amount of scoping in this repo makes `/leads` tenant-safe, and the route must be
-platform-only until it is.
+### Q4 resolution — Twenty is one shared pipeline **today** (answered 2026-08-12)
+
+> **Everything below is interim containment, not the end state.** The target architecture gives every
+> org its own provisioned Twenty instance — see `2026-08-12-twenty-tenancy-ownership-design.md`. The
+> guard described here stays in force until every org has one, and is removed only then. Do not read
+> this section as "Twenty is shared, permanently."
+>
+> It also understates the problem. Twenty's deduplication actively **merges** contacts across tenants
+> in a shared instance, so this is not only a read exposure — it is contamination that cannot be
+> reversed, which is why the shared instance is never migrated.
+
+Twenty is **not** partitioned by org. Every tenant's opportunities sit in one pipeline, so no scoping
+in this repository can make that data tenant-safe. The earlier mitigation recorded here — *"`/leads`
+must be hidden from external orgs"* — **was too narrow and must not be implemented as written.**
+Indexing the codebase found Twenty data reaching nine call sites, of which `/leads` is one:
+
+| Consumer | Exposure |
+|---|---|
+| `ads-agent/app/(admin)/crm/page.tsx` | the CRM board |
+| `ads-agent/app/(admin)/page.tsx` | **home dashboard** — `getPipelineValue`, `fetchLeadSignal` |
+| `ads-agent/app/api/crm/opportunities/[id]/stage/route.ts` | **mutates** another tenant's opportunity |
+| `ads-agent/lib/decision-engine/cycle.ts` | **autonomous** — acts with nobody watching |
+| `ads-agent/lib/openui/crm-tools.ts` | renders opportunity cards |
+| `ads-agent/lib/openui/opportunity-openui-lang.ts` | same |
+| `ads-agent/lib/openui/resolve-tools-then-generate.ts` | reshapes Twenty results into UI |
+| `ads-agent/lib/bifrost/mcp-client.ts` | Twenty MCP endpoint |
+| `app/api/leads/route.ts` | `createLeadInTwenty` writes into the shared pipeline |
+
+**Containment belongs in the client, not the routes.** Every exported function in
+`twenty-pipeline.ts` and the Twenty connectors refuses to return or mutate data when the resolved
+caller is not platform staff, and throws rather than returning empty — an empty pipeline is
+indistinguishable from a quiet leak in the surfaces that render it. A new call site then inherits the
+block instead of having to remember it, which is what makes this survive the next feature.
+
+Consequences to carry: the Twenty MCP tools are removed from any agent profile serving a broker
+tenant, and `/leads` plus the CRM board are platform-only in the navigation until Twenty is
+partitioned or replaced. This is a **release-gate condition of S3**, not a follow-up.
+
+The blocking status is therefore lifted: `twenty-pipeline` is **no longer excluded** from the S1–S3
+scope-parameter conversion. It converts like every other module and gains the platform-only guard in
+the same commit.
 
 ---
 

@@ -19,7 +19,7 @@ Storage jobs, deliberately separated:
 | Analytics | ClickHouse | mirror fed by CDC; never authoritative |
 | Context graph | node + edge **tables** in ClickHouse | queried with SQL; no graph engine |
 | Per-tenant serving | DuckDB snapshot per tenant | rebuilt on demand from ClickHouse |
-| Agent artifact content | **Firestore** (Native mode) | large variable-shaped payloads, referenced by URL from traces (§13) |
+| Agent artifact content | **Garage** (self-hosted S3) + `context.artifacts` index in Postgres | opaque payloads and call audio; bytes in the object store, queryable metadata in Postgres (§13) |
 | Agent traces | **Langfuse**, self-hosted on the same ClickHouse | OTEL GenAI spans; structure only, no PII |
 
 ---
@@ -110,7 +110,9 @@ Storage jobs, deliberately separated:
 
    Hermes agents ──▶ MCP context server ──▶ all three, tenant-scoped
                  └──▶ Langfuse (OTEL GenAI spans, structure only)
-                          └──▶ Firestore (artifact content, by reference)
+                          └──▶ artifact store, by reference:
+                               bytes ──▶ Garage (self-hosted S3)
+                               index ─▶ context.artifacts (Postgres, RLS)
 ```
 
 `pg_clickhouse` (FDW) is installed so application code can reach analytical tables through a single
@@ -662,42 +664,73 @@ capture opt-in and state that for systems handling PII, the recommended pattern 
 data into the telemetry pipeline. That single rule decides where agent content lives and what traces
 may contain.
 
-### 13.1 Firestore — the artifact content store
+### 13.1 The artifact store — self-hosted object store (revised 2026-08-12)
 
-**Its job, narrowly.** Large variable-shaped payloads produced or consumed by agents: generated
-artifacts, call-prep talking points, draft text, retrieved context packs, and trace message bodies.
-Referenced by URL from a trace span or a proposal row; never joined to relational data.
+**Firestore is out.** It was over-specified for this job: every feature that distinguishes it from a
+filing cabinet — realtime listeners, offline sync, client SDKs, security rules — was already disabled
+by this spec's own access rules. What remained was a keyed blob store billed per operation. Replaced
+with a self-hosted S3-compatible object store, on cost grounds.
 
-**What does *not* go here.** Anything queried by attribute, anything needing a transaction with
-relational state, and anything that belongs in a typed column. The existing eleven JSONB columns stay
-in Postgres: they are write-once payloads read by primary key alongside typed columns, which is the
-one access pattern JSONB handles well.
+**Its job, narrowly.** Large opaque payloads produced or consumed by agents: generated artifacts,
+call-prep talking points, draft text, retrieved context packs, trace payloads, and **call recordings**.
+Referenced by `context.artifacts.id` from a trace span or proposal; never joined to relational data.
 
-**Why a document store earns this and JSONB does not.** These payloads are large, individually
-addressed, never filtered on, and need independent lifecycle — deletion without touching the row that
-references them. JSONB's documented weaknesses land exactly here: no HOT updates causing write
-amplification, and DeTOASTing causing read amplification on large values.
+**Engine: Garage** (Deuxfleurs). Chosen for operational weight above all — a single Rust binary that
+supports single-node deployment as a first-class case rather than a degraded mode, which matters more
+than throughput for a solo operator moving hundreds of objects a day.
 
-**Access is server-side only.** The Admin SDK, from the same API that already resolves tenant. No
-client SDK, no Firestore security rules — tenancy is enforced where it already is, which is what
-keeps this from becoming a third authorization model.
+- **MinIO is not an option.** The open-source repository was archived on 13 February 2026: no
+  releases, no bug fixes, **no security patches**. Adopting it would mean adopting a frozen,
+  permanently unpatched network service.
+- **SeaweedFS is the alternative** if the licence question below is unwelcome: Apache 2.0, faster,
+  but a master, volume and filer process instead of one binary.
+- **Licence, stated accurately.** Garage is AGPL-3.0. The network clause obliges you to offer
+  *corresponding source of your modifications* to users who interact with **Garage itself** over a
+  network. Brokers interact with the portal, not with Garage's S3 API, and unmodified upstream
+  satisfies the clause in any case. This is the ordinary internal-infrastructure position; it becomes
+  a real question only if Garage is forked and modified. SeaweedFS's Apache 2.0 removes the question
+  rather than answering it.
 
-**Tenancy: one database, collection path per tenant.**
+**What does *not* go here.** Anything queried by attribute. The store has no query API — only
+`GET` by key and prefix listing — so every question the compliance machinery asks is answered by
+`context.artifacts` in Postgres (§8a of the data model). Payload bytes here, queryable metadata there.
+
+**Never a copy of something already stored** (dataflow review A-3). The store holds content with **no
+other home** — a generated draft, talking points, a context pack assembled at run time, call audio. It
+must never hold a copy of an enquiry message body or a listing description, because that would put the
+same personal data in two stores with different erasure paths and retention clocks. When a trace or
+proposal points at existing content, it carries the **Postgres row id**.
+
+**Why not JSONB in Postgres.** Payloads are opaque, never filtered, and now include audio. Blob volume
+would land in every base backup and WAL stream, inflating restore time for the system of record with
+bytes that have nothing to do with transactions. Keeping Postgres lean is a recovery-objective
+decision, not an aesthetic one.
+
+**Access is server-side only,** through one accessor holding the credentials. No presigned URLs handed
+to browsers in the first cut: a presigned URL is a bearer token that escapes tenant checks for its
+lifetime, and the volume here does not justify that exposure.
+
+**Tenancy: key prefix per tenant.**
 
 ```
-artifacts/{org_id}/agent_outputs/{artifact_id}
-artifacts/{org_id}/trace_payloads/{span_id}
-artifacts/{org_id}/context_packs/{pack_id}
+artifacts/{org_id}/{content_type}/{artifact_id}
 ```
 
-The `org_id` path segment comes from the server-resolved tenant, never from a request parameter — the
-same rule as the agent task token. A code path that constructs a collection path without going
-through the tenant helper is the Firestore equivalent of a missing `scopeClause`.
+The `org_id` segment comes from the server-resolved tenant, never from a request parameter — the same
+rule as the agent task token. A code path that builds a key without the tenant helper is the object
+store's equivalent of a missing `scopeClause`. Because the key is also stored in `context.artifacts`
+under RLS, a mismatch between the row's `org_id` and the key's prefix is detectable, and the accessor
+checks it on every read.
 
-**Erasure is the easy case.** Recursive delete on `artifacts/{org_id}/…` removes a tenant entirely,
-and per-subject deletion removes documents by reference. This is materially simpler than ClickHouse,
-where deletes are expensive — one reason to prefer Firestore over widening the columnar store's role.
-Add `firestore` to the propagation stores in the deletion ledger.
+**Erasure.** Prefix delete on `artifacts/{org_id}/` offboards a tenant; `subject_refs @> ARRAY[$1]`
+against the index table finds everything naming one person. Both write
+`context.deletion_propagations` with `store = 'objectstore'`. Deleting bytes is cheap here, unlike
+ClickHouse — still a reason not to widen the columnar store's role.
+
+**The two stores can diverge,** which Firestore's single-system model hid. Two sweeps close it: an
+**orphan sweep** deletes objects with no `context.artifacts` row (the expected residue of a crash
+between the two writes), and a **dangling sweep** flags rows whose object is missing, which is not
+expected and indicates a bug or an out-of-band deletion.
 
 ### 13.2 Langfuse — agent traces
 
@@ -724,22 +757,33 @@ does not silently break dashboards.
 
 The division that keeps PII out of telemetry:
 
-| In the span | By reference only |
+| In the span | By reference, and to where |
 |---|---|
-| agent profile, task id, tenant id | prompt and completion bodies |
-| tool name, duration, token counts | retrieved context pack contents |
-| proposal id produced, evidence ids | enquiry message text |
-| CDC lag at read time (§12.1) | generated draft text |
+| agent profile, task id, tenant id | enquiry message text → **Postgres row id** |
+| tool name, duration, token counts | listing content → **Postgres row id** |
+| proposal id produced, evidence ids | retrieved context pack → `context.artifacts.id` |
+| CDC lag at read time (§12.1) | generated draft or completion → `context.artifacts.id` |
 
-Message bodies are not captured on spans at all. `gen_ai.input.messages` and
-`gen_ai.output.messages` stay disabled; the span carries a Firestore reference instead.
+Message bodies are never captured on spans: `gen_ai.input.messages` and `gen_ai.output.messages` stay
+disabled.
 
-### 13.4 Cost bounding
+**The reference points at wherever the content already lives.** Content that exists in Postgres is
+referenced by row id; only content with no other home — a generated draft, an assembled context pack —
+becomes an artifact. Copying an enquiry message into the artifact store so a span can point at it
+would create a second copy of personal data with its own erasure path, which is exactly what this
+pattern is meant to avoid.
 
-Firestore bills per operation, so the same discipline as §12.6 applies: artifact reads go through a
-single accessor that counts them per tenant per day against the same ceiling as model tokens. Because
-access is server-side only, no untrusted client can drive reads — which is what makes per-operation
-pricing acceptable here and would not be true of a client-facing design.
+### 13.4 Cost bounding (revised 2026-08-12)
+
+**Per-operation billing is gone with Firestore**, and with it the per-tenant read counter this section
+previously required. Self-hosted storage costs disk, so the ceiling that matters is now **bytes, not
+operations** — and it is enforced by `erase_after` on every artifact rather than by a rate limit.
+
+Two consequences worth stating. Nothing throttles artifact reads any more, so a runaway agent loop
+degrades into disk I/O rather than a surprise invoice — cheaper, but no longer self-announcing, which
+means disk usage per tenant needs a dashboard panel it did not need before. And call recordings will
+dominate the byte budget once voice ships, so their retention should be set deliberately against the
+DPDP one-year floor rather than inheriting the default applied to text artifacts.
 
 ---
 

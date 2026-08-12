@@ -161,6 +161,11 @@ into their own inbox. Nothing is sent.
 A proposal with an empty `evidence` array is rejected by the server. An agent that cannot cite its
 reasoning does not get to propose.
 
+**`evidence` holds identifiers only, never prose** (added 2026-08-12, dataflow review A-4). Row ids,
+artifact paths, node ids — things that point at facts. An agent's narrative belongs in `rationale`,
+its generated content in the artifact store, and its execution detail in the trace. Allowing prose into
+`evidence` would put the same reasoning in three stores with no rule about which is authoritative.
+
 ---
 
 ## 6. Tenant binding
@@ -271,11 +276,12 @@ metrics are mandatory rather than nice-to-have: `gen_ai.client.operation.duratio
 `gen_ai.client.token.usage`. They are the same signal that enforces the per-tenant cost ceiling in
 §6, so tracing and denial-of-wallet protection are one effort.
 
-**Spans carry structure; content goes to Firestore by reference.** Prompt and completion bodies,
-retrieved context packs, and generated drafts are not written to spans — `gen_ai.input.messages` and
-`gen_ai.output.messages` stay disabled, and the span holds an `artifacts/{org_id}/…` path instead.
-This is the OTEL-recommended pattern for systems handling PII and it keeps customer data out of the
-telemetry pipeline. Full design in the datastore spec §13.
+**Spans carry structure; content goes to the artifact store by reference.** Prompt and completion
+bodies, retrieved context packs, and generated drafts are not written to spans —
+`gen_ai.input.messages` and `gen_ai.output.messages` stay disabled, and the span holds a
+`context.artifacts.id` instead. Content that already lives in Postgres is referenced by its own row id
+rather than copied into an artifact. This is the OTEL-recommended pattern for systems handling PII and
+it keeps customer data out of the telemetry pipeline. Full design in the datastore spec §13.
 
 A span must also carry the **CDC lag** observed when its context pack was read, so a bad proposal can
 be traced back to whether the data behind it was fresh.

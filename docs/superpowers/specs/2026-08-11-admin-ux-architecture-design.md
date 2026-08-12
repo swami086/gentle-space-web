@@ -496,7 +496,10 @@ Applies to every route, and closes the systemic gaps:
 - Responsive sidebar with a mobile drawer, replacing the fixed 220px grid.
 - WCAG 2.2 AA: labelled inputs, `aria-live` on streaming regions, visible focus, keyboard reachability.
 - Empty states distinguished from error states — today "no leads" and "Twenty CRM is down" are visually
-  identical because `listOpportunities` fails soft to `[]` (`twenty-pipeline.ts:176`).
+  identical because `listOpportunities` fails soft to `[]` (`twenty-pipeline.ts:176`). **Fixed at the
+  source 2026-08-12:** the tenant-resolving client throws instead of returning empty, precisely because
+  an empty result and an unreachable CRM must never render the same — that ambiguity is also how a
+  tenancy leak would hide.
 - `GET /campaigns/new` stops writing. Draft creation becomes a POST from an explicit action, plus a drafts
   index so orphans are reachable and deletable.
 - Both Kanban boards either get working persistence (the status APIs exist) or lose the drag affordance. No
@@ -608,7 +611,7 @@ short list rather than composing a layout.
 | Q1 | Default undo window length. Spec assumes 60s, org-configurable | Epic 2 |
 | Q2 | Should `operator` have an approval value threshold above which `admin` is required? | Epic 1 |
 | Q3 | Do external orgs self-serve credit top-up, or does Gentle Space staff grant? | Epic 5 |
-| Q4 | Is Twenty CRM data per-org, or one shared pipeline? Affects whether `/leads` is tenant-safe | Epic 6 |
+| ~~Q4~~ | ~~Is Twenty CRM data per-org, or one shared pipeline?~~ **Resolved 2026-08-12:** shared today, one instance per org by design — `2026-08-12-twenty-tenancy-ownership-design.md`. `/leads` and the CRM board are platform-only until every org has its own instance | — |
 | Q5 | Notification channel for pending approvals — in-app only, or email/Slack? | Epic 2 |
 
 ---

@@ -147,10 +147,13 @@ what is collected.
 | `contact_revealed` | enquiry handling | listing ref, channel |
 | `enquiry_submitted` | enquiry handling | enquiry ref |
 
-`search_performed` overlaps the existing `search_queries` table on the marketing site, which logs
-anonymously with no session or tenant. That table stays as-is for the Gentle Space site; broker
-portals go through this pipeline. Merging them is deliberately out of scope — one is anonymous and
-consent-free, the other is neither.
+**`search_performed` duplicates the existing `search_queries` table**, and the dataflow review (A-2)
+settled how. The Gentle Space marketing site is itself a portal, so its searches should flow through
+this same pipeline, after which `search_queries` retires. Until that happens the table carries a
+comment stating it covers **only the first-party site with no tenant, session, or consent context** —
+otherwise someone will eventually compare its counts against `search_performed` and get a wrong
+answer. Two pipelines measuring the same concept with neither aware of the other is the duplication
+this review exists to catch.
 
 ## 7. Retention and erasure
 
