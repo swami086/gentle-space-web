@@ -14,7 +14,12 @@ const VIEWS = [
   "v_agent_spaces",
   "v_agent_proposals",
   "v_agent_campaigns",
+  "v_agent_graph_node",
+  "v_agent_graph_edge",
 ] as const;
+
+// FDW graph views use definer security — agent_ro has no SELECT on fdw_graph_*.
+const DEFINER_VIEWS = new Set(["v_agent_graph_node", "v_agent_graph_edge"]);
 
 // listings.* has no RLS — spaces uses SECURITY DEFINER; never grant those tables.
 const ALLOWED_BASE_TABLES = new Set([
@@ -34,13 +39,13 @@ describe.skipIf(!LIVE)("agent read views", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("every agent view sets security_invoker, so the base table's RLS still applies", async () => {
+  it("RLS-backed agent views set security_invoker; FDW graph views use definer security", async () => {
     const { rows } = await pool!.query<{ relname: string }>(
       `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'context' AND c.relname LIKE 'v_agent_%' AND c.relkind = 'v'
           AND NOT COALESCE(array_to_string(c.reloptions, ',') LIKE '%security_invoker=true%', false)`,
     );
-    expect(rows.map((r) => r.relname)).toEqual([]);
+    expect(rows.map((r) => r.relname).sort()).toEqual([...DEFINER_VIEWS].sort());
   });
 
   it("every agent view embeds the tenant predicate in its own definition", async () => {

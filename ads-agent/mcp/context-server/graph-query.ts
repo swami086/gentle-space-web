@@ -50,7 +50,8 @@ const TEMPLATES: Record<GraphTemplateName, Template<z.ZodType>> = {
     schema: z.strictObject({ corridor_id: uuid, limit }),
     sql: `SELECT n.node_id, n.node_kind, n.props
             FROM context.v_agent_graph_edge e
-            JOIN context.v_agent_graph_node n ON n.node_id = e.source_id
+            JOIN context.v_agent_graph_node n
+              ON n.node_id = e.source_id AND n.snapshot_id = e.snapshot_id
            WHERE e.relationship = 'IN_CORRIDOR'
              AND e.target_id = $1
              AND n.node_kind = 'Space'
@@ -63,7 +64,8 @@ const TEMPLATES: Record<GraphTemplateName, Template<z.ZodType>> = {
     schema: z.strictObject({ space_id: uuid, limit }),
     sql: `SELECT n.node_id, n.node_kind, n.props
             FROM context.v_agent_graph_edge e
-            JOIN context.v_agent_graph_node n ON n.node_id = e.source_id
+            JOIN context.v_agent_graph_node n
+              ON n.node_id = e.source_id AND n.snapshot_id = e.snapshot_id
            WHERE e.relationship = 'ENQUIRED_ABOUT'
              AND e.target_id = $1
              AND n.node_kind = 'Enquiry'
@@ -78,9 +80,12 @@ const TEMPLATES: Record<GraphTemplateName, Template<z.ZodType>> = {
             FROM context.v_agent_graph_edge person_enq
             JOIN context.v_agent_graph_edge enq_corr
               ON enq_corr.source_id = person_enq.target_id
+             AND enq_corr.snapshot_id = person_enq.snapshot_id
              AND enq_corr.relationship = 'IN_CORRIDOR'
             JOIN context.v_agent_graph_node c
-              ON c.node_id = enq_corr.target_id AND c.node_kind = 'Corridor'
+              ON c.node_id = enq_corr.target_id
+             AND c.snapshot_id = enq_corr.snapshot_id
+             AND c.node_kind = 'Corridor'
            WHERE person_enq.relationship = 'MADE_ENQUIRY'
              AND person_enq.source_id = $1
            ORDER BY c.node_id
