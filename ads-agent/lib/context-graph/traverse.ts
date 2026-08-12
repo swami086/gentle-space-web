@@ -11,7 +11,11 @@ import { chQuery } from "./clickhouse";
  * SQL/PGQ GRAPH_TABLE by declaration once PostgreSQL 19 is GA (§6.1).
  */
 const G = "gentle_space";
-const TENANT = `org_id = toUUID({org:String}) AND snapshot_id = toUUID({snap:String})`;
+/** Scoped tenant filter; alias both columns so JOINs stay unambiguous in ClickHouse. */
+const tenantWhere = (alias: string) =>
+  `${alias}.org_id = toUUID({org:String}) AND ${alias}.snapshot_id = toUUID({snap:String})`;
+
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export type ConvertingCorridor = {
   corridorId: string;
@@ -44,13 +48,13 @@ export async function convertingCorridors(
     `WITH campaign_corridor AS (
        SELECT source_id AS campaign_id, target_id AS corridor_id
          FROM ${G}.graph_edge
-        WHERE ${TENANT} AND relationship_kind = 'TARGETS'
+        WHERE ${tenantWhere("graph_edge")} AND relationship_kind = 'TARGETS'
           AND source_kind = 'Campaign' AND target_kind = 'Corridor'
      ),
      campaign_enquiry AS (
        SELECT source_id AS campaign_id, target_id AS enquiry_id
          FROM ${G}.graph_edge
-        WHERE ${TENANT} AND relationship_kind = 'GENERATED'
+        WHERE ${tenantWhere("graph_edge")} AND relationship_kind = 'GENERATED'
           AND source_kind = 'Campaign' AND target_kind = 'Enquiry'
      ),
      enquiry_outcome AS (
@@ -59,7 +63,7 @@ export async function convertingCorridors(
          INNER JOIN ${G}.graph_node n
                  ON n.org_id = e.org_id AND n.snapshot_id = e.snapshot_id
                 AND n.node_id = e.target_id AND n.node_kind = 'Outcome'
-        WHERE e.${TENANT} AND e.relationship_kind = 'RESULTED_IN'
+        WHERE ${tenantWhere("e")} AND e.relationship_kind = 'RESULTED_IN'
           AND e.source_kind = 'Enquiry'
      )
      SELECT toString(cc.corridor_id)                     AS corridorId,
@@ -71,7 +75,7 @@ export async function convertingCorridors(
        INNER JOIN campaign_enquiry ce ON ce.campaign_id = cc.campaign_id
        LEFT  JOIN enquiry_outcome  eo ON eo.enquiry_id  = ce.enquiry_id
        INNER JOIN ${G}.graph_node  cn
-               ON cn.${TENANT} AND cn.node_id = cc.corridor_id AND cn.node_kind = 'Corridor'
+               ON ${tenantWhere("cn")} AND cn.node_id = cc.corridor_id AND cn.node_kind = 'Corridor'
       GROUP BY cc.corridor_id
      HAVING count() >= {minEnquiries:UInt32}
       ORDER BY conversionRate DESC, count() DESC`,
@@ -125,11 +129,11 @@ export async function substituteSpaces(
             nullIf(toString(any(loc.target_id)), '')      AS corridorId
        FROM ${G}.graph_edge sim
        INNER JOIN ${G}.graph_node n
-               ON n.${TENANT} AND n.node_id = sim.target_id AND n.node_kind = 'Space'
+               ON ${tenantWhere("n")} AND n.node_id = sim.target_id AND n.node_kind = 'Space'
        LEFT  JOIN ${G}.graph_edge loc
                ON loc.org_id = sim.org_id AND loc.snapshot_id = sim.snapshot_id
               AND loc.source_id = sim.target_id AND loc.relationship_kind = 'LOCATED_IN'
-      WHERE sim.${TENANT}
+      WHERE ${tenantWhere("sim")}
         AND sim.relationship_kind = 'SIMILAR_TO'
         AND sim.source_id = toUUID({space:String})
       GROUP BY sim.target_id, n.label, sim.weight
@@ -165,16 +169,20 @@ export async function corridorAncestors(
             nullIf(toString(any(h3.target_id)), '') AS l3
        FROM (SELECT toUUID({corridor:String}) AS start) s
        LEFT JOIN ${G}.graph_edge h1
-              ON h1.${TENANT} AND h1.relationship_kind = 'PART_OF' AND h1.source_id = s.start
+              ON ${tenantWhere("h1")} AND h1.relationship_kind = 'PART_OF' AND h1.source_id = s.start
        LEFT JOIN ${G}.graph_edge h2
-              ON h2.${TENANT} AND h2.relationship_kind = 'PART_OF' AND h2.source_id = h1.target_id
+              ON ${tenantWhere("h2")} AND h2.relationship_kind = 'PART_OF' AND h2.source_id = h1.target_id
        LEFT JOIN ${G}.graph_edge h3
-              ON h3.${TENANT} AND h3.relationship_kind = 'PART_OF' AND h3.source_id = h2.target_id`,
+              ON ${tenantWhere("h3")} AND h3.relationship_kind = 'PART_OF' AND h3.source_id = h2.target_id`,
     {
       orgId: scope.orgId,
       params: { org: scope.orgId, snap: snapshotId, corridor: corridorId },
     },
   );
 
-  return [row?.l1, row?.l2, row?.l3].filter((id): id is string => Boolean(id));
+  // ponytail: any() on an empty LEFT JOIN group returns the zero UUID in CH 25;
+  // filter it here rather than adding a CASE per hop.
+  return [row?.l1, row?.l2, row?.l3].filter(
+    (id): id is string => Boolean(id) && id !== NIL_UUID,
+  );
 }
