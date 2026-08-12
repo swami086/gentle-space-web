@@ -1,5 +1,17 @@
+import type { PoolClient } from "pg";
 import type { Scope } from "./scope-sql";
 import { withTenantTransaction } from "./tx";
+
+async function withUserTransaction<T>(
+  scope: Scope,
+  userId: string,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  return withTenantTransaction(scope, async (client) => {
+    await client.query("SELECT public.set_user($1)", [userId]);
+    return fn(client);
+  });
+}
 
 export type SavedFilterQuery = {
   statuses?: string[];
@@ -39,7 +51,7 @@ function rowToSavedFilter(row: SavedFilterRow): SavedFilter {
 }
 
 export async function listSavedFilters(scope: Scope, userId: string): Promise<SavedFilter[]> {
-  return withTenantTransaction(scope, async (client) => {
+  return withUserTransaction(scope, userId, async (client) => {
     const { rows } = await client.query<SavedFilterRow>(
       `SELECT ${COLUMNS}
          FROM adsagent.proposal_saved_filters
@@ -59,7 +71,7 @@ export async function createSavedFilter(
   const name = input.name.trim();
   if (!name) throw new Error("createSavedFilter: name must not be empty");
 
-  return withTenantTransaction(scope, async (client) => {
+  return withUserTransaction(scope, userId, async (client) => {
     const { rows } = await client.query<SavedFilterRow>(
       `INSERT INTO adsagent.proposal_saved_filters (org_id, owner_user_id, name, query)
        VALUES ($1::uuid, $2, $3, $4::jsonb)
@@ -75,7 +87,7 @@ export async function deleteSavedFilter(
   userId: string,
   id: string,
 ): Promise<boolean> {
-  return withTenantTransaction(scope, async (client) => {
+  return withUserTransaction(scope, userId, async (client) => {
     const { rows } = await client.query<{ id: string }>(
       `DELETE FROM adsagent.proposal_saved_filters
         WHERE id = $1 AND owner_user_id = $2

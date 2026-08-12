@@ -33,7 +33,8 @@ describe("listSavedFilters", () => {
     const filters = await listSavedFilters(ORG, USER);
     expect(filters).toHaveLength(1);
     expect(filters[0].name).toBe("Pending budget changes");
-    const [sql, params] = query.mock.calls[0];
+    expect(query.mock.calls[0]).toEqual(["SELECT public.set_user($1)", [USER]]);
+    const [sql, params] = query.mock.calls[1];
     expect(sql).toContain("FROM adsagent.proposal_saved_filters");
     expect(sql).toContain("owner_user_id = $1");
     expect(sql).toContain("ORDER BY created_at DESC");
@@ -47,7 +48,8 @@ describe("createSavedFilter", () => {
       name: "All orgs pending",
       query: { statuses: ["pending"], orgIds: ["org-x"] },
     });
-    const [sql, params] = query.mock.calls[0];
+    expect(query.mock.calls[0]).toEqual(["SELECT public.set_user($1)", [USER]]);
+    const [sql, params] = query.mock.calls[1];
     expect(sql).toContain("INSERT INTO adsagent.proposal_saved_filters");
     expect(params).toEqual([
       PLATFORM.orgId,
@@ -68,7 +70,8 @@ describe("deleteSavedFilter", () => {
   it("deletes only when id and owner match", async () => {
     query.mockResolvedValue({ rows: [{ id: row.id }], rowCount: 1 });
     await expect(deleteSavedFilter(ORG, USER, row.id)).resolves.toBe(true);
-    const [sql, params] = query.mock.calls[0];
+    expect(query.mock.calls[0]).toEqual(["SELECT public.set_user($1)", [USER]]);
+    const [sql, params] = query.mock.calls[1];
     expect(sql).toContain("DELETE FROM adsagent.proposal_saved_filters");
     expect(sql).toContain("owner_user_id = $2");
     expect(params).toEqual([row.id, USER]);
