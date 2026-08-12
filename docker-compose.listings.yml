@@ -16,6 +16,9 @@ services:
       # PG18+ stores data under /var/lib/postgresql/<major>/docker (not .../data).
       - gentle_space_pgdata:/var/lib/postgresql
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # Local Pub/Sub. The official client addresses this automatically when
   # PUBSUB_EMULATOR_HOST is set, so no test needs cloud credentials.
   # Caveat: the emulator implements neither dead-letter topics nor subscription
