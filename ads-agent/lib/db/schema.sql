@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS users (
   org_id UUID NOT NULL REFERENCES orgs(id),
   email TEXT NOT NULL UNIQUE,
   display_name TEXT,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
+  role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin','operator','viewer')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
