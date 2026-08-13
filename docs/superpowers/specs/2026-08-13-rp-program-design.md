@@ -63,10 +63,50 @@ Every workstream spec inherits these verbatim.
 
 - **GC1 — Graduated autonomy.** No write to any external system (ad platform, CMS, third-party API) may execute without either an explicit human approval or an `autonomy_policies` row in `mode = 'auto'` for that `(org_id, action_kind)` whose guardrails pass at execute time. The autonomy engine fails closed: on any policy-lookup error the action is gated.
 - **GC2 — Tenant config, not constants.** Corridors, negative-keyword seeds, lead tiers, objectives, currency and brand kit are read from `tenant_config`. No workstream hardcodes CRE values.
-- **GC3 — Search-policy compliance.** No feature may buy or exchange links, generate pages whose primary purpose is ranking manipulation, publish third-party content onto a host domain for its ranking signals, or post automatically to third-party communities. Reference: [Google Search spam policies](https://developers.google.com/search/docs/essentials/spam-policies) (link spam, scaled content abuse, site reputation abuse).
-- **GC4 — Uniform audit ledger.** Auto-executed actions write the same `proposals` row (status `auto_executed`) and `ai_action_log` entry as human-approved ones, and publish to the outbox. There is exactly one changelog.
-- **GC5 — Idempotency.** Every `execute` accepts and honours an idempotency key. Multi-operation platform writes record a compensating entry rather than leaving a silent partial.
-- **GC6 — Tenant isolation.** All new tables carry `org_id`, live under the `adsagent` schema (or `cms` for `cms-service`), enable `FORCE ROW LEVEL SECURITY`, and use a leading-edge tenant index.
+- **GC3 — Search-policy compliance.** No feature may buy or exchange links, generate pages whose primary purpose is ranking manipulation, publish third-party content onto a host domain for its ranking signals, post automatically to third-party communities, serve different content to a crawler than to a user, or send automated queries to a search engine. Reference anchors, each of which a gate reviewer must be able to check independently: [link spam](https://developers.google.com/search/docs/essentials/spam-policies#link-spam), [scaled content abuse](https://developers.google.com/search/docs/essentials/spam-policies#scaled-content), [site reputation abuse](https://developers.google.com/search/docs/essentials/spam-policies#site-reputation), [doorway abuse](https://developers.google.com/search/docs/essentials/spam-policies#doorway-abuse), [cloaking](https://developers.google.com/search/docs/essentials/spam-policies#cloaking), [machine-generated traffic](https://developers.google.com/search/docs/essentials/spam-policies#machine-generated-traffic).
+
+  **Doorway abuse is the policy that actually governs one-page-per-locality**, not scaled content abuse — its examples name "multiple domain names or pages targeted at specific regions or cities that funnel users to one page" and "substantially similar pages that are closer to search results than a clearly defined, browseable hierarchy". Since W7 serves many tenants on many custom domains from one listings database, that first example describes the deployment unless the value gate prevents it.
+
+  **Compliance thresholds are program floors in code, never tenant config.** Tenant config may make a gate stricter; it may never loosen one. This resolves the tension where GC2 would otherwise let a tenant set the minimum-listings threshold to 1 and pass.
+
+  Site reputation abuse is narrower than a blanket ban — the policy turns on content being hosted *mainly for the host's ranking signals*, and editorial columns, syndication and UGC are explicitly not violations. The program's blanket refusal is therefore a deliberate conservative choice, not a policy requirement, and should be described that way.
+
+- **GC4 — Uniform audit ledger.** Auto-executed actions write the same `proposals` row (status `auto_executed`) and the same **`adsagent.audit_log`** entry via `writeAudit` as human-approved ones, and publish to the outbox. There is exactly one changelog.
+
+  Two corrections to the original wording. The ledger is `audit_log`, not `ai_action_log`: migration 013 states `ai_action_log` "is retained in place and **unread**; it is dropped in a later cleanup", and it has no `org_id`, so using it would violate GC6. And the gated path does **not** currently publish to the outbox — `executeProposal` calls `markProposalExecuted` and nothing else — so making the two paths identical means *adding* outbox publication to the gated path, which is W0 work, not a W1 assumption.
+
+- **GC5 — Idempotency.** Every `execute` accepts and honours an idempotency key, backed by a durable store (`adsagent.adapter_idempotency`, W0). Multi-operation platform writes record a compensating entry rather than leaving a silent partial. No platform SDK accepts an idempotency key natively, so this is our store, not theirs.
+
+- **GC6 — Tenant isolation.** Every new table follows the repo's canonical shape verbatim — not a paraphrase of it:
+
+  ```sql
+  BEGIN;
+  CREATE TABLE adsagent.x (
+    id         UUID PRIMARY KEY DEFAULT uuidv7(),
+    org_id     public.org_ref NOT NULL REFERENCES public.orgs(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX x_org_thing_idx ON adsagent.x (org_id, thing, created_at DESC);
+  ALTER TABLE adsagent.x ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE adsagent.x FORCE ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS tenant_isolation ON adsagent.x;
+  CREATE POLICY tenant_isolation ON adsagent.x
+    USING      (org_id = public.current_tenant() OR public.is_platform_read())
+    WITH CHECK (org_id = public.current_tenant());
+  COMMIT;
+  ```
+
+  Every element is load-bearing. `uuidv7()` is the convention in 30 migrations and `gen_random_uuid()` in zero. `public.org_ref` is the domain type used in ~25 migrations. **`FORCE` with no policy is deny-all** — a table shipped without the policy is unreadable by every role, and the natural panic-fix under deadline is `USING (true)`, which is a silent cross-tenant leak. `WITH CHECK` carries as much isolation as `USING`; migration 009 warns explicitly that without it "a tenant can write rows carrying another tenant's org_id". Every migration ships a paired `.down.sql`; the runner requires it.
+
+  Tables read by a scheduler across orgs additionally need a `cross_tenant_read` `FOR SELECT` policy, or `withCrossTenantRead` returns zero rows and the scheduler **silently does nothing**.
+
+  A program-wide test greps every new migration for its policy, following `110_proposal_cross_tenant_claim.test.ts`, so a missing policy fails CI rather than production.
+
+  **Documented exception:** `adsagent.audit_requests` (W9) is anonymous by nature and carries no `org_id`. It is the only exempt table, it must declare explicit `GRANT`s (notably excluding `agent_ro`), and it must carry retention.
+
+- **GC7 — Never log or persist raw error text.** `err.message` is forbidden in any persisted or spanned field. `lib/tracing/redact.ts` documents why: "a Postgres error's message and detail echo row values, a ClickHouse error echoes the query, and a validation error echoes the input" — and platform SDK errors are worse, routinely serialising the failed request including `Authorization` headers. Errors cross boundaries as closed-enum codes via `safeErrorCode`, never free text.
+
+- **GC8 — No cross-range migration references.** Migrations are applied in version order, not merge order, so a lower-numbered migration must never reference an object created in another workstream's higher range. Cross-workstream foreign keys are therefore forbidden; use the documented-external-reference comment pattern from migration 056 instead.
 
 ## Workstream map and dependencies
 
@@ -98,9 +138,9 @@ Two mechanisms prevent eight concurrent worktrees from colliding.
 
 | WS | Owned paths |
 |----|-------------|
-| W0 | `ads-agent/lib/autonomy/`, `ads-agent/lib/channels/`, `ads-agent/lib/tenant-config/`, `ads-agent/lib/publish/` |
-| W1 | `ads-agent/lib/decision-engine/`, `ads-agent/app/(admin)/proposals/`, `ads-agent/app/api/proposals/` |
-| W2 | `ads-agent/lib/connectors/`, `ads-agent/mcp/linkedin-ads-server/` |
+| W0 | `ads-agent/lib/autonomy/`, `ads-agent/lib/channels/`, `ads-agent/lib/tenant-config/`, `ads-agent/lib/publish/`, `ads-agent/lib/types.ts`, `ads-agent/lib/executor/`, `ads-agent/lib/db/proposals.ts`, `ads-agent/lib/net/` (guarded fetch), `ads-agent/mcp/google-ads-server/`, `ads-agent/app/(admin)/settings/autonomy/` |
+| W1 | `ads-agent/lib/decision-engine/`, `ads-agent/app/(admin)/proposals/`, `ads-agent/app/api/proposals/`, `ads-agent/scripts/run-proposal-undo-worker.ts` |
+| W2 | `ads-agent/lib/connectors/`, `ads-agent/mcp/linkedin-ads-server/`, `ads-agent/lib/channels/linkedin-adapter.ts` |
 | W3 | `ads-agent/lib/creative/`, `ads-agent/app/(admin)/creative/` |
 | W4 | `ads-agent/app/api/public/`, `ads-agent/app/.well-known/`, `ads-agent/lib/publicapi/`, `ads-agent/mcp/public-gateway/` |
 | W4a | `auth-service/` (entire existing service) |
@@ -110,7 +150,13 @@ Two mechanisms prevent eight concurrent worktrees from colliding.
 | W8 | `ads-agent/lib/agency/`, `ads-agent/app/(admin)/agency/` |
 | W9 | `app/tools/` routes in the marketing site, `ads-agent/lib/audit-funnel/` |
 
-Shared files that multiple workstreams must touch (`lib/nav-config.ts`, `lib/db/schema.sql` registry comments) are appended to only at each workstream's final task, in a single-line change, to keep conflicts trivial.
+Three mechanisms remove the shared-file conflicts that owned paths alone cannot:
+
+- **`lib/executor/` is W0-owned and becomes a registry.** The current `switch (proposal.kind)` with a throwing `default` would otherwise force W1, W3 and W7 to edit the same statement concurrently. W0 replaces it with `registerExecutor(kind, handler)` so each workstream *adds a file*.
+- **`proposals.kind` stops being a closed `CHECK`.** Today `proposals_kind_check` hardcodes five literals; three workstreams each adding kinds would each need a DROP/ADD restating the full list, and whichever migration applies last silently wins. W0 replaces it with an insert-only `adsagent.proposal_kinds` lookup table.
+- **W0 declares the shared-file exceptions it needs**: it rewrites `lib/decision-engine/strategy-config.ts` (a W1 path) down to a seed export, and it owns `mcp/google-ads-server/` in order to close the ungated write surface. W2 extends the W0-authored `google-adapter.ts` / `meta-adapter.ts` capability lists; that exception is declared rather than implicit.
+
+`lib/nav-config.ts` is appended to only at each workstream's final task, in a single-line change. (The earlier draft also named `lib/db/schema.sql` as a shared ads-agent file — no such file exists; ads-agent's checked-in artefact is the generated `lib/db/baseline.sql`, which must not be hand-edited.)
 
 **2. Migration ranges.** Latest applied migration is `112`. Each workstream owns a disjoint numeric block and may not use another's.
 
@@ -144,6 +190,10 @@ Shared files that multiple workstreams must touch (`lib/nav-config.ts`, `lib/db/
 | Nine parallel workstreams drift on interfaces | W0 freezes shared interfaces before wave 1; each spec restates consumed/produced signatures verbatim |
 | SEO/GEO work drifts toward policy-violating tactics | GC3 is a spec-level constraint reviewed in every workstream gate test |
 | Public API exposes a write path that bypasses the gate | W4 publishes a literal allowlist (not a containment rule); an import boundary forbids `lib/publicapi/` from importing `getAdapter`; an exhaustive registry sweep drives every executable descriptor with `evaluateAutonomy` stubbed to throw |
+| The gate sits *above* the bypass, so every workstream gate test asserts the wrong layer | **W0 moves enforcement below the adapters.** `execute` requires an `ExecutionGrant` that only the autonomy engine can construct (class with a private field, not a forgeable branded alias); the connectors and the Google Ads MCP server reject writes without it; `lib/publicapi/` may not import `getAdapter` at all. Structural, not test-asserted |
+| `cms-service` cannot verify a `proposalId` it is handed — no FK is possible across a schema and service boundary, so any internal-key holder can send a random UUID | `lib/publish/` mints a short-lived HMAC over `(orgId, proposalId, idempotencyKey, actionKind)` after calling `evaluateAutonomy` itself; `cms-service` verifies the HMAC. The gate stops being opt-in per call site |
+| One listings database feeding many tenant domains produces cross-domain near-duplicates, which is doorway abuse in the deployment's own shape | Value gate spans all tenant domains plus the Gentle Space site; shared-source listing prose is excluded from the uniqueness numerator; first-party tenant content is a mandatory component of the distinct-fact count |
+| Anonymous free-audit endpoint fetches user-submitted domains (SSRF, outbound DoS, stored XSS) | W0 owns one guarded-fetch module used by W9 and W6: resolve once, reject private/loopback/link-local/CGNAT/reserved ranges (v4, v6, v4-mapped), connect to the validated IP with explicit Host/SNI, `redirect: 'manual'` revalidating each hop, http/https on 80/443 only, caps on body bytes, decompressed bytes, depth and wall time |
 | **Pre-existing GC1 violation in `mcp/google-ads-server`** — `create_campaign`, `pause_campaign`, `update_campaign_budget` and `add_negative_keyword` mutate Google Ads in-process with no proposal, no autonomy evaluation and no `ai_action_log` entry. The file's comment claims `propose_change` is the only reachable write path, which holds by network placement and Hermes configuration, not by code (the per-profile allowlists in `lib/agent/profiles.ts` gate the context-server task token, and that server has none). | **W1/W2 must route these four tools through the proposal pipeline or remove them.** W4 must not publish them, and their existence is not precedent. Tracked as a W1 task, not deferred to wave 2 |
 | Migration collisions across worktrees | Disjoint per-workstream ranges, above |
 
@@ -153,4 +203,6 @@ Each workstream ships one gate test file (`<ws>-gate.test.ts`) following the exi
 
 ## Revision log
 
-**2026-08-13 — after review.** Split W4a out of W4 (the OAuth authorization server was one sentence in W4 with no owner, no path allocation and no migration budget; `auth-service` has RS256 signing and JWKS but no `/authorize`, `/token`, client store or consent). Added `ads-agent/app/.well-known/` to W4's owned paths, since RFC 9728 derives the metadata path from the resource URI and it must be served from the origin root. Recorded the pre-existing ungated Google Ads MCP mutation tools as a W1/W2 obligation rather than leaving them implicit. Two W0 interfaces changed before freeze: `ToolDescriptor` gained `effect`/`scope`/`internalToolName`, and `ExecutionResult.error.class` gained `quota` with `retryAfterMs`.
+**2026-08-13 — after four-reviewer pass (architecture, data model and security, SEO/GEO, cross-spec consistency).** Verdict was BLOCK; the following program-level corrections landed first because every workstream inherits them. GC3 gained doorway abuse, cloaking and machine-generated traffic, and compliance thresholds became code floors rather than tenant config. GC4 now names `adsagent.audit_log` (migration 013 retired `ai_action_log` as "retained in place and unread", and it has no `org_id`), and records that the gated path does not currently publish to the outbox. GC6 now quotes the canonical DDL verbatim — `uuidv7()`, `public.org_ref`, the FK to `public.orgs`, and the `tenant_isolation` policy with `WITH CHECK` — because `FORCE` with no policy is deny-all and its panic-fix is a permissive policy. Added GC7 (no raw `err.message` anywhere persisted) and GC8 (no cross-range migration references, since migrations apply in version order rather than merge order). Ownership extended to the five unowned load-bearing files; the executor became a registry and `proposals.kind` a lookup table, because three workstreams would otherwise edit one `switch` and one `CHECK` concurrently. Enforcement moved below the adapters via an unforgeable `ExecutionGrant`, and the publish client now mints an HMAC that `cms-service` can actually verify.
+
+**2026-08-13 — after API review.** Split W4a out of W4 (the OAuth authorization server was one sentence in W4 with no owner, no path allocation and no migration budget; `auth-service` has RS256 signing and JWKS but no `/authorize`, `/token`, client store or consent). Added `ads-agent/app/.well-known/` to W4's owned paths, since RFC 9728 derives the metadata path from the resource URI and it must be served from the origin root. Recorded the pre-existing ungated Google Ads MCP mutation tools as a W1/W2 obligation rather than leaving them implicit. Two W0 interfaces changed before freeze: `ToolDescriptor` gained `effect`/`scope`/`internalToolName`, and `ExecutionResult.error.class` gained `quota` with `retryAfterMs`.
