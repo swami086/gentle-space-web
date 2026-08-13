@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { WhyPanel } from "@/components/generative/WhyPanel";
 import { AlertCircle, Clock } from "lucide-react";
 import { ForbiddenNotice } from "@/components/ForbiddenNotice";
 import { requireRole } from "@/lib/auth/dal";
@@ -26,14 +28,17 @@ function undoSecondsRemaining(untilIso: string): number {
 
 export default async function ProposalDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ why?: string }>;
 }) {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
   const scope = await scopeFromSession(access.session);
   const { id } = await params;
+  const { why: whyAnswerId } = await searchParams;
   const proposal = await getProposalById(scope, id);
   if (!proposal) notFound();
 
@@ -135,6 +140,14 @@ export default async function ProposalDetailPage({
         )}
 
         {showReview && preflight && <PreflightPanel preflight={preflight} />}
+
+        <Suspense fallback={null}>
+          <WhyPanel
+            proposalId={proposal.id}
+            proposalKind={proposal.kind}
+            initialAnswerId={whyAnswerId ?? null}
+          />
+        </Suspense>
 
         {!showReview && (
           <div>

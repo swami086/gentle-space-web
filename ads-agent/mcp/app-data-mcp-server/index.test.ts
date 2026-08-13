@@ -20,7 +20,9 @@ const analyticsMock = vi.hoisted(() => ({
 vi.mock("../../lib/openui/crm-tools", () => ({
   createCrmToolProvider: () => crmMock.crmToolProvider,
 }));
-vi.mock("../../lib/openui/analytics-tools", () => analyticsMock);
+vi.mock("../../lib/openui/analytics-tools", () => ({
+  createAnalyticsToolProvider: () => analyticsMock.analyticsToolProvider,
+}));
 
 import { afterEach, vi } from "vitest";
 import { buildAppDataMcpServer } from "./index";
