@@ -13,7 +13,7 @@ vi.mock("../db/proposals", () => ({ listProposals }));
 vi.mock("../db/attribution", () => ({ readAttribution }));
 vi.mock("../db/corridors", () => ({ corridorListingIds }));
 
-import { analyticsToolHandlers, analyticsToolProvider, analyticsToolSpecs } from "./analytics-tools";
+import { analyticsToolHandlers, analyticsToolSpecs, createAnalyticsToolProvider } from "./analytics-tools";
 
 const ORG = { kind: "org" as const, orgId: "org-1" };
 const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -47,7 +47,6 @@ beforeEach(() => {
   listProposals.mockReset();
   readAttribution.mockReset();
   corridorListingIds.mockReset();
-  process.env.ADS_AGENT_ORG_ID = "org-1";
 });
 
 describe("analyticsToolSpecs", () => {
@@ -158,10 +157,28 @@ describe("analyticsToolHandlers.get_per_space_cost_estimate", () => {
   });
 });
 
-describe("analyticsToolProvider", () => {
-  it("binds ADS_AGENT_ORG_ID when invoked through the Copilot registry", async () => {
+describe("createAnalyticsToolProvider", () => {
+  it("binds the provided scope, not ADS_AGENT_ORG_ID", async () => {
+    const scope = { kind: "org" as const, orgId: "10101010-1010-1010-1010-101010101010" };
+    process.env.ADS_AGENT_ORG_ID = "other-org-should-not-be-used";
+
+    const provider = createAnalyticsToolProvider(scope);
     listProposals.mockResolvedValue([]);
-    await analyticsToolProvider.list_pending_proposals({});
-    expect(listProposals).toHaveBeenCalledWith(ORG, "pending");
+    await provider.list_pending_proposals({});
+
+    expect(listProposals).toHaveBeenCalledWith(scope, "pending");
+  });
+
+  it("ignores orgId in tool args", async () => {
+    const scope = { kind: "org" as const, orgId: "10101010-1010-1010-1010-101010101010" };
+    const provider = createAnalyticsToolProvider(scope);
+    getSpendCplTrend.mockResolvedValue([]);
+
+    await provider.get_spend_cpl_trend({
+      orgId: "99999999-9999-9999-9999-999999999999",
+      days: 7,
+    });
+
+    expect(getSpendCplTrend).toHaveBeenCalledWith(scope, 7);
   });
 });
