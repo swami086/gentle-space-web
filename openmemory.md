@@ -158,7 +158,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 ## Implementation plans (docs/superpowers/plans/)
 
-**Plans cover S1–S12; S1–S9a written 2026-08-12, S10–S12 added 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
+**Plans cover S1–S13; S1–S9a written 2026-08-12, S10–S12 implemented 2026-08-13, S13 plan 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
 
 | Plan | Steps | Tasks / waves / max width | PG migrations |
 |---|---|---|---|
@@ -172,6 +172,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 | `2026-08-13-s10-leads-agent.md` | 633 | 5 / 3 / 3 | (none — reuses S9 `100`–`106`) | **IMPLEMENTED** on local `main` (`73c1a1f`, 2026-08-13) — code+docs; manual Hermes E2E gate remaining |
 | `2026-08-13-s11-decision-engine-extensions.md` | — | **15 / 5 / peak 7** (ceiling 8) | `107`–`110` | **IMPLEMENTED** on local `main` (`7e12dec`, 2026-08-13) — E1–E7; gate 125/125; apply migrations before `worker:proposals` |
 | `2026-08-13-s12-kanban-orchestrator.md` | 592 | **9 / 5 / 3** | (none — Kanban in Hermes `kanban.db`) | **IMPLEMENTED** on local `main` (`8b422fd`, 2026-08-13) — orchestrator+leads profiles; **S12-D1** ads-agent wake/seed, Hermes gateway dispatch; chain gate + runbook |
+| `2026-08-13-s13-generative-surfaces.md` | — | **12 / 7 / peak 4** (ceiling 8) | `111` | **PLAN WRITTEN** 2026-08-13 — F1–F5; self-hosted OpenUI; session-scoped tools; grounding/citation; Why/Ask/call-prep |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under
