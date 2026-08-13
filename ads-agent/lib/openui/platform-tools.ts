@@ -1,8 +1,8 @@
 import type { ToolSpec } from "@openuidev/lang-core";
 import type { Scope } from "../db/scope-sql";
-import { campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
+import { createAnalyticsToolProvider, analyticsToolSpecs } from "./analytics-tools";
+import { createCampaignToolProvider, campaignToolSpecs } from "./campaign-tools";
 import { createCrmToolProvider, crmToolSpecs } from "./crm-tools";
-import { analyticsToolProvider, analyticsToolSpecs } from "./analytics-tools";
 
 export type ToolProviderMap = Record<string, (args: Record<string, unknown>) => Promise<unknown>>;
 
@@ -36,9 +36,9 @@ export function composeToolSpecs(...specLists: ToolSpec[][]): ToolSpec[] {
  */
 export function createPlatformToolProvider(scope: Scope): ToolProviderMap {
   return composeToolProviders(
-    campaignToolProvider,
+    createCampaignToolProvider(scope),
     createCrmToolProvider(scope),
-    analyticsToolProvider,
+    createAnalyticsToolProvider(scope),
   );
 }
 

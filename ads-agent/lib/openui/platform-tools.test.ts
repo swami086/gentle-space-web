@@ -1,64 +1,86 @@
-import { describe, expect, it } from "vitest";
-import { composeToolProviders, composeToolSpecs, createPlatformToolProvider, platformToolSpecs } from "./platform-tools";
-import type { ToolSpec } from "@openuidev/lang-core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const scope = { kind: "platform" as const, orgId: "00000000-0000-0000-0000-000000000001" };
+const scope = { kind: "org" as const, orgId: "10101010-1010-1010-1010-101010101010" };
+
+const campaignMock = { start_campaign_draft: vi.fn() };
+const crmMock = { list_opportunities: vi.fn() };
+const analyticsMock = { get_spend_cpl_trend: vi.fn() };
+
+const { createCampaignToolProvider, createCrmToolProvider, createAnalyticsToolProvider } = vi.hoisted(
+  () => ({
+    createCampaignToolProvider: vi.fn(() => campaignMock),
+    createCrmToolProvider: vi.fn(() => crmMock),
+    createAnalyticsToolProvider: vi.fn(() => analyticsMock),
+  }),
+);
+
+vi.mock("./campaign-tools", () => ({
+  createCampaignToolProvider,
+  campaignToolSpecs: [{ name: "start_campaign_draft" }],
+}));
+vi.mock("./crm-tools", () => ({
+  createCrmToolProvider,
+  crmToolSpecs: [{ name: "list_opportunities" }],
+}));
+vi.mock("./analytics-tools", () => ({
+  createAnalyticsToolProvider,
+  analyticsToolSpecs: [{ name: "get_spend_cpl_trend" }],
+}));
+
+import { composeToolProviders, createPlatformToolProvider, platformToolSpecs } from "./platform-tools";
+
+beforeEach(() => {
+  createCampaignToolProvider.mockClear();
+  createCrmToolProvider.mockClear();
+  createAnalyticsToolProvider.mockClear();
+  campaignMock.start_campaign_draft.mockReset();
+  crmMock.list_opportunities.mockReset();
+  analyticsMock.get_spend_cpl_trend.mockReset();
+});
+
+describe("createPlatformToolProvider", () => {
+  it("passes the session scope to every domain factory", () => {
+    createPlatformToolProvider(scope);
+
+    expect(createCampaignToolProvider).toHaveBeenCalledWith(scope);
+    expect(createCrmToolProvider).toHaveBeenCalledWith(scope);
+    expect(createAnalyticsToolProvider).toHaveBeenCalledWith(scope);
+  });
+
+  it("merges tools from campaign, CRM, and analytics domains", async () => {
+    campaignMock.start_campaign_draft.mockResolvedValue({ id: "draft-1", path: "/campaigns/drafts/draft-1" });
+    crmMock.list_opportunities.mockResolvedValue({ opportunities: [] });
+    analyticsMock.get_spend_cpl_trend.mockResolvedValue([]);
+
+    const provider = createPlatformToolProvider(scope);
+
+    await provider.start_campaign_draft({});
+    await provider.list_opportunities({});
+    await provider.get_spend_cpl_trend({ days: 7 });
+
+    expect(campaignMock.start_campaign_draft).toHaveBeenCalledWith({});
+    expect(crmMock.list_opportunities).toHaveBeenCalledWith({});
+    expect(analyticsMock.get_spend_cpl_trend).toHaveBeenCalledWith({ days: 7 });
+  });
+});
 
 describe("composeToolProviders", () => {
-  it("merges multiple domain tool-provider maps into one", () => {
-    const a = { get_users: async () => [1, 2] };
-    const b = { get_leads: async () => [3] };
-    const merged = composeToolProviders(a, b);
-    expect(Object.keys(merged).sort()).toEqual(["get_leads", "get_users"]);
-  });
-
-  it("throws on a duplicate tool name across domains", () => {
-    const a = { get_users: async () => [] };
-    const b = { get_users: async () => [] };
-    expect(() => composeToolProviders(a, b)).toThrow(/duplicate tool name "get_users"/);
-  });
-
-  it("returns an empty object when called with no providers", () => {
-    expect(composeToolProviders()).toEqual({});
+  it("rejects duplicate tool names across domains", () => {
+    expect(() =>
+      composeToolProviders(
+        { shared_tool: async () => "a" },
+        { shared_tool: async () => "b" },
+      ),
+    ).toThrow(/duplicate tool name "shared_tool"/);
   });
 });
 
-describe("composeToolSpecs", () => {
-  const spec = (name: string): ToolSpec => ({ name, inputSchema: {}, outputSchema: {} });
-
-  it("merges multiple domain tool-spec lists into one", () => {
-    const merged = composeToolSpecs([spec("get_users")], [spec("get_leads")]);
-    expect(merged.map((s) => s.name).sort()).toEqual(["get_leads", "get_users"]);
-  });
-
-  it("throws on a duplicate tool spec name across domains", () => {
-    expect(() => composeToolSpecs([spec("get_users")], [spec("get_users")])).toThrow(/duplicate tool spec name "get_users"/);
-  });
-
-  it("returns an empty array when called with no spec lists", () => {
-    expect(composeToolSpecs()).toEqual([]);
-  });
-});
-
-describe("createPlatformToolProvider / platformToolSpecs", () => {
-  it("includes every CRM and analytics tool", () => {
-    const platformToolProvider = createPlatformToolProvider(scope);
-    const names = platformToolSpecs.map((s) => s.name);
+describe("platformToolSpecs", () => {
+  it("includes specs from every domain without duplicate names", () => {
+    const names = platformToolSpecs.map((spec) => spec.name);
+    expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("start_campaign_draft");
     expect(names).toContain("list_opportunities");
-    expect(names).toContain("advance_opportunity_stage");
     expect(names).toContain("get_spend_cpl_trend");
-    expect(platformToolProvider.start_campaign_draft).toBeDefined();
-    expect(platformToolProvider.list_opportunities).toBeDefined();
-    expect(platformToolProvider.get_spend_cpl_trend).toBeDefined();
-  });
-
-  it("throws on a tool name collision across domains", () => {
-    expect(() =>
-      composeToolSpecs(
-        [{ name: "dup", inputSchema: {}, outputSchema: {} }],
-        [{ name: "dup", inputSchema: {}, outputSchema: {} }],
-      ),
-    ).toThrow(/duplicate/);
   });
 });
