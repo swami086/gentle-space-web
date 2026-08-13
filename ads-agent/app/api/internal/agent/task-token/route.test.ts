@@ -9,6 +9,8 @@ vi.mock("@/mcp/context-server/task-token", () => ({ mintTaskToken }));
 import { POST } from "./route";
 import { LEADS_TOOL_ALLOWLIST } from "@/lib/agent/leads-tools";
 import { ORCHESTRATOR_TOOL_ALLOWLIST } from "@/lib/agent/orchestrator-tools";
+import { PERFORMANCE_TOOL_ALLOWLIST } from "@/lib/agent/performance-tools";
+import { CAMPAIGN_TOOL_ALLOWLIST } from "@/lib/agent/campaign-tools";
 
 const ORG = "00000000-0000-4000-8000-0000000000aa";
 const KEY = "test-agent-internal-key";
@@ -49,7 +51,7 @@ describe("POST /api/internal/agent/task-token", () => {
 
   it("returns 403 forbidden_profile for unknown profile", async () => {
     const res = await post(
-      { orgId: ORG, taskId: "t1", profile: "campaign" },
+      { orgId: ORG, taskId: "t1", profile: "research" },
       { "x-agent-internal-key": KEY },
     );
     expect(res.status).toBe(403);
@@ -96,6 +98,40 @@ describe("POST /api/internal/agent/task-token", () => {
       toolAllowlist: [...LEADS_TOOL_ALLOWLIST],
       ttlSeconds: 120,
     });
+  });
+
+  it("mints for performance with server allowlist", async () => {
+    const res = await post(
+      { orgId: ORG, taskId: "task-perf", profile: "performance", ttlSeconds: 600 },
+      { "x-agent-internal-key": KEY },
+    );
+    expect(res.status).toBe(200);
+    expect(mintTaskToken).toHaveBeenCalledWith({
+      orgId: ORG,
+      taskId: "task-perf",
+      profile: "performance",
+      toolAllowlist: [...PERFORMANCE_TOOL_ALLOWLIST],
+      ttlSeconds: 600,
+    });
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).toContain("get_campaign_performance");
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).toContain("create_proposal");
+  });
+
+  it("mints for campaign with server allowlist", async () => {
+    const res = await post(
+      { orgId: ORG, taskId: "task-camp", profile: "campaign", ttlSeconds: 450 },
+      { "x-agent-internal-key": KEY },
+    );
+    expect(res.status).toBe(200);
+    expect(mintTaskToken).toHaveBeenCalledWith({
+      orgId: ORG,
+      taskId: "task-camp",
+      profile: "campaign",
+      toolAllowlist: [...CAMPAIGN_TOOL_ALLOWLIST],
+      ttlSeconds: 450,
+    });
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).toContain("get_campaign_performance");
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).toContain("search_spaces");
   });
 
   it("ignores client toolAllowlist if somehow present", async () => {

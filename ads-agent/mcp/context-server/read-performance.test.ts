@@ -89,6 +89,20 @@ describe("getCampaignPerformance", () => {
     expect(err.message).toBe("clickhouse_unavailable");
     expect(String(err)).not.toContain("asha@example.com");
   });
+
+  it("fetches only AGENT_CLICKHOUSE_URL (replica), never a postgres-looking host", async () => {
+    await getCampaignPerformance(CLAIMS, { windowDays: 7 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url.startsWith("http://clickhouse:8123")).toBe(true);
+    expect(url).not.toMatch(/5432|5433|5434/);
+  });
+
+  it("SQL body targets campaign_performance_daily, not performance_snapshots", async () => {
+    await getCampaignPerformance(CLAIMS, { windowDays: 7 });
+    const body = String(fetchMock.mock.calls[0][1].body);
+    expect(body).toContain("campaign_performance_daily");
+    expect(body).not.toContain("performance_snapshots");
+  });
 });
 
 describe("resolveClickHouseUrl", () => {
