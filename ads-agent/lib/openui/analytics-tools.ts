@@ -68,20 +68,14 @@ export const analyticsToolHandlers: Record<string, ScopedToolHandler> = {
   },
 };
 
-function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolProviderMap {
+export function createAnalyticsToolProvider(scope: Scope): ToolProviderMap {
   return Object.fromEntries(
-    Object.entries(handlers).map(([name, fn]) => [
+    Object.entries(analyticsToolHandlers).map(([name, fn]) => [
       name,
-      (args: Record<string, unknown>) => {
-        const orgId = process.env.ADS_AGENT_ORG_ID;
-        if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-        return fn({ kind: "org" as const, orgId }, args);
-      },
+      (args: Record<string, unknown>) => fn(scope, args),
     ]),
-  );
+  ) as ToolProviderMap;
 }
-
-export const analyticsToolProvider: ToolProviderMap = bindScopedHandlers(analyticsToolHandlers);
 
 export const analyticsToolSpecs: ToolSpec[] = [
   {
