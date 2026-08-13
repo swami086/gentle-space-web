@@ -2,14 +2,16 @@ import { createServer } from "node:http";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { hostHeaderValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
+import { createAnalyticsToolProvider } from "../../lib/openui/analytics-tools";
 import { createCrmToolProvider } from "../../lib/openui/crm-tools";
-import { analyticsToolProvider } from "../../lib/openui/analytics-tools";
 
 // The app-data MCP server runs as a local developer tool with no session, so
 // its tenant comes from the environment and is explicit rather than implied.
 const orgId = process.env.MCP_ORG_ID;
 if (!orgId) throw new Error("app-data-mcp-server: MCP_ORG_ID is required");
-const crmToolProvider = createCrmToolProvider({ kind: "org", orgId });
+const scope = { kind: "org" as const, orgId };
+const crmToolProvider = createCrmToolProvider(scope);
+const analyticsToolProvider = createAnalyticsToolProvider(scope);
 
 /** Host-header allowlist for the DNS-rebinding guard, driven by APP_DATA_MCP_ALLOWED_HOSTS
  * (comma-separated). Defaults to localhost-only for the tsx-on-host workflow; docker-compose.yml
@@ -31,7 +33,7 @@ export function resolveAppDataMcpBind(): string {
 }
 
 /** Builds (but does not connect/serve) the read-only CRM + analytics MCP server — 6 read tools,
- * zero write tools. Wraps the existing crmToolProvider/analyticsToolProvider verbatim; no new
+ * zero write tools. Wraps scoped createCrmToolProvider/createAnalyticsToolProvider; no new
  * business logic. advance_opportunity_stage (the one CRM mutation) is intentionally not exposed —
  * propose_change on the Google Ads MCP server remains the only write path Hermes can reach. */
 export function buildAppDataMcpServer(): McpServer {
