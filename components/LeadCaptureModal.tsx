@@ -155,9 +155,11 @@ export function LeadCaptureModal() {
               {title}
             </h2>
             <p className="text-[15px] leading-[1.45] text-[var(--ink-secondary)]">{headerHelper}</p>
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Step {stepIndex + 1} of {steps.length}
-            </p>
+            {!submittedWhatsAppUrl && (
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Step {stepIndex + 1} of {steps.length}
+              </p>
+            )}
           </div>
           <button
             type="button"

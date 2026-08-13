@@ -26,6 +26,8 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | Area | Key paths |
 |------|-----------|
 | Brand lockup | `components/BrandWordmark.tsx`, `components/BrandLogoMark.tsx`, `lib/site.ts` (`name` / `nameCore` / `nameQualifier`) |
+| WhatsApp lead handoff | `lib/leads/whatsapp-handoff.ts` — `submitWhatsAppHandoff(lead, { openWindow, postLead })` opens `buildWhatsAppUrl(lead)` via injectable `openWindow` **before** fire-and-forget `postLead`; returns `{ whatsappUrl }`. Wired from `LeadCaptureModal.handleSubmit`. Tests: `whatsapp-handoff.test.ts`. |
+| Lead capture confirmation | `components/LeadCaptureConfirmation.tsx` — post-submit panel (`role="status"`): reopen link + Done; `LeadCaptureModal` swaps form for this when `submittedWhatsAppUrl` is set. |
 | Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `ApproxAreaMap`, `useGoogleMap`, `SpaceGallery`, `SpaceInsightPanel` |
 | Search API | `app/api/spaces/search/route.ts` |
 | Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
@@ -94,6 +96,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 
 ## Patterns
 
+- **WhatsApp lead handoff (2026-08-13):** User-gesture popup reliability — `submitWhatsAppHandoff` must call `openWindow` synchronously before any `await`/`void postLead`. Post-submit UX uses `LeadCaptureConfirmation` (reopen link + Done) instead of closing the modal. Timeline buckets live in `TIMELINE_BUCKETS` / `Step2Field.kind: "choice"` for office/retail only; lease rent/timeline stays free text.
 - **v3 Calm Structured production UI (2026-08-01):** Source Sans 3 + Source Serif 4, dual theme (`ThemeProvider` + `gs-theme` + `public/theme-init.js`), Motion `Reveal`, accent `#6840B8`. Tokens in `app/globals.css` (`--accent-soft`, `--surface-tint` alias, `--bg`/`--surface`/`--border`/`--ink*`/`--muted`/`--on-accent`/`--radius`). Theme toggle in `SiteHeader` only (`SpacesHeader` is page-title band). Token-first restyle of home + Spaces browse/detail in place; do not change APIs/privacy/`toPublicListing` for UI work. Brand lockup: `BrandWordmark` = ink `Gentle Space` + hairline + accent tracked `CRE` submark (not tinted same-size text, not pill chip); circular mark PNG preserved. Spec: `docs/superpowers/specs/2026-08-01-v3-calm-structured-production-redesign.md`. Lab: `frontend-redesign/v3-calm-structured/`. Branch: `feat/v3-calm-production-ui`.
 - Listing privacy read boundary: `app/spaces/page.tsx`, `app/api/spaces/search/route.ts`, and `app/spaces/[slug]/page.tsx` all map DB rows through `toPublicListing()` before HTML/JSON; `PublicListing` uses `?: never` on forbidden fields. Cards/detail show `displayLocationLine()` and fixed "Ask for pricing" copy (budget filter removed).
 - Spaces filters stay pure in `lib/listings/filterListings.ts` (typed on `PublicListing`).
