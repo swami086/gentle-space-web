@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import { scopeClause, type Scope } from "./scope-sql";
 import { orgIdForWrite } from "./scope-write";
@@ -5,6 +6,10 @@ import { withTenantTransaction } from "./tx";
 
 export const REPLY_STATES = ["waiting", "called", "closed"] as const;
 export type ReplyState = (typeof REPLY_STATES)[number];
+
+export function mintInboundReplyToken(): string {
+  return randomBytes(16).toString("hex");
+}
 
 export type Enquiry = {
   id: string;
@@ -21,6 +26,7 @@ export type Enquiry = {
   firstSeenAt: string;
   lastActivityAt: string;
   lifecycle: "active" | "suppressed" | "erased";
+  inboundReplyToken: string | null;
   createdAt: string;
 };
 
@@ -48,12 +54,13 @@ type EnquiryRow = {
   first_seen_at: Date;
   last_activity_at: Date;
   lifecycle: "active" | "suppressed" | "erased";
+  inbound_reply_token: string | null;
   created_at: Date;
 };
 
 const COLUMNS = `id, org_id, contact_id, twenty_opportunity_id, listing_id, listing_url,
                  corridor_id, reply_state, contact_name, contact_phone, contact_email,
-                 first_seen_at, last_activity_at, lifecycle, created_at`;
+                 first_seen_at, last_activity_at, lifecycle, inbound_reply_token, created_at`;
 
 function rowToEnquiry(row: EnquiryRow): Enquiry {
   return {
@@ -71,6 +78,7 @@ function rowToEnquiry(row: EnquiryRow): Enquiry {
     firstSeenAt: row.first_seen_at.toISOString(),
     lastActivityAt: row.last_activity_at.toISOString(),
     lifecycle: row.lifecycle,
+    inboundReplyToken: row.inbound_reply_token,
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -88,8 +96,8 @@ export async function createEnquiry(
   const orgId = orgIdForWrite(scope);
   const sql = `INSERT INTO adsagent.enquiries
                  (org_id, contact_id, listing_id, listing_url,
-                  contact_name, contact_phone, contact_email)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+                  contact_name, contact_phone, contact_email, inbound_reply_token)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING ${COLUMNS}`;
   const params = [
     orgId,
@@ -99,6 +107,7 @@ export async function createEnquiry(
     input.contactName,
     input.contactPhone ?? null,
     input.contactEmail ?? null,
+    mintInboundReplyToken(),
   ];
   if (client) {
     const { rows } = await client.query<EnquiryRow>(sql, params);
@@ -218,6 +227,41 @@ export async function listEnquiriesAwaitingOpportunity(
       [...clause.params, contactId],
     );
     return rows.map(rowToEnquiry);
+  });
+}
+
+export async function findEnquiryByReplyToken(
+  scope: Scope,
+  token: string,
+): Promise<Enquiry | null> {
+  const clause = scopeClause(scope);
+  return withTenantTransaction(scope, async (c) => {
+    const { rows } = await c.query<EnquiryRow>(
+      `SELECT ${COLUMNS} FROM adsagent.enquiries
+        WHERE ${clause.sql} AND lifecycle = 'active' AND inbound_reply_token = $${clause.params.length + 1}`,
+      [...clause.params, token],
+    );
+    return rows[0] ? rowToEnquiry(rows[0]) : null;
+  });
+}
+
+export async function findOpenEnquiryForContact(
+  scope: Scope,
+  contactId: string,
+): Promise<Enquiry | null> {
+  const clause = scopeClause(scope);
+  return withTenantTransaction(scope, async (c) => {
+    const { rows } = await c.query<EnquiryRow>(
+      `SELECT ${COLUMNS} FROM adsagent.enquiries
+        WHERE ${clause.sql}
+          AND lifecycle = 'active'
+          AND reply_state <> 'closed'
+          AND contact_id = $${clause.params.length + 1}
+        ORDER BY last_activity_at DESC
+        LIMIT 1`,
+      [...clause.params, contactId],
+    );
+    return rows[0] ? rowToEnquiry(rows[0]) : null;
   });
 }
 

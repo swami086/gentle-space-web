@@ -6,12 +6,21 @@ vi.mock("./tx", () => ({
     fn({ query }),
 }));
 
+const TOKEN = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const mockRandomBytes = vi.fn(() => Buffer.alloc(16, 0xaa));
+vi.mock("node:crypto", () => ({
+  randomBytes: (...args: unknown[]) => mockRandomBytes(...args),
+}));
+
 import type { Scope } from "./scope-sql";
 import {
   countEnquiriesByState,
   createEnquiry,
+  findEnquiryByReplyToken,
+  findOpenEnquiryForContact,
   getEnquiryById,
   listEnquiries,
+  mintInboundReplyToken,
   setReplyState,
   setTwentyOpportunityId,
 } from "./enquiries";
@@ -34,9 +43,20 @@ const row = {
   last_activity_at: new Date("2026-08-12T04:00:00.000Z"),
   lifecycle: "active",
   created_at: new Date("2026-08-12T04:00:00.000Z"),
+  inbound_reply_token: TOKEN,
 };
 
-beforeEach(() => query.mockReset());
+beforeEach(() => {
+  query.mockReset();
+  mockRandomBytes.mockClear();
+});
+
+describe("mintInboundReplyToken", () => {
+  it("returns 32 hex chars from 16 random bytes", () => {
+    expect(mintInboundReplyToken()).toBe(TOKEN);
+    expect(mockRandomBytes).toHaveBeenCalledWith(16);
+  });
+});
 
 describe("createEnquiry", () => {
   it("commits with no Twenty identifier and starts in the waiting state", async () => {
@@ -53,6 +73,7 @@ describe("createEnquiry", () => {
     expect(sql).toContain("INSERT INTO adsagent.enquiries");
     const insertedColumns = sql.match(/INSERT INTO adsagent\.enquiries\s*\(([^)]*)\)/)?.[1] ?? "";
     expect(insertedColumns).not.toContain("twenty_opportunity_id");
+    expect(insertedColumns).toContain("inbound_reply_token");
     expect(params).toEqual([
       "org-1",
       "contact-1",
@@ -61,7 +82,9 @@ describe("createEnquiry", () => {
       "Asha Rao",
       "+919800000000",
       null,
+      TOKEN,
     ]);
+    expect(enquiry.inboundReplyToken).toBe(TOKEN);
   });
 
   it("refuses platform scope", async () => {
@@ -121,6 +144,42 @@ describe("setTwentyOpportunityId", () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/twenty_opportunity_id\s*=\s*\$\d+/);
     expect(params).toEqual(["org-1", "opp-9", "enq-1"]);
+  });
+});
+
+describe("findEnquiryByReplyToken", () => {
+  it("scopes by org and matches the inbound reply token", async () => {
+    query.mockResolvedValue({ rows: [row] });
+    const enquiry = await findEnquiryByReplyToken(scope, TOKEN);
+    expect(enquiry?.id).toBe("enq-1");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("inbound_reply_token = $");
+    expect(sql).toContain("lifecycle = 'active'");
+    expect(params).toEqual(["org-1", TOKEN]);
+  });
+
+  it("returns null when no row matches", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await expect(findEnquiryByReplyToken(scope, "missing")).resolves.toBeNull();
+  });
+});
+
+describe("findOpenEnquiryForContact", () => {
+  it("returns the newest open enquiry for the contact", async () => {
+    query.mockResolvedValue({ rows: [row] });
+    const enquiry = await findOpenEnquiryForContact(scope, "contact-1");
+    expect(enquiry?.id).toBe("enq-1");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("contact_id = $");
+    expect(sql).toContain("lifecycle = 'active'");
+    expect(sql).toContain("reply_state <> 'closed'");
+    expect(sql).toContain("ORDER BY last_activity_at DESC");
+    expect(params).toEqual(["org-1", "contact-1"]);
+  });
+
+  it("returns null when the contact has no open enquiry", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await expect(findOpenEnquiryForContact(scope, "contact-1")).resolves.toBeNull();
   });
 });
 
