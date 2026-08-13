@@ -130,4 +130,4 @@ components/LeadCaptureModal.tsx
 5. Add the three copy additions (phone helper text, `(optional)` labels, "not a bot" line).
 6. Extend tests per the Testing section; run the full existing suite to confirm no regression in soft-fail/PII/CRM behavior.
 
-Detailed task breakdown follows in a writing-plans doc after this spec is reviewed.
+Detailed task breakdown: [`docs/superpowers/plans/2026-08-13-whatsapp-lead-capture-cx-amendment.md`](../plans/2026-08-13-whatsapp-lead-capture-cx-amendment.md).
