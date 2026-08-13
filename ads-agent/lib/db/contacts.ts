@@ -69,12 +69,6 @@ export async function createContact(
   });
 }
 
-/**
- * Follows exactly one merge hop. Twenty's dedup can point a losing row at a
- * survivor; a chain longer than one hop means the sync consumer wrote a
- * tombstone at a tombstone, which is a bug worth seeing rather than papering
- * over with recursion (tenancy spec §8).
- */
 export async function findContactByPhone(scope: Scope, phone: string): Promise<Contact | null> {
   const clause = scopeClause(scope);
   const n = clause.params.length;
@@ -89,6 +83,12 @@ export async function findContactByPhone(scope: Scope, phone: string): Promise<C
   });
 }
 
+/**
+ * Follows exactly one merge hop. Twenty's dedup can point a losing row at a
+ * survivor; a chain longer than one hop means the sync consumer wrote a
+ * tombstone at a tombstone, which is a bug worth seeing rather than papering
+ * over with recursion (tenancy spec §8).
+ */
 export async function getContactById(scope: Scope, id: string): Promise<Contact | null> {
   const clause = scopeClause(scope);
   return withTenantTransaction(scope, async (c) => {
