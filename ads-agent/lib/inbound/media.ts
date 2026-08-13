@@ -11,7 +11,7 @@ export type InboundMediaItem = {
   bytes?: Uint8Array;
 };
 
-const DEFAULT_INBOUND_MEDIA_MAX_BYTES = 8 * 1024 * 1024; // 8 MiB, bounded but large enough for images/docs
+const DEFAULT_INBOUND_MEDIA_MAX_BYTES = 25_000_000; // S15-D9: 25 MB default inbound media cap
 
 function getInboundMediaMaxBytesFromEnv(): number {
   const raw = process.env.INBOUND_MEDIA_MAX_BYTES;

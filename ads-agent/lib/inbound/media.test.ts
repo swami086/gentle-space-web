@@ -124,6 +124,60 @@ describe("storeInboundMedia", () => {
     expect(result.skipped[0]).toContain("oversize");
   });
 
+  it("uses S15-D9 default cap of 25_000_000 bytes when env is unset", async () => {
+    const prev = process.env.INBOUND_MEDIA_MAX_BYTES;
+    delete process.env.INBOUND_MEDIA_MAX_BYTES;
+
+    try {
+      let nextId = 1;
+      const putArtifactImpl = vi.fn(async (_scope: Scope, input: unknown): Promise<ArtifactRow> => {
+        const id = `a${nextId++}`;
+        const { contentType, mediaType, body, subjectRefs } = input as {
+          contentType: string;
+          mediaType?: string;
+          body: Uint8Array;
+          subjectRefs?: string[];
+        };
+        return makeArtifact(id, { contentType, mediaType, body, subjectRefs });
+      });
+
+      const { storeInboundMedia } = await import("./media");
+
+      const atLimit = new Uint8Array(25_000_000);
+      const resultAtLimit = await storeInboundMedia(
+        SCOPE,
+        SUBJECT,
+        [{ source: "postmark", mediaType: "application/pdf", bytes: atLimit }],
+        { putArtifact: putArtifactImpl as never },
+      );
+
+      expect(resultAtLimit.artifactIds).toHaveLength(1);
+      expect(resultAtLimit.skipped).toEqual([]);
+
+      putArtifactImpl.mockClear();
+
+      const overLimit = new Uint8Array(25_000_001);
+      const resultOverLimit = await storeInboundMedia(
+        SCOPE,
+        SUBJECT,
+        [{ source: "postmark", mediaType: "application/pdf", bytes: overLimit }],
+        { putArtifact: putArtifactImpl as never },
+      );
+
+      expect(putArtifactImpl).not.toHaveBeenCalled();
+      expect(resultOverLimit.artifactIds).toEqual([]);
+      expect(resultOverLimit.skipped).toHaveLength(1);
+      expect(resultOverLimit.skipped[0]).toContain("too_large");
+      expect(resultOverLimit.skipped[0]).toContain("25000001>25000000");
+    } finally {
+      if (prev !== undefined) {
+        process.env.INBOUND_MEDIA_MAX_BYTES = prev;
+      } else {
+        delete process.env.INBOUND_MEDIA_MAX_BYTES;
+      }
+    }
+  });
+
   it("returns empty arrays for an empty list without calling dependencies", async () => {
     const putArtifactImpl = vi.fn();
     const fetchWhatsAppMedia = vi.fn();
