@@ -15,6 +15,7 @@ export const OUTBOX_TOPICS = [
   "reminder.due",
   "deletion.requested",
   "portal.event",
+  "inbound.message_received",
 ] as const;
 
 export type OutboxTopic = (typeof OUTBOX_TOPICS)[number];
