@@ -134,6 +134,7 @@ describe("markInboundEventProcessed", () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain("status = 'processed'");
     expect(sql).toContain("processed_at = now()");
+    expect(sql).toContain("AND status = 'pending'");
     expect(params).toEqual(["evt-1"]);
   });
 });
@@ -145,6 +146,7 @@ describe("markInboundEventFailed", () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain("status = 'failed'");
     expect(sql).toContain("last_error = $2");
+    expect(sql).toContain("AND status = 'pending'");
     expect(params).toEqual(["evt-1", "media download failed"]);
   });
 });

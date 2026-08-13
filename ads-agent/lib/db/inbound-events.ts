@@ -102,7 +102,8 @@ export async function markInboundEventProcessed(scope: Scope, id: string): Promi
     await c.query(
       `UPDATE adsagent.inbound_events
           SET status = 'processed', processed_at = now()
-        WHERE id = $1`,
+        WHERE id = $1
+          AND status = 'pending'`,
       [id],
     );
   });
@@ -118,7 +119,8 @@ export async function markInboundEventFailed(
     await c.query(
       `UPDATE adsagent.inbound_events
           SET status = 'failed', last_error = $2, processed_at = now()
-        WHERE id = $1`,
+        WHERE id = $1
+          AND status = 'pending'`,
       [id, error.slice(0, 2000)],
     );
   });
