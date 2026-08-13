@@ -28,6 +28,7 @@ Standalone Next.js marketing + coworking listings site for **Gentle Space CRE** 
 | Brand lockup | `components/BrandWordmark.tsx`, `components/BrandLogoMark.tsx`, `lib/site.ts` (`name` / `nameCore` / `nameQualifier`) |
 | WhatsApp lead handoff | `lib/leads/whatsapp-handoff.ts` — `submitWhatsAppHandoff(lead, { openWindow, postLead })` opens `buildWhatsAppUrl(lead)` via injectable `openWindow` **before** fire-and-forget `postLead`; returns `{ whatsappUrl }`. Wired from `LeadCaptureModal.handleSubmit`. Tests: `whatsapp-handoff.test.ts`. |
 | Lead capture confirmation | `components/LeadCaptureConfirmation.tsx` — post-submit panel (`role="status"`): reopen link + Done; `LeadCaptureModal` swaps form for this when `submittedWhatsAppUrl` is set. |
+| S15 inbound expansion (design) | Spec `docs/superpowers/specs/2026-08-13-s15-inbound-expansion-design.md` — Postmark + Meta WA Cloud webhooks → `inbound_events` + outbox → worker → `enquiry_messages` + Garage `inbound_media`; platform org only; BD2 no send. |
 | Browse UI | `components/spaces/SpacesBrowseClient.tsx`, `SpacesHomeHero`, `SpacesBrowseChrome`, `SpacesAiSearch`, `SpacesFiltersModal`, `SpacesMap`, `ApproxAreaMap`, `useGoogleMap`, `SpaceGallery`, `SpaceInsightPanel` |
 | Search API | `app/api/spaces/search/route.ts` |
 | Insight API | `app/api/spaces/insight/route.ts` — 503/400/404/502 contract; UUID validation before DB |
