@@ -174,7 +174,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 | `2026-08-13-s11-decision-engine-extensions.md` | — | **15 / 5 / peak 7** (ceiling 8) | `107`–`110` | **IMPLEMENTED** on local `main` (`7e12dec`, 2026-08-13) — E1–E7; gate 125/125; apply migrations before `worker:proposals` |
 | `2026-08-13-s12-kanban-orchestrator.md` | 592 | **9 / 5 / 3** | (none — Kanban in Hermes `kanban.db`) | **IMPLEMENTED** on local `main` (`8b422fd`, 2026-08-13) — orchestrator+leads profiles; **S12-D1** ads-agent wake/seed, Hermes gateway dispatch; chain gate + runbook |
 | `2026-08-13-s13-generative-surfaces.md` | — | **12 / 7 / peak 4** (ceiling 8) | `111` | **IMPLEMENTED** on local `main` (`aa35cb4`, 2026-08-13) — F1–F5; gate `s13-gate.test.ts`; migration 111 applied on consolidated `:5433` |
-| `2026-08-13-s14-performance-campaign-agents` (design) | — | plan next | (none expected) | **DESIGN DRAFT** `docs/superpowers/specs/2026-08-13-s14-performance-campaign-agents-design.md` — option 3: Hermes profiles + CH gate + Google Ads MCP enrich |
+| `2026-08-13-s14-performance-campaign-agents.md` | — | **12 / 4 / peak 5** (ceiling 8) | (none) | **PLAN READY** — option 3; design `2026-08-13-s14-performance-campaign-agents-design.md`; gate live Hermes + Docker CH |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under

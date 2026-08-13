@@ -1,7 +1,8 @@
 # S14 — `performance` and `campaign` agents — design
 
 Date: 2026-08-13  
-Status: draft (awaiting user review of this written spec)  
+Status: approved (plan written; await execution choice)
+  
 Build step: **S14** ([`2026-08-12-build-sequence.md`](2026-08-12-build-sequence.md))  
 Maps to: agent topology Stage 4 ([`2026-08-12-agent-topology-design.md`](2026-08-12-agent-topology-design.md) §4, §10)  
 Depends on: **S9–S13** on local `main` (context MCP, task tokens, ClickHouse `get_campaign_performance`, Kanban/orchestrator pattern, decision preflight E2 available for campaign drafts)  
