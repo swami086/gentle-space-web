@@ -144,18 +144,24 @@ The executor calls `evaluateAutonomy` a second time immediately before the adapt
 export type ChannelId = 'google' | 'meta' | 'linkedin';
 
 export type ToolDescriptor = {
-  name: string;                    // 'google.update_campaign_budget'
+  name: string;                    // channel-qualified: 'google.update_campaign_budget'
+  internalToolName: string | null; // bare name on an internal MCP server, or null if none
   description: string;
   inputSchema: Record<string, unknown>;   // JSON Schema
-  mutating: boolean;
-  actionKind?: string;             // required when mutating
+  effect: 'read' | 'propose' | 'execute';
+  scope: string;                   // e.g. 'ads:read' | 'ads:propose' | 'ads:write'
+  actionKind?: string;             // required when effect === 'execute'
 };
 
 export type ExecutionResult = {
   ok: boolean;
   externalIds: string[];
   compensated?: boolean;
-  error?: { class: 'transient' | 'policy' | 'auth' | 'validation'; message: string };
+  error?: {
+    class: 'transient' | 'quota' | 'policy' | 'auth' | 'validation';
+    message: string;
+    retryAfterMs?: number;         // required when class === 'quota'
+  };
 };
 
 export type ChannelAdapter = {
@@ -170,9 +176,19 @@ export type ChannelAdapter = {
 export function registerAdapter(adapter: ChannelAdapter): void;
 export function getAdapter(id: ChannelId): ChannelAdapter;
 export function listToolDescriptors(): ToolDescriptor[];
+
+// Scope hierarchy: a broader scope implies narrower ones. Declared once, here.
+export const SCOPE_IMPLIES: Readonly<Record<string, readonly string[]>>;
+export function scopeSatisfies(granted: string[], required: string): boolean;
 ```
 
 `ExecuteContext` carries `{ orgId, idempotencyKey, proposalId, dryRun }`. Adapters must treat a repeated `idempotencyKey` as a no-op returning the original `externalIds`.
+
+Three fields exist for reasons that are not obvious from the type alone.
+
+`effect` is three-valued rather than a `mutating` boolean because a boolean cannot distinguish "create a proposal" from "write to the ad account", and W4 needs exactly that distinction to offer a propose-only scope. `scope` is carried on the descriptor rather than derived by a consumer, so the catalogue is the single source of authorisation truth. `internalToolName` records the bare tool name on whichever internal MCP server backs the descriptor (or `null` where none does), because the internal servers use unqualified names and any cross-check between the two namespaces needs a declared mapping rather than a set comparison that would silently compare disjoint sets.
+
+`quota` is a distinct error class from `transient` because platform quota exhaustion must **not** be retried on the transient backoff path — Google Ads returns `RESOURCE_EXHAUSTED` against a daily operation quota and Meta reports headroom in `X-Business-Use-Case-Usage`, so a retry loop burns the remaining allowance and can starve the internal decision engine, which shares the same credentials. A `quota` error suspends that channel's writes for the tenant until `retryAfterMs` elapses.
 
 ### Migration of existing connectors
 
@@ -257,7 +273,8 @@ Policy lookup failure, config parse failure and registry lookup failure all fail
 
 - `lib/autonomy/evaluate.test.ts` — table-driven over every reason code; asserts fail-closed on `null` policy and on each kill switch.
 - `lib/autonomy/policies.db.test.ts` — promotion after N clean outcomes, demotion on revert, tenant isolation.
-- `lib/channels/registry.test.ts` — descriptor generation, `mutating` descriptors always carry `actionKind`, unknown adapter throws.
+- `lib/channels/registry.test.ts` — descriptor generation, `effect: 'execute'` descriptors always carry `actionKind` and a write scope, every descriptor carries a `scope`, `internalToolName` is either null or a name that exists on an internal server, unknown adapter throws.
+- `lib/channels/scopes.test.ts` — `scopeSatisfies` is transitive across `SCOPE_IMPLIES` and rejects unrelated scopes.
 - `lib/channels/*-adapter.test.ts` — error classification and idempotency no-op behaviour, with the platform SDK mocked.
 - `lib/tenant-config/config.db.test.ts` — schema validation, seed migration produces a valid `CreConfig`, RLS isolation.
 - `lib/publish/client.test.ts` — contract shape and header/idempotency propagation against a stub server.

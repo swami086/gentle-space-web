@@ -90,11 +90,13 @@ export function resumeCampaign(scope: OrgScope, campaignId: string): Promise<voi
 
 ## Error handling
 
-Every adapter maps platform errors into the W0 taxonomy: rate limits and 5xx are `transient`; disapprovals, policy violations and billing holds are `policy`; expired or revoked tokens are `auth`; schema and length violations are `validation` and should have been caught at preflight — a `validation` error reaching the platform is a preflight bug and is logged as such.
+Every adapter maps platform errors into the W0 taxonomy: transient 5xx and short-window rate limits are `transient`; **daily/account quota exhaustion is `quota`** (Google Ads `RESOURCE_EXHAUSTED`, Meta's `X-Business-Use-Case-Usage` headroom) and carries `retryAfterMs` — it must never be classified `transient`, because retrying into an exhausted quota burns the remaining allowance shared with the internal decision engine; disapprovals, policy violations and billing holds are `policy`; expired or revoked tokens are `auth`; schema and length violations are `validation` and should have been caught at preflight — a `validation` error reaching the platform is a preflight bug and is logged as such.
+
+A `quota` error suspends writes for that `(org, channel)` until `retryAfterMs` elapses, and the adapter surfaces remaining headroom where the platform reports it, so the executor can back off before exhaustion rather than after.
 
 ## Testing
 
-- `linkedin-adapter.test.ts` — every capability against a mocked MCP client; error classification table; idempotency-key replay returns the original ids without a second write.
+- `linkedin-adapter.test.ts` — every capability against a mocked MCP client; error classification table including `quota` vs `transient`; idempotency-key replay returns the original ids without a second write.
 - `credentials.test.ts` — `env://` resolution, missing ref throws, resolved values never appear in a log line (assert on a captured logger).
 - `connections.db.test.ts` — suspension isolates one tenant/channel; RLS prevents cross-org reads.
 - `live-smoke.test.ts` — env-flagged real-account smoke, following `mcp/google-ads-server/live-smoke.test.ts`.

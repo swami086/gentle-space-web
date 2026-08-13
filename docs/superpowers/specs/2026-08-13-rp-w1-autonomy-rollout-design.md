@@ -17,6 +17,7 @@ W0 ships the autonomy engine but nothing calls it. The decision engine still rou
 2. Define the action-kind taxonomy for ad operations and seed sensible default guardrails per kind.
 3. Add cross-channel budget reallocation, which today has no rule at all.
 4. Give operators a supervision surface: an activity feed of auto-executed changes with one-click undo inside the window.
+5. **Close the pre-existing GC1 violation in `mcp/google-ads-server`.** That server registers `create_campaign`, `pause_campaign`, `update_campaign_budget` and `add_negative_keyword`, each calling the connector in-process with no proposal, no autonomy evaluation and no `ai_action_log` entry. Its comment claims `propose_change` is the only reachable write path, but that holds only by network placement and Hermes configuration — the server has no token auth, and the per-profile allowlists in `lib/agent/profiles.ts` gate the context-server task token, not this one. Route all four through `proposeChange` (so they create proposals) or remove them. This is a task in this workstream, not a wave-2 cleanup.
 
 ## Non-goals
 
@@ -87,7 +88,7 @@ export function undoProposal(orgId: string, proposalId: string): Promise<{ rever
 
 ## Error handling
 
-An `auto` execution that fails with a `transient` error retries through the outbox and does not touch the streak. A `policy` or `validation` failure marks the proposal failed and calls `recordOutcome('rejected')`, demoting the kind — a platform rejecting our write is evidence the policy was too loose. An `auth` failure halts that tenant's channel and pauses every action kind for it.
+An `auto` execution that fails with a `transient` error retries through the outbox and does not touch the streak. A `quota` error suspends that `(org, channel)` until `retryAfterMs` elapses and likewise leaves the streak untouched — quota exhaustion says nothing about whether the decision was correct. A `policy` or `validation` failure marks the proposal failed and calls `recordOutcome('rejected')`, demoting the kind — a platform rejecting our write is evidence the policy was too loose. An `auth` failure halts that tenant's channel and pauses every action kind for it.
 
 ## Testing
 

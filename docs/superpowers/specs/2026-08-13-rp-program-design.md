@@ -50,6 +50,7 @@ Constraints: graduated autonomy (§Global constraints GC1), CRE-first tenant con
 | W2 | Channel breadth | `lib/connectors/{meta,google-ads}.ts` | LinkedIn adapter + Google/Meta depth on the adapter interface |
 | W3 | Ad variants written, A/B tested, fatigue-refreshed | none (explicit non-goal of the 2026-08-03 spec) | Creative engine using listings data |
 | W4 | "API to let AI manage your ads", 150+ tools, OAuth | `mcp/{context-server,google-ads-server,app-data-mcp-server}` | Public OAuth MCP + REST |
+| W4a | (prerequisite for the above) | `auth-service` RS256 signing + JWKS publication | OAuth 2.1 authorization server: authorization-code + PKCE, client metadata documents, consent, grants |
 | W5 | Technical SEO fixes, programmatic content, rank tracking | none | SEO autopilot |
 | W6 | AI-search citations, llms.txt, share of voice | none | GEO workstream |
 | W7 | Website edits, A/B tests, CRO fixes | none | `cms-service` + CRO agent |
@@ -75,7 +76,11 @@ W0 foundation (autonomy engine · channel registry · tenant config · publish c
  ├─ W1 autonomy rollout            needs: autonomy engine
  ├─ W2 LinkedIn + channel depth    needs: channel registry
  ├─ W3 creative engine             needs: channel registry, autonomy engine
- ├─ W4 public MCP + REST           needs: channel registry (tool descriptors), autonomy engine
+         ├─ W4a OAuth authorization server needs: nothing (own service)
+         ├─ W4 public MCP + REST           needs: channel registry (tool descriptors), autonomy engine,
+         │                                        W4a token-claims contract (published in the W4a spec,
+         │                                        so both build in parallel; only W4's final
+         │                                        integration task needs W4a running)
  ├─ W5 SEO autopilot               needs: publish contract
  ├─ W6 GEO / AI citations          needs: publish contract
  ├─ W7 cms-service + CRO agent     needs: publish contract (implements it)
@@ -97,7 +102,8 @@ Two mechanisms prevent eight concurrent worktrees from colliding.
 | W1 | `ads-agent/lib/decision-engine/`, `ads-agent/app/(admin)/proposals/`, `ads-agent/app/api/proposals/` |
 | W2 | `ads-agent/lib/connectors/`, `ads-agent/mcp/linkedin-ads-server/` |
 | W3 | `ads-agent/lib/creative/`, `ads-agent/app/(admin)/creative/` |
-| W4 | `ads-agent/app/api/public/`, `ads-agent/lib/publicapi/`, `ads-agent/mcp/public-gateway/` |
+| W4 | `ads-agent/app/api/public/`, `ads-agent/app/.well-known/`, `ads-agent/lib/publicapi/`, `ads-agent/mcp/public-gateway/` |
+| W4a | `auth-service/` (entire existing service) |
 | W5 | `ads-agent/lib/seo/`, `ads-agent/app/(admin)/seo/` |
 | W6 | `ads-agent/lib/geo/`, `ads-agent/app/(admin)/geo/` |
 | W7 | `cms-service/` (entire new app) |
@@ -120,12 +126,13 @@ Shared files that multiple workstreams must touch (`lib/nav-config.ts`, `lib/db/
 | W8 | 190–199 |
 | W9 | 200–209 |
 | W7 | `cms-service/lib/db/migrations/001+` (own schema, own sequence) |
+| W4a | `auth-service` own schema, own sequence |
 
 ## Sequencing
 
 **Wave 0:** W0 alone, merged to `main` before the parallel wave starts. It is small by construction — four modules, no product surface.
 
-**Wave 1:** W1–W9 in parallel worktrees. With an 8-agent ceiling, W9 (fully independent, no shared dependency) is the one held back or slotted in as capacity frees.
+**Wave 1:** W1–W9 plus W4a in parallel worktrees — ten workstreams against an 8-agent ceiling, so two are slotted in as capacity frees. Hold back **W9** (fully independent, no dependants) and **W6** (depends only on the publish contract, and its value compounds after W5 has pages to analyse). Start W4a early despite the ceiling: it has no dependencies and W4 cannot finish without it.
 
 **Wave 2 (out of scope for these specs):** additional channels (TikTok/Microsoft/Pinterest) as adapters, ads-in-ChatGPT when the surface has a public API, reseller billing.
 
@@ -136,9 +143,14 @@ Shared files that multiple workstreams must touch (`lib/nav-config.ts`, `lib/db/
 | Autonomy causes real overspend | Guardrails re-checked at execute time; undo window; three-level kill switch; promotion requires a clean streak per action kind |
 | Nine parallel workstreams drift on interfaces | W0 freezes shared interfaces before wave 1; each spec restates consumed/produced signatures verbatim |
 | SEO/GEO work drifts toward policy-violating tactics | GC3 is a spec-level constraint reviewed in every workstream gate test |
-| Public API exposes a write path that bypasses the gate | W4 tool descriptors are generated from the channel registry; every write descriptor routes through `autonomy.evaluate()`; gate test asserts no write tool reaches an adapter directly |
+| Public API exposes a write path that bypasses the gate | W4 publishes a literal allowlist (not a containment rule); an import boundary forbids `lib/publicapi/` from importing `getAdapter`; an exhaustive registry sweep drives every executable descriptor with `evaluateAutonomy` stubbed to throw |
+| **Pre-existing GC1 violation in `mcp/google-ads-server`** — `create_campaign`, `pause_campaign`, `update_campaign_budget` and `add_negative_keyword` mutate Google Ads in-process with no proposal, no autonomy evaluation and no `ai_action_log` entry. The file's comment claims `propose_change` is the only reachable write path, which holds by network placement and Hermes configuration, not by code (the per-profile allowlists in `lib/agent/profiles.ts` gate the context-server task token, and that server has none). | **W1/W2 must route these four tools through the proposal pipeline or remove them.** W4 must not publish them, and their existence is not precedent. Tracked as a W1 task, not deferred to wave 2 |
 | Migration collisions across worktrees | Disjoint per-workstream ranges, above |
 
 ## Testing
 
-Each workstream ships one gate test file (`<ws>-gate.test.ts`) following the existing `lib/events/gate.db.test.ts` and `scripts/s12-chain-gate.ts` convention, asserting: tenant isolation, idempotency, autonomy path (gated and auto), audit-ledger uniformity, and the workstream's own invariants. The program is complete when all nine gates plus W0's pass on `main`.
+Each workstream ships one gate test file (`<ws>-gate.test.ts`) following the existing `lib/events/gate.db.test.ts` and `scripts/s12-chain-gate.ts` convention, asserting: tenant isolation, idempotency, autonomy path (gated and auto), audit-ledger uniformity, and the workstream's own invariants. The program is complete when all ten workstream gates plus W0's pass on `main`.
+
+## Revision log
+
+**2026-08-13 — after review.** Split W4a out of W4 (the OAuth authorization server was one sentence in W4 with no owner, no path allocation and no migration budget; `auth-service` has RS256 signing and JWKS but no `/authorize`, `/token`, client store or consent). Added `ads-agent/app/.well-known/` to W4's owned paths, since RFC 9728 derives the metadata path from the resource URI and it must be served from the origin root. Recorded the pre-existing ungated Google Ads MCP mutation tools as a W1/W2 obligation rather than leaving them implicit. Two W0 interfaces changed before freeze: `ToolDescriptor` gained `effect`/`scope`/`internalToolName`, and `ExecutionResult.error.class` gained `quota` with `retryAfterMs`.
