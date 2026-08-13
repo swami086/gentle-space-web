@@ -25,6 +25,8 @@
     "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts",
     "mcp:context": "tsx --env-file=.env.local scripts/run-context-mcp.ts",
     "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts",
+    "seed:orchestrator": "tsx --env-file=.env.local scripts/seed-orchestrator-task.ts",
+    "wake:orchestrator": "tsx --env-file=.env.local scripts/wake-orchestrator-agent.ts",
     "artifacts:sweep": "tsx --env-file=.env.local scripts/artifact-sweeps.ts",
     "graph:worker": "tsx --env-file=.env.local scripts/graph-rebuild-worker.ts"
   },
