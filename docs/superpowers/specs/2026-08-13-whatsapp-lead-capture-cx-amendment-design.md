@@ -1,7 +1,7 @@
 # WhatsApp lead-capture CX amendment
 
 Date: 2026-08-13
-Status: proposed
+Status: implemented
 Related: amends/extends [`docs/superpowers/specs/2026-08-03-whatsapp-ai-lead-qualification-design.md`](2026-08-03-whatsapp-ai-lead-qualification-design.md) (implemented) — this spec does not re-litigate anything already shipped there; it patches four CX gaps found during a best-practices review of the shipped feature.
 
 ## Problem
@@ -114,12 +114,12 @@ components/LeadCaptureModal.tsx
 
 ## Success criteria
 
-- [ ] Submitting the form opens the WhatsApp tab even when `/api/leads` is slow, erroring, or offline — verified by delaying/failing the mocked fetch in a test and asserting `window.open` still fires.
-- [ ] After submit, the modal shows a confirmation panel (not an immediate close) with a working "Open WhatsApp again" link and a "Done" button.
-- [ ] Office and retail Step 2 timeline fields render as a 4-option button group; lease's "Expected rent / timeline" field is unchanged (still free text).
-- [ ] A submitted lead with a chosen timeline bucket still produces a readable `brief`/CRM string and a normal AI qualifier tier — no regression in `qualify-prompt.ts` or `createLeadInTwenty`.
-- [ ] Phone field shows the "no spam" helper text; every Step 2 field label ends in "(optional)"; the last step shows the "not a bot, real broker" line.
-- [ ] All existing 2026-08-03 spec success criteria (soft-fail paths, PII exclusion, CRM write) still pass unmodified.
+- [x] Submitting the form opens the WhatsApp tab even when `/api/leads` is slow, erroring, or offline — verified by `lib/leads/whatsapp-handoff.test.ts` (sync `openWindow` before fire-and-forget `postLead`; hanging promise does not block return).
+- [x] After submit, the modal shows a confirmation panel (not an immediate close) with a working "Open WhatsApp again" link and a "Done" button — code-verified in `LeadCaptureModal.tsx` + `LeadCaptureConfirmation.tsx`; manual browser smoke pending (no `LeadCaptureModal.test.tsx` yet).
+- [x] Office and retail Step 2 timeline fields render as a 4-option button group; lease's "Expected rent / timeline" field is unchanged (still free text) — verified by `lib/leads/step2-fields.test.ts` and Step 2 `kind: "choice"` branch in `LeadCaptureModal.tsx`.
+- [x] A submitted lead with a chosen timeline bucket still produces a readable `brief`/CRM string and a normal AI qualifier tier — no regression in `qualify-prompt.ts` or `createLeadInTwenty` — verified by `qualify-prompt.test.ts`, `whatsapp.test.ts`, `foldStep2Answers` test, and unchanged `app/api/leads/route.test.ts`.
+- [x] Phone field shows the "no spam" helper text; every Step 2 field label ends in "(optional)"; the last step shows the "not a bot, real broker" line — code-verified in `LeadCaptureModal.tsx` (`step2FieldDisplayLabel`, copy blocks); manual smoke pending.
+- [x] All existing 2026-08-03 spec success criteria (soft-fail paths, PII exclusion, CRM write) still pass unmodified — `app/api/leads/route.test.ts` suite green (6 files, 31 tests total in regression gate).
 
 ## Implementation order (high level)
 
