@@ -69,6 +69,20 @@ export async function createContact(
   });
 }
 
+export async function findContactByPhone(scope: Scope, phone: string): Promise<Contact | null> {
+  const clause = scopeClause(scope);
+  const n = clause.params.length;
+  return withTenantTransaction(scope, async (c) => {
+    const { rows } = await c.query<ContactRow>(
+      `SELECT ${COLUMNS} FROM adsagent.contacts
+        WHERE ${clause.sql} AND phone = $${n + 1}
+        LIMIT 1`,
+      [...clause.params, phone],
+    );
+    return rows[0] ? rowToContact(rows[0]) : null;
+  });
+}
+
 /**
  * Follows exactly one merge hop. Twenty's dedup can point a losing row at a
  * survivor; a chain longer than one hop means the sync consumer wrote a

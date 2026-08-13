@@ -9,6 +9,7 @@ vi.mock("./tx", () => ({
 import type { Scope } from "./scope-sql";
 import {
   createContact,
+  findContactByPhone,
   getContactById,
   markContactMergedAway,
   markContactMergedIntoPerson,
@@ -58,6 +59,17 @@ describe("createContact", () => {
     await expect(
       createContact({ kind: "platform", orgId: "org-1" }, { name: "Asha Rao" }),
     ).rejects.toThrow(/platform scope cannot write/i);
+  });
+});
+
+describe("findContactByPhone", () => {
+  it("findContactByPhone selects by org + phone", async () => {
+    query.mockResolvedValue({ rows: [row] });
+    const c = await findContactByPhone(scope, "+919800000000");
+    expect(c?.phone).toBe("+919800000000");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/FROM adsagent\.contacts/i);
+    expect(params).toEqual(["org-1", "+919800000000"]);
   });
 });
 
