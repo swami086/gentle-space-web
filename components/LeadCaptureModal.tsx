@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { buildWhatsAppUrl, NEED_LABELS, type LeadPayload, type NeedType } from "@/lib/whatsapp";
-import { step2FieldsFor, type Step2Answers } from "@/lib/leads/step2-fields";
+import { NEED_LABELS, type LeadPayload, type NeedType } from "@/lib/whatsapp";
+import { step2FieldDisplayLabel, step2FieldsFor, type Step2Answers } from "@/lib/leads/step2-fields";
+import { submitWhatsAppHandoff } from "@/lib/leads/whatsapp-handoff";
+import { LeadCaptureConfirmation } from "./LeadCaptureConfirmation";
 import {
   canAdvanceFromIdentify,
   nextStepIndex,
@@ -54,6 +56,7 @@ export function LeadCaptureModal() {
   const [step2Answers, setStep2Answers] = useState<Step2Answers>({});
   const [notes, setNotes] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
+  const [submittedWhatsAppUrl, setSubmittedWhatsAppUrl] = useState<string | null>(null);
 
   const steps = wizardSteps(Boolean(propertyContext));
   const currentStep = steps[stepIndex];
@@ -66,6 +69,7 @@ export function LeadCaptureModal() {
       setStep2Answers({});
       setNotes("");
       setStepIndex(0);
+      setSubmittedWhatsAppUrl(null);
       return;
     }
     setStep2Answers({});
@@ -101,7 +105,7 @@ export function LeadCaptureModal() {
   const handleNext = () => setStepIndex((index) => nextStepIndex(steps, index));
   const handleBack = () => setStepIndex((index) => previousStepIndex(index));
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canAdvance) return;
     if (!isLastStep) {
@@ -119,9 +123,11 @@ export function LeadCaptureModal() {
         propertyUrl: propertyContext.propertyUrl,
       }),
     };
-    await postLead(lead);
-    window.open(buildWhatsAppUrl(lead), "_blank", "noopener,noreferrer");
-    closeModal();
+    const { whatsappUrl } = submitWhatsAppHandoff(lead, {
+      openWindow: window.open.bind(window),
+      postLead,
+    });
+    setSubmittedWhatsAppUrl(whatsappUrl);
   };
 
   const title = propertyContext ? "Message on WhatsApp" : "Get your private property e-brochure";
@@ -163,6 +169,17 @@ export function LeadCaptureModal() {
           </button>
         </div>
 
+        {submittedWhatsAppUrl ? (
+          <LeadCaptureConfirmation
+            onReopenWhatsApp={() => {
+              window.open(submittedWhatsAppUrl, "_blank", "noopener,noreferrer");
+            }}
+            onDone={() => {
+              setSubmittedWhatsAppUrl(null);
+              closeModal();
+            }}
+          />
+        ) : (
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           {currentStep === "identify" && (
             <>
@@ -184,6 +201,9 @@ export function LeadCaptureModal() {
                   className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
                   placeholder="+91 …"
                 />
+                <p className="text-[12px] text-[var(--muted)]">
+                  We&apos;ll only use this to reply on WhatsApp — no spam.
+                </p>
               </label>
 
               <fieldset className="flex flex-col gap-2">
@@ -212,19 +232,50 @@ export function LeadCaptureModal() {
           )}
 
           {currentStep === "details" &&
-            step2FieldsFor(need).map((field) => (
-              <label key={field.key} className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">{field.label}</span>
-                <input
-                  value={step2Answers[field.key] ?? ""}
-                  onChange={(event) =>
-                    setStep2Answers((prev) => ({ ...prev, [field.key]: event.target.value }))
-                  }
-                  className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-                  placeholder={field.placeholder}
-                />
-              </label>
-            ))}
+            step2FieldsFor(need).map((field) =>
+              field.kind === "choice" && field.choices ? (
+                <fieldset key={field.key} className="flex flex-col gap-2">
+                  <legend className="text-[13px] font-semibold text-[var(--ink-secondary)]">
+                    {step2FieldDisplayLabel(field)}
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {field.choices.map((choice) => {
+                      const selected = step2Answers[field.key] === choice;
+                      return (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() =>
+                            setStep2Answers((prev) => ({ ...prev, [field.key]: choice }))
+                          }
+                          className={`rounded-[var(--radius)] px-3.5 py-2.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
+                            selected
+                              ? "border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+                              : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                          }`}
+                        >
+                          {choice}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ) : (
+                <label key={field.key} className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-semibold text-[var(--ink-secondary)]">
+                    {step2FieldDisplayLabel(field)}
+                  </span>
+                  <input
+                    value={step2Answers[field.key] ?? ""}
+                    onChange={(event) =>
+                      setStep2Answers((prev) => ({ ...prev, [field.key]: event.target.value }))
+                    }
+                    className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] dark:placeholder:text-[var(--ink-secondary)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                    placeholder={field.placeholder}
+                  />
+                </label>
+              ),
+            )}
 
           {currentStep === "notes" && (
             <label className="flex flex-col gap-1.5">
@@ -264,12 +315,13 @@ export function LeadCaptureModal() {
             {isLastStep && (
               <p className="text-center text-[13px] text-[var(--muted)]">
                 {propertyContext
-                  ? "We'll open WhatsApp with your message ready. Nothing is sent automatically."
-                  : "Opens WhatsApp with your brief ready to send to Gentle Space CRE."}
+                  ? "We'll open WhatsApp with your message ready. Nothing is sent automatically. You're chatting directly with Sanjay, not a bot."
+                  : "Opens WhatsApp with your brief ready to send to Gentle Space CRE. You're chatting directly with Sanjay, not a bot."}
               </p>
             )}
           </div>
         </form>
+        )}
       </div>
     </div>
   );
