@@ -8,6 +8,7 @@ vi.mock("@/mcp/context-server/task-token", () => ({ mintTaskToken }));
 
 import { POST } from "./route";
 import { LEADS_TOOL_ALLOWLIST } from "@/lib/agent/leads-tools";
+import { ORCHESTRATOR_TOOL_ALLOWLIST } from "@/lib/agent/orchestrator-tools";
 
 const ORG = "00000000-0000-4000-8000-0000000000aa";
 const KEY = "test-agent-internal-key";
@@ -46,12 +47,13 @@ describe("POST /api/internal/agent/task-token", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 403 for non-leads profile", async () => {
+  it("returns 403 forbidden_profile for unknown profile", async () => {
     const res = await post(
       { orgId: ORG, taskId: "t1", profile: "campaign" },
       { "x-agent-internal-key": KEY },
     );
     expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({ error: "forbidden_profile" });
     expect(mintTaskToken).not.toHaveBeenCalled();
   });
 
@@ -61,6 +63,23 @@ describe("POST /api/internal/agent/task-token", () => {
       { "x-agent-internal-key": KEY },
     );
     expect(res.status).toBe(400);
+  });
+
+  it("mints for orchestrator with server allowlist", async () => {
+    const res = await post(
+      { orgId: ORG, taskId: "task-99", profile: "orchestrator", ttlSeconds: 300 },
+      { "x-agent-internal-key": KEY },
+    );
+    expect(res.status).toBe(200);
+    expect(mintTaskToken).toHaveBeenCalledWith({
+      orgId: ORG,
+      taskId: "task-99",
+      profile: "orchestrator",
+      toolAllowlist: [...ORCHESTRATOR_TOOL_ALLOWLIST],
+      ttlSeconds: 300,
+    });
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).toContain("list_proposals");
+    expect(mintTaskToken.mock.calls[0][0].toolAllowlist).not.toContain("create_proposal");
   });
 
   it("mints with server-owned allowlist", async () => {
