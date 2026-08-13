@@ -38,7 +38,7 @@ suffixed rather than renumbered so existing `S`-number references in other specs
 | **S12** | Kanban and `orchestrator` | agent spec §7 | two agents complete one linked task chain |
 | **S13** | Generative surfaces | backend spec F1–F5 | answers cite only the context pack |
 | **S14** | `performance` and `campaign` agents | agent spec §4 | reads the replica, not the primary |
-| **S15** | Inbound expansion — email, WhatsApp | backend spec B2, B3 | inbound threads to the right enquiry |
+| **S15** | Inbound expansion — email, WhatsApp | backend spec B2, B3; design [`2026-08-13-s15-inbound-expansion-design.md`](2026-08-13-s15-inbound-expansion-design.md) | inbound threads to the right enquiry |
 | **S16** | `research` and `content` agents | agent spec §4 | — |
 | **S17** | CMS | backend spec H1–H7 | — |
 
