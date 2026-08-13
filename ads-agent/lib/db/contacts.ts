@@ -75,6 +75,20 @@ export async function createContact(
  * tombstone at a tombstone, which is a bug worth seeing rather than papering
  * over with recursion (tenancy spec §8).
  */
+export async function findContactByPhone(scope: Scope, phone: string): Promise<Contact | null> {
+  const clause = scopeClause(scope);
+  const n = clause.params.length;
+  return withTenantTransaction(scope, async (c) => {
+    const { rows } = await c.query<ContactRow>(
+      `SELECT ${COLUMNS} FROM adsagent.contacts
+        WHERE ${clause.sql} AND phone = $${n + 1}
+        LIMIT 1`,
+      [...clause.params, phone],
+    );
+    return rows[0] ? rowToContact(rows[0]) : null;
+  });
+}
+
 export async function getContactById(scope: Scope, id: string): Promise<Contact | null> {
   const clause = scopeClause(scope);
   return withTenantTransaction(scope, async (c) => {
