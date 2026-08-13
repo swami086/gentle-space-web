@@ -35,6 +35,18 @@ describe("buildWhatsAppUrl", () => {
     expect(notesIdx).toBeGreaterThan(areaIdx);
   });
 
+  it("renders a chosen timeline bucket as a labeled Step 2 line", () => {
+    const url = buildWhatsAppUrl({
+      name: "Ada",
+      phone: "+91 90000 00000",
+      need: "office",
+      brief: "",
+      step2Answers: { moveInTimeline: "Immediate (this month)" },
+    });
+    const text = decodeURIComponent(url.split("text=")[1]);
+    expect(text).toContain("Move-in timeline: Immediate (this month)");
+  });
+
   it("omits the Notes line when brief is empty and skips blank step2Answers", () => {
     const url = buildWhatsAppUrl({
       name: "Ada",
