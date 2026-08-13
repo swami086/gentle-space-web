@@ -5,13 +5,17 @@ const { createDraft } = vi.hoisted(() => ({
 }));
 vi.mock("../db/campaign-drafts", () => ({ createDraft }));
 
-import { campaignToolHandlers, campaignToolProvider, campaignToolSpecs } from "./campaign-tools";
+import { campaignToolHandlers, campaignToolSpecs, createCampaignToolProvider } from "./campaign-tools";
 
 const ORG = { kind: "org" as const, orgId: "org-1" };
+const SESSION_SCOPE = {
+  kind: "org" as const,
+  orgId: "10101010-1010-1010-1010-101010101010",
+};
+const OTHER_ORG = "20202020-2020-2020-2020-202020202020";
 
 beforeEach(() => {
   createDraft.mockReset();
-  process.env.ADS_AGENT_ORG_ID = "org-1";
 });
 
 describe("campaignToolHandlers.start_campaign_draft", () => {
@@ -23,11 +27,20 @@ describe("campaignToolHandlers.start_campaign_draft", () => {
   });
 });
 
-describe("campaignToolProvider.start_campaign_draft", () => {
-  it("binds ADS_AGENT_ORG_ID when invoked through the Copilot registry", async () => {
+describe("createCampaignToolProvider", () => {
+  it("binds the provided scope, not ADS_AGENT_ORG_ID", async () => {
     createDraft.mockResolvedValue({ id: "draft-abc" });
-    await campaignToolProvider.start_campaign_draft({});
-    expect(createDraft).toHaveBeenCalledWith(ORG);
+    const provider = createCampaignToolProvider(SESSION_SCOPE);
+    await provider.start_campaign_draft({});
+    expect(createDraft).toHaveBeenCalledWith(SESSION_SCOPE);
+  });
+
+  it("ignores orgId in tool args", async () => {
+    createDraft.mockResolvedValue({ id: "draft-abc" });
+    const provider = createCampaignToolProvider(SESSION_SCOPE);
+    await provider.start_campaign_draft({ orgId: OTHER_ORG });
+    expect(createDraft).toHaveBeenCalledWith(SESSION_SCOPE);
+    expect(createDraft).not.toHaveBeenCalledWith({ kind: "org", orgId: OTHER_ORG });
   });
 });
 

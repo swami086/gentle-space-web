@@ -13,20 +13,14 @@ export const campaignToolHandlers: Record<string, ScopedToolHandler> = {
   },
 };
 
-function bindScopedHandlers(handlers: Record<string, ScopedToolHandler>): ToolProviderMap {
+export function createCampaignToolProvider(scope: Scope): ToolProviderMap {
   return Object.fromEntries(
-    Object.entries(handlers).map(([name, fn]) => [
+    Object.entries(campaignToolHandlers).map(([name, fn]) => [
       name,
-      (args: Record<string, unknown>) => {
-        const orgId = process.env.ADS_AGENT_ORG_ID;
-        if (!orgId) throw new Error("ADS_AGENT_ORG_ID is not set");
-        return fn({ kind: "org" as const, orgId }, args);
-      },
+      (args: Record<string, unknown>) => fn(scope, args),
     ]),
   );
 }
-
-export const campaignToolProvider: ToolProviderMap = bindScopedHandlers(campaignToolHandlers);
 
 export const campaignToolSpecs: ToolSpec[] = [
   {
