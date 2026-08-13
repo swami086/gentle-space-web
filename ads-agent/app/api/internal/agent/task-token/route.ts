@@ -1,11 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { mintTaskToken } from "@/mcp/context-server/task-token";
-import {
-  LEADS_PROFILE,
-  LEADS_TOOL_ALLOWLIST,
-  assertLeadsProfile,
-  clampLeadsTtl,
-} from "@/lib/agent/leads-tools";
+import { allowlistFor, clampTtlFor, isAgentProfile } from "@/lib/agent/profiles";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,17 +40,15 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof profile !== "string") {
     return Response.json({ error: "invalid_profile" }, { status: 400 });
   }
-  try {
-    assertLeadsProfile(profile);
-  } catch {
+  if (!isAgentProfile(profile)) {
     return Response.json({ error: "forbidden_profile" }, { status: 403 });
   }
 
   const ttl =
     ttlSeconds === undefined
-      ? clampLeadsTtl(undefined)
+      ? clampTtlFor(profile, undefined)
       : typeof ttlSeconds === "number"
-        ? clampLeadsTtl(ttlSeconds)
+        ? clampTtlFor(profile, ttlSeconds)
         : null;
   if (ttl === null) {
     return Response.json({ error: "invalid_ttl" }, { status: 400 });
@@ -65,8 +58,8 @@ export async function POST(req: Request): Promise<Response> {
     const { token } = await mintTaskToken({
       orgId,
       taskId,
-      profile: LEADS_PROFILE,
-      toolAllowlist: [...LEADS_TOOL_ALLOWLIST],
+      profile,
+      toolAllowlist: [...allowlistFor(profile)],
       ttlSeconds: ttl,
     });
     return Response.json({ token });
