@@ -1,7 +1,7 @@
 # S15 — Inbound expansion (email + WhatsApp)
 
 Date: 2026-08-13  
-Status: approved (plan written; await execution choice)  
+Status: approved (implemented)  
 
 Build step: **S15** ([`2026-08-12-build-sequence.md`](2026-08-12-build-sequence.md))  
 Maps to: backend features **B2, B3, B4** ([`2026-08-12-backend-features-design.md`](2026-08-12-backend-features-design.md) §B, Phase 6)  
@@ -177,7 +177,7 @@ Authoritative sources: [Meta Graph API webhooks getting started](https://develop
 | `WHATSAPP_APP_SECRET` | X-Hub-Signature-256 |
 | `WHATSAPP_ACCESS_TOKEN` | Media download |
 | `WHATSAPP_PHONE_NUMBER_ID` | Optional filter if multiple numbers exist later |
-| `POSTMARK_INBOUND_BASIC_USER` / `POSTMARK_INBOUND_BASIC_PASS` | Webhook auth |
+| `POSTMARK_INBOUND_USER` / `POSTMARK_INBOUND_PASS` | Webhook auth |
 | Garage / artifact env | Existing S8a |
 
 ## Implementation sketch (for writing-plans)
