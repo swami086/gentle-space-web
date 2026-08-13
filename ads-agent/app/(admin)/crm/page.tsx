@@ -7,6 +7,7 @@ import { KanbanCard } from "@/components/pencil/KanbanCard";
 import { StatusPill, type StatusTone } from "@/components/pencil/StatusPill";
 import { CrmAssistantPanel } from "@/components/CrmAssistantPanel";
 import { CrmBoardRefreshListener } from "@/components/CrmBoardRefreshListener";
+import { CallPrepBlock } from "@/components/generative/CallPrepBlock";
 import type { Opportunity } from "@/lib/crm/twenty-pipeline";
 
 const TIER_TONE: Record<string, StatusTone> = { HOT: "hot", WARM: "warm", COLD: "cold", UNSCORED: "unscored" };
@@ -24,11 +25,16 @@ function LeadCard({ opportunity }: { opportunity: Opportunity }) {
   );
 }
 
-export default async function CrmPage() {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ enquiryId?: string }>;
+}) {
   const access = await requireRole("operator");
   if (!access.ok) return <ForbiddenNotice />;
 
   const scope = await scopeFromSession(await requireSession());
+  const { enquiryId } = await searchParams;
 
   const opportunities = await listOpportunities(scope);
   const columns = PIPELINE_STAGES.map((stage) => ({
@@ -49,6 +55,11 @@ export default async function CrmPage() {
             Synced live from Twenty CRM — {opportunities.length} opportunities in pipeline.
           </p>
         </div>
+        {enquiryId ? (
+          <div className="rounded-lg bg-surface p-4">
+            <CallPrepBlock enquiryId={enquiryId} />
+          </div>
+        ) : null}
         {opportunities.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             No opportunities yet, or Twenty CRM is not configured.
