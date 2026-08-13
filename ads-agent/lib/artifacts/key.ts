@@ -6,6 +6,7 @@ export const ARTIFACT_CONTENT_TYPES = [
   "context_pack",
   "trace_payload",
   "call_recording",
+  "inbound_media",
 ] as const;
 
 export type ArtifactContentType = (typeof ARTIFACT_CONTENT_TYPES)[number];

@@ -16,13 +16,14 @@ describe("artifactStorageKey", () => {
     expect(artifactStorageKey(scope, "draft", ID)).toBe(`artifacts/${ORG}/draft/${ID}`);
   });
 
-  it("covers exactly the five content types the CHECK constraint allows", () => {
+  it("covers exactly the six content types the CHECK constraint allows", () => {
     expect([...ARTIFACT_CONTENT_TYPES]).toEqual([
       "talking_points",
       "draft",
       "context_pack",
       "trace_payload",
       "call_recording",
+      "inbound_media",
     ]);
   });
 
