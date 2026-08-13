@@ -154,5 +154,54 @@ describe("POST /api/inbound/whatsapp", () => {
     expect(insertInboundEvent).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
   });
+
+  it("returns 200 on invalid JSON after signature verify (no-op)", async () => {
+    verifyWhatsAppSignature.mockReturnValue(true);
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      new Request("https://ads.example/api/inbound/whatsapp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-hub-signature-256": signature,
+        },
+        body: "not-json",
+      }),
+    );
+
+    expect(verifyWhatsAppSignature).toHaveBeenCalledWith("not-json", signature, "app-secret");
+    expect(withTenantTransaction).not.toHaveBeenCalled();
+    expect(insertInboundEvent).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("returns 200 when insertInboundEvent reports duplicate (inserted: false)", async () => {
+    verifyWhatsAppSignature.mockReturnValue(true);
+    insertInboundEvent.mockResolvedValue({ id: "evt-1", inserted: false });
+
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [{ id: "wamid.dupe", text: { body: "retry" } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest(payload));
+
+    expect(insertInboundEvent).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
 });
 

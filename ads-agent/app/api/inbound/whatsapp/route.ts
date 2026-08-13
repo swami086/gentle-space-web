@@ -40,7 +40,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     payload = JSON.parse(bodyText);
   } catch {
-    return new Response("invalid json", { status: 400 });
+    // ponytail: invalid JSON after verify is a no-op; Meta must still get 200
+    return Response.json({ ok: true });
   }
 
   const events = extractWhatsAppMessageEvents(payload);
