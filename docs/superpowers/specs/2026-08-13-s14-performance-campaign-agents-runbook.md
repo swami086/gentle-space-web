@@ -1,7 +1,7 @@
 # S14 — `performance` and `campaign` agents runbook
 
 Date: 2026-08-13  
-Status: operational (CI gate + docs; **live Hermes E2E operator-run**)  
+Status: operational (CI gate + docs; **interactive Hermes two-profile E2E PASS** 2026-08-13 local)  
 Build step: **S14** ([`2026-08-12-build-sequence.md`](2026-08-12-build-sequence.md))  
 Plan: [`2026-08-13-s14-performance-campaign-agents.md`](../plans/2026-08-13-s14-performance-campaign-agents.md)  
 Design: [`2026-08-13-s14-performance-campaign-agents-design.md`](2026-08-13-s14-performance-campaign-agents-design.md)
@@ -227,14 +227,35 @@ cd ads-agent
 npx tsx scripts/s14-live-e2e.ts
 ```
 
+Interactive Hermes (after profiles exist):
+
+```bash
+# context-mcp on host (consolidated PG :5433 + CH :8123); bind 0.0.0.0 for Docker Hermes
+CONTEXT_MCP_BIND=0.0.0.0 npm run mcp:context
+# ads-agent mint API
+npm run dev   # :3030 with AGENT_INTERNAL_API_KEY
+
+# Mint helper lives in each profile workspace (do not invent keys in chat):
+#   ~/.hermes/profiles/{performance,campaign}/workspace/mint-task-token.sh
+
+# Official profile selection (Nous): hermes -p <profile> chat
+# Wake scripts use the same pattern via docker exec (default HERMES_WAKE_TRANSPORT=cli).
+docker exec hermes /opt/hermes/bin/hermes -p performance chat \
+  --yolo --accept-hooks -s performance-review -q '…'
+```
+
 Observed on this machine:
 
 1. **CH seed:** created `campaign_performance_daily` + tenant row policy; inserted one row for platform org.
 2. **CH client fixes** (required for live CH 25.8): use `readonly=2` (not `1`) so `SQL_current_tenant_id` can be set; rename param to `corridor_filter` and alias `corridor_label` to avoid `ILLEGAL_AGGREGATION`.
-3. **agent_ro grants:** re-applied `GRANT SELECT ON context.v_agent_graph_manifest` (and related) — missing on consolidated `:5433` despite migration 105.
-4. **Result:** `get_campaign_performance` returned CH rows; pending `campaign.pause` from `proposed_by=performance`; `campaign.budget_change` correctly hit `stale_data_refusal` (CDC lag).
-5. **Hermes chat profiles:** gateway currently only lists `default` — create Hermes profiles `performance` / `campaign` + MCP wiring before interactive two-profile chat. Wake stubs log only until Hermes API invoke is wired.
-6. **Google Ads MCP** `:8766` up (HTTP 405 on bare `/mcp` is expected for non-MCP clients); option‑3 read smoke deferred until Hermes profiles exist.
+3. **agent_ro grants:** re-applied `GRANT SELECT` on `context.v_agent_graph_manifest`, `v_agent_spend_today`, `agent_cost_ceilings`, `agent_token_usage` — often missing on consolidated `:5433` despite migrations 105/106.
+4. **Scripted path:** `get_campaign_performance` returned CH rows; pending `campaign.pause` from `proposed_by=performance`; `campaign.budget_change` correctly hit `stale_data_refusal` when graph CDC lag was unknown/high.
+5. **Hermes profiles created:** `performance` + `campaign` under `~/.hermes/profiles/` with context-mcp `:8768` + Google Ads read-only includes (writes not in `tools.include`). Skills synced via `scripts/sync-hermes-skills.sh`.
+6. **Interactive PASS:** performance chat → pending `campaign.pause` (`9960c392-…`); campaign chat → pending `campaign.create` (`bb364a3b-…`) after seeding `context.graph_manifests` with `cdc_lag_seconds=30` for the platform org (spend-changing kinds refuse when lag unknown).
+7. **Ops gotchas:** context-mcp default bind is IPv6 `localhost` — set `CONTEXT_MCP_BIND=0.0.0.0` for Hermes on Docker; models invent `test_key` unless minting via the workspace helper.
+8. **Wake invoke (wired):** `HERMES_WAKE=1` + default `HERMES_WAKE_TRANSPORT=cli` runs `docker exec … /opt/hermes/bin/hermes -p <profile> chat` (official profile selection per [Nous profiles docs](https://hermes-agent.nousresearch.com/docs/user-guide/profiles)). Prefer CLI over `api` when mint needs terminal — `api_server` often disables terminal. Exit 0 requires `proposalId=<uuid>` in the reply. Optional: `HERMES_WAKE_TRANSPORT=api` + multiplex `/p/<profile>/v1/chat/completions`.
+9. **Wake live PASS (2026-08-13):** performance CLI wake → pending `campaign.pause` `proposalId=74f2fa36-8e87-4fa0-88e0-c49cfa4bef4e`; campaign CLI wake → pending `campaign.create` `proposalId=81b1e4ed-2a36-4558-9663-4e560d5408a3`.
+10. **Google Ads MCP** `:8766` up; discovery still lists write tools but profile `tools.include` limits selection to the three reads (option‑3 enrichment available).
 
 ## Deterministic CI (no Hermes)
 

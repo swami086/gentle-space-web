@@ -1,9 +1,25 @@
+import {
+  buildCampaignWakeMessage,
+  invokeHermesProfileWakeApi,
+  invokeHermesProfileWakeCli,
+  passEnvFromProcess,
+  resolveWakeTransport,
+  wakeLooksComplete,
+  WAKE_PASS_ENV_KEYS,
+  type HermesWakeInvokeResult,
+} from "../lib/hermes/wake-invoke";
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type WakeCampaignArgs = {
   orgId: string;
   corridor?: string;
+};
+
+export type WakeCampaignDeps = {
+  invokeCli: typeof invokeHermesProfileWakeCli;
+  invokeApi: typeof invokeHermesProfileWakeApi;
 };
 
 export function parseWakeArgs(argv: string[]): WakeCampaignArgs {
@@ -24,17 +40,74 @@ export function parseWakeArgs(argv: string[]): WakeCampaignArgs {
   return out;
 }
 
-export async function main(env: NodeJS.ProcessEnv, argv: string[]): Promise<number> {
+function hermesApiConfigured(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.HERMES_API_SERVER_URL?.trim() && env.HERMES_API_SERVER_KEY?.trim());
+}
+
+export async function main(
+  env: NodeJS.ProcessEnv,
+  argv: string[],
+  deps: WakeCampaignDeps = {
+    invokeCli: invokeHermesProfileWakeCli,
+    invokeApi: invokeHermesProfileWakeApi,
+  },
+): Promise<number> {
   const args = parseWakeArgs(argv);
   if (env.HERMES_WAKE !== "1") {
     console.log("wake-campaign-agent: not scheduled (set HERMES_WAKE=1 to enable)");
     return 0;
   }
+
+  const timeoutRaw = env.HERMES_WAKE_TIMEOUT_MS?.trim();
+  const timeoutMs = timeoutRaw ? Number(timeoutRaw) : 300_000;
+  const timeout =
+    Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 300_000;
+  const transport = resolveWakeTransport(env);
+  const message = buildCampaignWakeMessage(args);
+
   console.log(
-    `wake-campaign-agent: stub wake org=${args.orgId}` +
-      (args.corridor ? ` corridor=${args.corridor}` : "") +
-      " (Hermes API invoke deferred)",
+    `wake-campaign-agent: invoking Hermes transport=${transport} profile=campaign org=${args.orgId}` +
+      (args.corridor ? ` corridor=${args.corridor}` : ""),
   );
+
+  let result: HermesWakeInvokeResult;
+  if (transport === "api") {
+    if (!hermesApiConfigured(env)) {
+      console.error(
+        "wake-campaign-agent: HERMES_API_SERVER_URL and HERMES_API_SERVER_KEY are required for transport=api",
+      );
+      return 1;
+    }
+    result = await deps.invokeApi({
+      profile: "campaign",
+      message,
+      baseUrl: env.HERMES_API_SERVER_URL!.trim(),
+      apiKey: env.HERMES_API_SERVER_KEY!.trim(),
+      model: env.HERMES_API_SERVER_MODEL?.trim(),
+      timeoutMs: timeout,
+    });
+  } else {
+    result = await deps.invokeCli({
+      profile: "campaign",
+      skill: "campaign-draft",
+      message,
+      timeoutMs: timeout,
+      container: env.HERMES_DOCKER_CONTAINER?.trim() || "hermes",
+      passEnv: passEnvFromProcess(env, [...WAKE_PASS_ENV_KEYS]),
+    });
+  }
+
+  if (!result.ok) {
+    console.error(
+      `wake-campaign-agent: Hermes invoke failed status=${result.status} error=${result.error}`,
+    );
+    return 1;
+  }
+  console.log(`wake-campaign-agent: ok\n${result.content}`);
+  if (!wakeLooksComplete(result.content)) {
+    console.error("wake-campaign-agent: finished without proposalId= (incomplete)");
+    return 1;
+  }
   return 0;
 }
 
