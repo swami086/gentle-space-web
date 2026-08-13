@@ -18,6 +18,7 @@ export const RETENTION_DAYS: Record<ArtifactContentType, number> = {
   context_pack: 400,
   trace_payload: 400,
   call_recording: 366,
+  inbound_media: 366,
 };
 
 export type ArtifactRow = {
