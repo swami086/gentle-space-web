@@ -1,7 +1,7 @@
 # S15 — Inbound expansion (email + WhatsApp)
 
 Date: 2026-08-13  
-Status: approved (plan written; await execution choice)  
+Status: approved (implemented)  
 
 Build step: **S15** ([`2026-08-12-build-sequence.md`](2026-08-12-build-sequence.md))  
 Maps to: backend features **B2, B3, B4** ([`2026-08-12-backend-features-design.md`](2026-08-12-backend-features-design.md) §B, Phase 6)  
