@@ -40,11 +40,11 @@ afterEach(() => {
 });
 
 describe("getCampaignPerformance", () => {
-  it("pins the tenant with the SQL_current_tenant_id setting and forces readonly", async () => {
+  it("pins the tenant with the SQL_current_tenant_id setting and forces readonly=2", async () => {
     await getCampaignPerformance(CLAIMS, { windowDays: 7 });
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain(`SQL_current_tenant_id=${CLAIMS.orgId}`);
-    expect(url).toContain("readonly=1");
+    expect(url).toContain("readonly=2");
     expect(url).toContain("default_format=JSONEachRow");
   });
 
@@ -53,9 +53,10 @@ describe("getCampaignPerformance", () => {
     const url = String(fetchMock.mock.calls[0][0]);
     const body = String(fetchMock.mock.calls[0][1].body);
     expect(url).toContain("param_window_days=7");
-    expect(url).toContain("param_corridor=Whitefield");
+    expect(url).toContain("param_corridor_filter=Whitefield");
     expect(body).not.toContain("Whitefield");
     expect(body).toContain("{window_days:UInt16}");
+    expect(body).toContain("{corridor_filter:String}");
   });
 
   it("parses JSONEachRow into numbers", async () => {

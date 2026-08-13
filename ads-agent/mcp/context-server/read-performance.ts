@@ -29,17 +29,18 @@ const inputSchema = z.strictObject({
 
 // The SQL is a module constant. Values arrive as ClickHouse query parameters
 // ({name:Type}) so nothing the caller supplies is ever part of the statement.
+// Param name must not collide with a SELECT alias (CH 25.8 ILLEGAL_AGGREGATION).
 const PERFORMANCE_SQL = `
 SELECT campaign_id,
        any(campaign_name)      AS campaign_name,
-       any(corridor)           AS corridor,
+       any(corridor)           AS corridor_label,
        sum(spend)              AS spend,
        sum(clicks)             AS clicks,
        sum(impressions)        AS impressions,
        sum(conversions)        AS conversions
   FROM campaign_performance_daily
  WHERE day >= today() - {window_days:UInt16}
-   AND ({corridor:String} = '' OR corridor = {corridor:String})
+   AND ({corridor_filter:String} = '' OR campaign_performance_daily.corridor = {corridor_filter:String})
  GROUP BY campaign_id
  ORDER BY spend DESC
  LIMIT 200`;
@@ -59,13 +60,15 @@ export async function getCampaignPerformance(
   if (!parsed.success) throw new Error("invalid_window_days");
   const { windowDays, corridor } = parsed.data;
 
+  // readonly=2: read-only queries but still allow session settings (tenant id).
+  // readonly=1 rejects SQL_current_tenant_id ("Cannot modify setting in readonly mode").
   const params = new URLSearchParams({
     default_format: "JSONEachRow",
-    readonly: "1",
+    readonly: "2",
     max_execution_time: "5",
     SQL_current_tenant_id: claims.orgId,
     param_window_days: String(windowDays),
-    param_corridor: corridor ?? "",
+    param_corridor_filter: corridor ?? "",
   });
 
   const auth = Buffer.from(
@@ -80,9 +83,11 @@ export async function getCampaignPerformance(
 
   // The response body of a failed ClickHouse query can echo row data. It never
   // reaches an error message, because that message reaches a span (§13.3).
-  if (!res.ok) throw new Error("clickhouse_unavailable");
-
+  // ClickHouse may return HTTP 200 with `Code:` / JSON exception in the body.
   const body = await res.text();
+  if (!res.ok || body.startsWith("Code:") || body.includes('"exception"')) {
+    throw new Error("clickhouse_unavailable");
+  }
   return body
     .split("\n")
     .filter((line) => line.trim().length > 0)
@@ -90,7 +95,10 @@ export async function getCampaignPerformance(
     .map((row) => ({
       campaignId: String(row.campaign_id),
       campaignName: String(row.campaign_name ?? ""),
-      corridor: row.corridor === null || row.corridor === "" ? null : String(row.corridor),
+      corridor: (() => {
+        const raw = row.corridor_label ?? row.corridor;
+        return raw === null || raw === undefined || raw === "" ? null : String(raw);
+      })(),
       spend: Number(row.spend ?? 0),
       clicks: Number(row.clicks ?? 0),
       impressions: Number(row.impressions ?? 0),

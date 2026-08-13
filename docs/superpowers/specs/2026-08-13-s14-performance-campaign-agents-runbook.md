@@ -217,7 +217,27 @@ Open ads-agent **`/proposals`**: at least one **pending** row with:
 | 5 | Proposal visible in `/proposals`; human approval unchanged; no agent execute |
 | 6 | **Option‑3:** when Google Ads MCP is up, profile calls a read tool without platform writes. **When Ads is down, skip step 6 — CH-only still satisfies gate items 1–5** |
 
+## Live E2E notes (2026-08-13 local)
+
+Automated smoke (no interactive Hermes chat):
+
+```bash
+cd ads-agent
+# Requires seeded CH table + AGENT_CLICKHOUSE_* + AGENT_RO_DATABASE_URL + DATABASE_URL
+npx tsx scripts/s14-live-e2e.ts
+```
+
+Observed on this machine:
+
+1. **CH seed:** created `campaign_performance_daily` + tenant row policy; inserted one row for platform org.
+2. **CH client fixes** (required for live CH 25.8): use `readonly=2` (not `1`) so `SQL_current_tenant_id` can be set; rename param to `corridor_filter` and alias `corridor_label` to avoid `ILLEGAL_AGGREGATION`.
+3. **agent_ro grants:** re-applied `GRANT SELECT ON context.v_agent_graph_manifest` (and related) — missing on consolidated `:5433` despite migration 105.
+4. **Result:** `get_campaign_performance` returned CH rows; pending `campaign.pause` from `proposed_by=performance`; `campaign.budget_change` correctly hit `stale_data_refusal` (CDC lag).
+5. **Hermes chat profiles:** gateway currently only lists `default` — create Hermes profiles `performance` / `campaign` + MCP wiring before interactive two-profile chat. Wake stubs log only until Hermes API invoke is wired.
+6. **Google Ads MCP** `:8766` up (HTTP 405 on bare `/mcp` is expected for non-MCP clients); option‑3 read smoke deferred until Hermes profiles exist.
+
 ## Deterministic CI (no Hermes)
+
 
 ```bash
 cd ads-agent
