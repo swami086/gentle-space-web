@@ -73,6 +73,9 @@ npm run worker:inbound
 - Runs `processInboundEvent`: match/create enquiry → Garage media → `addMessage` → signals.
 - Disable without stopping the app: `INBOUND_WORKER=0`.
 - Override schedule: `INBOUND_WORKER_CRON='*/10 * * * * *'`.
+- **Run a single `worker:inbound` process.** Claims release before status flips off `pending`, so
+  two instances can double-process an event (message rows stay deduped; unmatched creates can mint
+  orphan contacts/enquiries). Harden with a `processing` status in a follow-up if you need HA.
 
 Run alongside `npm run relay` in production so outbox events are durable; the worker also claims
 directly from `inbound_events` for processing.

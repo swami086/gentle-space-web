@@ -165,7 +165,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 
 ## Implementation plans (docs/superpowers/plans/)
 
-**Plans cover S1–S13; S1–S9a written 2026-08-12, S10–S13 implemented 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
+**Plans cover S1–S15; S1–S9a written 2026-08-12, S10–S15 implemented 2026-08-13.** Execute in build-sequence order via `superpowers:subagent-driven-development`.
 
 | Plan | Steps | Tasks / waves / max width | PG migrations |
 |---|---|---|---|
@@ -181,6 +181,7 @@ Written 2026-08-11/12 for the shift from internal admin panel to productised mul
 | `2026-08-13-s12-kanban-orchestrator.md` | 592 | **9 / 5 / 3** | (none — Kanban in Hermes `kanban.db`) | **IMPLEMENTED** on local `main` (`8b422fd`, 2026-08-13) — orchestrator+leads profiles; **S12-D1** ads-agent wake/seed, Hermes gateway dispatch; chain gate + runbook |
 | `2026-08-13-s13-generative-surfaces.md` | — | **12 / 7 / peak 4** (ceiling 8) | `111` | **IMPLEMENTED** on local `main` (`aa35cb4`, 2026-08-13) — F1–F5; gate `s13-gate.test.ts`; migration 111 applied on consolidated `:5433` |
 | `2026-08-13-s14-performance-campaign-agents.md` | — | **12 / 4 / peak 5** (ceiling 8) | (none) | **IMPLEMENTED** on local `main` (`970deb5` + CH `264da5d`) — CI + interactive Hermes two-profile E2E PASS 2026-08-13 |
+| `2026-08-13-s15-inbound-expansion.md` | — | **14 / 3 / peak 8** (W1 T1–T8) | `112` | **IMPLEMENTED** on `feat/s15-inbound-expansion` (`ee395e4`) — gate `s15-gate.test.ts`; runbook; apply migration `112` before worker |
 
 **Migration ranges are allocated per plan and must not be crossed** — that allocation is what let seven
 writers work simultaneously without collision. ClickHouse DDL is separately numbered under
