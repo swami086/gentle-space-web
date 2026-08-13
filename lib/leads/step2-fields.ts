@@ -2,22 +2,49 @@ import type { NeedType } from "../whatsapp";
 
 export type Step2Answers = Record<string, string>;
 
+export type Step2FieldKind = "text" | "choice";
+
 export type Step2Field = {
   key: string;
   label: string;
   placeholder: string;
+  kind?: Step2FieldKind;
+  choices?: readonly string[];
 };
+
+export const TIMELINE_BUCKETS = [
+  "Immediate (this month)",
+  "1–3 months",
+  "3–6 months",
+  "Just exploring",
+] as const;
+
+export function step2FieldDisplayLabel(field: Step2Field): string {
+  return `${field.label} (optional)`;
+}
 
 export const STEP2_FIELDS: Record<NeedType, Step2Field[]> = {
   office: [
     { key: "teamSize", label: "Team size / desks", placeholder: "e.g. 15 desks" },
     { key: "preferredArea", label: "Preferred area or corridor", placeholder: "e.g. Koramangala, HSR" },
-    { key: "moveInTimeline", label: "Move-in timeline", placeholder: "e.g. Within 30 days" },
+    {
+      key: "moveInTimeline",
+      label: "Move-in timeline",
+      placeholder: "e.g. Within 30 days",
+      kind: "choice",
+      choices: TIMELINE_BUCKETS,
+    },
   ],
   retail: [
     { key: "frontageFootfall", label: "Frontage / footfall need", placeholder: "e.g. High-street frontage" },
     { key: "preferredLocality", label: "Preferred locality", placeholder: "e.g. Indiranagar 100 Feet Road" },
-    { key: "timeline", label: "Timeline", placeholder: "e.g. Within 60 days" },
+    {
+      key: "timeline",
+      label: "Timeline",
+      placeholder: "e.g. Within 60 days",
+      kind: "choice",
+      choices: TIMELINE_BUCKETS,
+    },
   ],
   lease: [
     { key: "propertySize", label: "Property type & size", placeholder: "e.g. 2,000 sqft office floor" },
