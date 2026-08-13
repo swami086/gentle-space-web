@@ -20,6 +20,7 @@
     "worker:projection": "tsx --env-file=.env.local scripts/run-twenty-projection.ts",
     "worker:reminders": "tsx --env-file=.env.local scripts/run-reminder-scheduler.ts",
     "worker:proposals": "tsx --env-file=.env.local scripts/run-proposal-undo-worker.ts",
+    "worker:inbound": "tsx --env-file=.env.local scripts/run-inbound-worker.ts",
     "cycle:run": "tsx --env-file=.env.local scripts/run-once.ts",
     "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts",
     "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts",
