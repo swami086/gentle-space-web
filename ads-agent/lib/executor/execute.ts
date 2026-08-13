@@ -93,8 +93,8 @@ export async function executeProposal(
 ): Promise<{ status: "executed" | "failed"; error?: string }> {
   const proposal = await getProposalById(scope, proposalId);
   if (!proposal) throw new Error(`proposal ${proposalId} not found`);
-  if (proposal.status !== "approved") {
-    throw new Error(`proposal ${proposalId} is not approved (status: ${proposal.status})`);
+  if (proposal.status !== "executing") {
+    throw new Error(`proposal ${proposalId} is not executing (status: ${proposal.status})`);
   }
 
   try {
