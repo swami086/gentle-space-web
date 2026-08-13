@@ -13,6 +13,16 @@ describe("buildQualifyUserText", () => {
     expect(text).toContain("Need by month end");
     expect(text).not.toMatch(/"name"|"phone"/i);
   });
+
+  it("includes a chosen timeline bucket in details and still excludes PII keys", () => {
+    const text = buildQualifyUserText({
+      need: "office",
+      step2Answers: { moveInTimeline: "1–3 months" },
+      notes: "",
+    });
+    expect(text).toContain("Move-in timeline: 1–3 months");
+    expect(text).not.toMatch(/"name"|"phone"/i);
+  });
 });
 
 describe("parseQualificationJson", () => {
