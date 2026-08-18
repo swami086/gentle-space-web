@@ -7,6 +7,10 @@ export function getPool(): Pool {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
   if (!pool) {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    // Idle clients drop (Docker/macOS) as 'error' on Client; unhandled = process exit.
+    pool.on("error", (err) => {
+      console.error("pg pool idle client error", err.message);
+    });
   }
   return pool;
 }

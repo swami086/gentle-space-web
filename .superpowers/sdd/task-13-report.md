@@ -1,34 +1,63 @@
-# Task 13 Report — List + detail UI (delta, preflight, diff, undo)
+# Task 13 Report — Process inbound event (worker core)
 
-**Status:** Complete  
-**Branch:** `feat/s11-t13`
+**Branch:** `feat/s15-t13`  
+**Status:** ✅ Complete  
+**Commit:** `bfa1cce` — `feat(s15): inbound worker processes events`
 
-## Delivered
+## Deliverables
 
-- **List page** (`proposals/page.tsx`): Added **Scheduled** status tab; **Budget Δ** column via `budgetDeltaInr` + campaign join in `listProposals`.
-- **Detail page** (`proposals/[id]/page.tsx`): Server-side `runPreflight`, `semanticDiff`, `brokerRationale` for pending/scheduled; undo banner when `scheduled` + active window.
-- **PreflightPanel.tsx**: Structured check list with pass/block/warn icons.
-- **DiffTable.tsx**: Before/after field table from `semanticDiff`.
-- **ProposalActions.tsx**: Approve/reject for pending; **Cancel** + live countdown when `scheduled` and `undoUntil > now`.
-- **proposals.ts**: `listProposals` LEFT JOIN campaigns for `currentDailyBudgetInr`; exported `ProposalListItem`.
+| File | Action |
+|------|--------|
+| `ads-agent/lib/inbound/process.ts` | Created — `processInboundEvent(event, deps?)` |
+| `ads-agent/lib/inbound/process.test.ts` | Created — text-only happy path + media-before-message ordering |
+| `ads-agent/scripts/run-inbound-worker.ts` | Created — cron worker mirroring proposal-undo pattern |
+| `ads-agent/package.json` | Added `"worker:inbound": "tsx --env-file=.env.local scripts/run-inbound-worker.ts"` |
 
-## Tests
+## TDD cycle
 
-- `npx vitest run lib/db/proposals.test.ts` — PASS (updated SQL expectations for join + alias).
-- `npx vitest run lib/decision-engine/budget-delta.test.ts` — PASS.
+1. **RED** — Added `process.test.ts` with WhatsApp text-only flow and image media call-order assertions;  
+   `npx vitest run lib/inbound/process.test.ts` failed with `Cannot find module './process'`.
+2. **GREEN** — Implemented `process.ts` (parse → match → media → message → signals → touch → mark processed) and worker script;  
+   same command passes **2/2**.
 
-## Manual checks
+## Algorithm verified
 
-1. Open `/proposals?status=pending` — Budget Δ column shows `—` or signed INR.
-2. Open a pending proposal detail — **Changes** (DiffTable) + **Pre-flight checks** (PreflightPanel) render; Approve/Reject visible.
-3. Approve a proposal → lands on scheduled tab; detail shows undo banner + Cancel with countdown.
-4. Cancel within window → returns to pending; countdown disappears.
+1. Parse channel payload — WA single message object (`from`, `type`, `text.body`, image/document/audio/video ids); Postmark full JSON (`MailboxHash`, `FromFull`/`From`/`FromName`, `TextBody`, `Attachments[].Content` base64).
+2. `matchOrCreateEnquiry(scope, matchInput)` — WA passes `profileName: null`.
+3. Build `InboundMediaItem[]` for WA media ids or Postmark attachment bytes.
+4. `storeInboundMedia` — on throw, `markInboundEventFailed` + return (retry); oversize/missing_body skips appended to body.
+5. Body: text, media placeholders (`[image]`, `[document: name]`, `[attachment]`), or skipped notes (`[media skipped: too large]`).
+6. `addMessage` with `externalId`, `replyToken: enquiry.inboundReplyToken` — `is_untrusted` unchanged (DB default true).
+7. `refreshEnquirySignals`, `touchLastActivity`, `markInboundEventProcessed`.
+8. Scope always `{ kind: "org", orgId: event.orgId }` — no outbound send (BD2).
+
+## Worker
+
+- `INBOUND_WORKER=0` disables; default cron `*/5 * * * * *` (override `INBOUND_WORKER_CRON`).
+- `claimPendingInboundEvents(10)` per tick; logs per-event failures.
+- `npm run worker:inbound`.
+
+## Test summary
+
+```text
+Test Files  1 passed (1)
+     Tests  2 passed (2)
+
+Command: npx vitest run lib/inbound/process.test.ts
+Working directory: ads-agent (worktree feat/s15-t13)
+```
+
+## Self-review
+
+| Check | Result |
+|-------|--------|
+| Media before `addMessage` | ✅ Ordered in code + test asserts call sequence |
+| No outbound send | ✅ Only reads via existing `storeInboundMedia` Graph GET |
+| `is_untrusted` preserved | ✅ Not passed to `addMessage`; DB default remains |
+| Injectable deps for tests | ✅ `ProcessInboundEventDeps` |
+| Platform org scope | ✅ Uses `event.orgId` per brief |
 
 ## Concerns
 
-- Preflight on detail re-fetches org settings/credits each render (matches approve route pattern; no caching).
-- Undo countdown uses client `setInterval`; server-rendered banner seconds may drift 1s until refresh.
-
-## Commit
-
-`feat(s11): render preflight, diffs, budget delta, undo UI`
+- Worker tick counts an event as `processed` even when `processInboundEvent` marks it `failed` internally (function swallows errors after `markInboundEventFailed`). Metrics are optimistic; ops should use `inbound_events.status`.
+- Email media-only placeholder is generic `[attachment]` rather than per-file names (acceptable for S15; can refine in follow-up).
