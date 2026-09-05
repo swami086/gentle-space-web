@@ -7,6 +7,11 @@ metadata:
     app: openmemory-api
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: openmemory-api
@@ -63,12 +68,14 @@ spec:
               cpu: "1000m"
               memory: "1Gi"
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /docs
               port: 8765
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /docs
               port: 8765
             initialDelaySeconds: 30
             periodSeconds: 20
