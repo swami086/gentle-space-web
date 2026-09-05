@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openmemory-config
+  namespace: openmemory
+data:
+  USER: "GentleSpace"
+  QDRANT_HOST: "qdrant"
+  POSTGRES_USER: "openmemory"
+  POSTGRES_DB: "openmemory"

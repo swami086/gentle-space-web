@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openmemory
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openmemory-sa
+  namespace: openmemory

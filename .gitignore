@@ -47,6 +47,9 @@ backup-listings-*.sql
 
 backups/
 
+# OpenMemory GKE local secrets
+deploy/openmemory/02-secrets.local.yaml
+
 # OpenMemory - IDE/Assistant specific rules
 .cursor/rules/openmemory.mdc
 .worktrees/

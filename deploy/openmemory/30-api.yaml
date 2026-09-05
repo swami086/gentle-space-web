@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmemory-api
+  namespace: openmemory
+  labels:
+    app: openmemory-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openmemory-api
+  template:
+    metadata:
+      labels:
+        app: openmemory-api
+    spec:
+      serviceAccountName: openmemory-sa
+      containers:
+        - name: api
+          image: skpassegna/openmemory-mcp:latest
+          ports:
+            - name: http
+              containerPort: 8765
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openmemory-secrets
+                  key: OPENAI_API_KEY
+            - name: USER
+              valueFrom:
+                configMapKeyRef:
+                  name: openmemory-config
+                  key: USER
+            - name: QDRANT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: openmemory-config
+                  key: QDRANT_HOST
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openmemory-secrets
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            tcpSocket:
+              port: 8765
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8765
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openmemory-api
+  namespace: openmemory
+spec:
+  type: LoadBalancer
+  selector:
+    app: openmemory-api
+  ports:
+    - name: http
+      port: 8765
+      targetPort: 8765
