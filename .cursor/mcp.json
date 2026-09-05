@@ -14,7 +14,13 @@
         "list_memories",
         "delete_all_memories"
       ],
-      "url": "http://100.71.169.23:8770/mcp/cursor/sse/GentleSpace"
+      "url": "http://136.67.164.6:8765/mcp/cursor/sse/GentleSpace"
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "figma-desktop": {
+      "url": "http://127.0.0.1:3845/mcp"
     }
   }
 }
