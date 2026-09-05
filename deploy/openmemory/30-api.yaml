@@ -19,6 +19,18 @@ spec:
       containers:
         - name: api
           image: skpassegna/openmemory-mcp:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              python3 -c "
+              from pathlib import Path
+              p = Path('/usr/src/openmemory/app/database.py')
+              t = p.read_text()
+              old = 'engine = create_engine(\n    DATABASE_URL,\n    connect_args={\"check_same_thread\": False}  # Needed for SQLite\n)'
+              new = 'connect_args = ({\"check_same_thread\": False} if DATABASE_URL.startswith(\"sqlite\") else {})\nengine = create_engine(DATABASE_URL, connect_args=connect_args)'
+              p.write_text(t.replace(old, new) if old in t else t)
+              "
+              cd /usr/src/openmemory && exec uvicorn main:app --host 0.0.0.0 --port 8765
           ports:
             - name: http
               containerPort: 8765
@@ -45,8 +57,8 @@ spec:
                   key: DATABASE_URL
           resources:
             requests:
-              cpu: "200m"
-              memory: "512Mi"
+              cpu: "50m"
+              memory: "256Mi"
             limits:
               cpu: "1000m"
               memory: "1Gi"
