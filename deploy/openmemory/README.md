@@ -36,6 +36,8 @@ kubectl -n openmemory get svc openmemory-api -o wide
 
 Wait until `EXTERNAL-IP` is not `<pending>` (typically 1–3 minutes on GKE).
 
+Current MCP URL: `http://136.67.164.6:8765/mcp/cursor/sse/GentleSpace`
+
 ## Cursor MCP URL
 
 Update `.cursor/mcp.json` for server `openmemory-gentlespace`:
