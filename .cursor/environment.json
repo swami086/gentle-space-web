@@ -1,0 +1,26 @@
+{
+  "name": "gentle-space-web",
+  "install": "npm install && (cd auth-service && npm install) && (cd ads-agent && npm install)",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "npm run dev",
+      "description": "Main marketing/listings site (gentle-space-web) on http://localhost:3000. DB/AI/Maps features need real credentials (add via Secrets); DB-backed pages degrade to an empty state without them."
+    },
+    {
+      "name": "auth-service",
+      "command": "cd auth-service && npm run dev",
+      "description": "Admin auth service (SSO) on http://localhost:3040. Boots in dev without a database (its dev script unsets DATABASE_URL/Google OAuth vars)."
+    },
+    {
+      "name": "ads-agent",
+      "command": "cd ads-agent && npm run dev",
+      "description": "Ads agent console on http://localhost:3030. Unauthenticated requests redirect to the auth-service login. Full features need Postgres/Pub-Sub/Google Ads credentials."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "ads-agent", "port": 3030 },
+    { "name": "auth-service", "port": 3040 }
+  ]
+}
