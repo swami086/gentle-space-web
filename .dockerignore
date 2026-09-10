@@ -10,3 +10,20 @@ deploy/.env.*
 *.log
 coverage
 terminals
+
+# Sibling apps/tooling in this monorepo — not part of the root Next.js
+# build, but tsconfig's "**/*.tsx" include picks them up if present in
+# the build context, breaking `next build` typecheck on unrelated files.
+.worktrees
+ads-agent
+auth-service
+frontend-redesign
+infra
+docs
+design-exports
+design-sandbox
+designs
+.claude
+.cursor
+.superpowers
+.firecrawl

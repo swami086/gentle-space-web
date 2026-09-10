@@ -1,40 +1,82 @@
-# Task 1 Report — Proposal undo lifecycle
+# Task 1 Report: Archive weak board
 
-**Branch:** `feat/s11-decision-engine`  
-**Worktree:** `.worktrees/s11-decision-engine`  
-**Status:** ✅ Complete
+**Status:** DONE  
+**Commits:** none (Figma-only)  
+**File:** `bZ7LkDipySdYsNGH0YBtGu`  
+**Page:** BrokerDesk Waitlist
 
 ## Summary
 
-Implemented the Task 1 foundation for proposal undo lifecycle. `adsagent.proposals` now has the new lifecycle columns and widened status CHECK in migration 107, `ProposalStatus` / `Proposal` / `ProposalRow` now expose the scheduled undo fields, and `stripSmuggle()` strips zero-width, tag-block, and other Unicode format characters at display boundaries.
+Renamed and moved the weak PSW product screens board (`116:2`) off the primary slot at ~x=4780, y=100. The board is still addressable under its original ID but now lives at the archive position (rightEdge + 400). The slot near x=4780, y=100 is clear for a fresh quality-rebuild board.
 
-No schedule/cancel/claim behavior was added, and approve/execute flows were left untouched per brief.
+## Step 1: Switch page, rename, move
 
-## Files
+**Script:** Exact brief script (with extra read-only fields for QA).
 
-| Action | Path |
-|--------|------|
-| Create | `ads-agent/lib/db/migrations/107_proposal_undo_lifecycle.up.sql` |
-| Create | `ads-agent/lib/db/migrations/107_proposal_undo_lifecycle.down.sql` |
-| Create | `ads-agent/lib/decision-engine/strip-smuggle.ts` |
-| Create | `ads-agent/lib/decision-engine/strip-smuggle.test.ts` |
-| Modify | `ads-agent/lib/types.ts` |
-| Modify | `ads-agent/lib/db/proposals.ts` |
+| Field | Value |
+|-------|-------|
+| `archivedBoardId` | `116:2` |
+| `name` | `Archive / PSW Product Screens v1 (weak)` |
+| `x` | **7980** |
+| `y` | **100** |
+| `originalX` | 4780 |
+| `originalY` | 100 |
+| `rightEdge` (before move) | 7580 |
+| `mutatedNodeIds` | `["116:2"]` |
 
-## Test results
+Move formula: `board.x = rightEdge + 400` → 7580 + 400 = 7980. Confirmed.
 
-```bash
-npx vitest run lib/decision-engine/strip-smuggle.test.ts
+Board dimensions unchanged: 2800 × 2200 (from prior scaffold task).
+
+## Step 2: QA
+
+### Screenshot
+
+- Tool: `get_screenshot` on `116:2` (maxDimension 1024)
+- Result: PNG captured (2800×2200 node, scaled to 1024×805)
+- Visual: Dark archive board with 8 placeholder shimmer blocks (4 top, 1 large mid-left, 3 bottom) — consistent with pre-archive weak scaffold content
+
+### Slot clearance
+
+Read-only verification on BrokerDesk Waitlist page:
+
+| Check | Result |
+|-------|--------|
+| Frames within ±50px of (4780, 100) | **none** |
+| `slotCleared` | **true** |
+| Archived node still reachable | yes — id `116:2`, name and position as above |
+
+### Rename confirmation
+
+Plugin API returned `name: "Archive / PSW Product Screens v1 (weak)"` after mutation. Screenshot metadata targets node `116:2` post-rename.
+
+## Self-review vs brief
+
+| Criterion | Pass? |
+|-----------|-------|
+| Load `figma-use` before `use_figma` | Yes |
+| `skillNames: "figma-use"` on `use_figma` | Yes |
+| `await figma.setCurrentPageAsync(...)` at script start | Yes |
+| No `figma.closePlugin()`, no async IIFE | Yes |
+| Return mutated node IDs | Yes (`116:2`) |
+| Rename `116:2` → `Archive / PSW Product Screens v1 (weak)` | Yes |
+| Move to `rightEdge + 400`, y=100 | Yes (7980, 100) |
+| `get_screenshot` on archived board | Yes |
+| Original slot free for new board ~4780,100 | Yes |
+| Git commit | None (as required) |
+
+**Verdict:** DONE. Slot cleared; archived board preserved and addressable.
+
+## IDs for downstream tasks
+
+```json
+{
+  "archivedBoardId": "116:2",
+  "archivedName": "Archive / PSW Product Screens v1 (weak)",
+  "archivedX": 7980,
+  "archivedY": 100,
+  "clearedSlot": { "x": 4780, "y": 100 },
+  "slotCleared": true,
+  "screenshotTaken": true
+}
 ```
-
-Result: 1 file passed, 2 tests passed.
-
-`npx tsc -p tsconfig.json --noEmit` was attempted for a broader safety check, but it failed on pre-existing unrelated type errors outside this task's files.
-
-## Concerns
-
-None for this task scope. The only open issue is the unrelated repo-wide typecheck noise, which predates this change.
-
-## Notes
-
-`openmemory.md` was updated with the new proposal lifecycle contract and `stripSmuggle` helper entry.

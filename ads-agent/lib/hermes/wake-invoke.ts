@@ -247,7 +247,7 @@ async function runDockerSpawn(
   return await new Promise<HermesWakeInvokeResult>((resolve) => {
     const child: ChildProcessWithoutNullStreams = spawnFn("docker", dockerArgs, {
       stdio: ["ignore", "pipe", "pipe"],
-    }) as ChildProcessWithoutNullStreams;
+    }) as unknown as ChildProcessWithoutNullStreams;
 
     let stdout = "";
     let stderr = "";

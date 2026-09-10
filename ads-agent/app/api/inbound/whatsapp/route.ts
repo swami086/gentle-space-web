@@ -66,7 +66,7 @@ type WhatsAppMessageEvent = {
   payload: Record<string, unknown>;
 };
 
-export function extractWhatsAppMessageEvents(payload: unknown): WhatsAppMessageEvent[] {
+function extractWhatsAppMessageEvents(payload: unknown): WhatsAppMessageEvent[] {
   const root = payload as any;
   const events: WhatsAppMessageEvent[] = [];
 

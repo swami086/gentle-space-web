@@ -20,4 +20,10 @@ I also want to have multiple agents in the system for multiple specialisations l
 
 identify the right cursor skills here from the cursor skills catalog for this task. use /firecrawl-cli for any web search for best practices, use cases and official trustred sources for any clarification/ validation and use torbit mcp for any codebase understanding and its dependencies and be guided by /using-superpowers 
 
+use /firecrawl-cli  for the web search for best practices, compettion research,  use cases and authoritative trustred sources for any clarification/ validation and use torbit mcp for any codebase understanding and its dependencies and be guided by /using-superpowers 
+
 gather last working context from openmemory mcp and execute the plan 
+
+gather all the skills needed for this from the cursor global skills catalog first ( mandatory) and then do this step by step. use the best suited model for this task ( multiple if needed)
+
+gather the best skills needed for this from the cursor global skills catalog first ( mandatory) and then do this step by step. 
