@@ -34,7 +34,7 @@ describe("ensureAgeSession", () => {
     expect(query).toHaveBeenNthCalledWith(1, "LOAD 'age'");
     expect(query).toHaveBeenNthCalledWith(
       2,
-      'SET search_path TO ag_catalog, "$user", public',
+      "SET search_path TO ag_catalog, listings, public",
     );
   });
 });

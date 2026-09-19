@@ -1,3 +1,4 @@
+import { ReticleDev } from './reticle-dev';
 import type { Metadata } from "next";
 import { Source_Sans_3, Source_Serif_4 } from "next/font/google";
 import Script from "next/script";
@@ -31,7 +32,7 @@ export default function RootLayout({
       className={`${sourceSans.variable} ${sourceSerif.variable} h-full scroll-smooth`}
       suppressHydrationWarning
     >
-      <body className="font-primary bg-[var(--bg)] text-[var(--ink)] h-full antialiased">
+      <body className="font-primary bg-[var(--bg)] text-[var(--ink)] h-full antialiased">{process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}
         <Script src="/theme-init.js" strategy="beforeInteractive" />
         <ThemeProvider>{children}</ThemeProvider>
       </body>

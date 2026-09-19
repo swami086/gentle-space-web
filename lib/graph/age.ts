@@ -121,7 +121,10 @@ function bucketForEdge(edge: string): Bucket | null {
 
 export async function ensureAgeSession(client: PoolClient): Promise<void> {
   await client.query("LOAD 'age'");
-  await client.query('SET search_path TO ag_catalog, "$user", public');
+  // Keep `listings` on the path: pool connections already need it for
+  // unqualified listing SQL, and overwriting with only ag_catalog/public
+  // would hide listings.listings again for the rest of this session.
+  await client.query("SET search_path TO ag_catalog, listings, public");
 }
 
 export async function isAgeAvailable(): Promise<boolean> {

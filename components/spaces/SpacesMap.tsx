@@ -5,6 +5,8 @@ import type { PublicListing } from "@/lib/listings/public";
 import { useGoogleMap } from "./useGoogleMap";
 
 const BANGALORE = { lat: 12.9716, lng: 77.5946 };
+/** Privacy field stays APPROX_RADIUS_M (500); browse draw is capped so neighborhood zoom isn't a blob. */
+const BROWSE_CIRCLE_MAX_M = 200;
 
 type SpacesMapProps = {
   listings: PublicListing[];
@@ -43,7 +45,8 @@ export function SpacesMap({ listings, activeId, onActivate }: SpacesMapProps) {
       const circle = new google.maps.Circle({
         map,
         center,
-        radius: listing.approxRadiusM,
+        // ponytail: display-only cap; upgrade → zoom-scaled radius if one size still fights city vs street zoom
+        radius: Math.min(listing.approxRadiusM, BROWSE_CIRCLE_MAX_M),
         clickable: true,
         ...circleStyle(false),
       });

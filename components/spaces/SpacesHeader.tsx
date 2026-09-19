@@ -1,5 +1,3 @@
-import { ThemeToggle } from "@/components/ThemeToggle";
-
 const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000;
 
 export function isStaleSync(finishedAt: string | null | undefined): boolean {
@@ -12,7 +10,10 @@ type SpacesHeaderProps = {
   variant?: "default" | "minimal";
 };
 
+/** Title/meta strip only — theme lives in SiteHeader (spaces layout). */
 export function SpacesHeader({ metaOverride, variant = "default" }: SpacesHeaderProps) {
+  if (variant === "minimal" && !metaOverride) return null;
+
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="mx-auto flex min-h-[72px] max-w-[1120px] items-center justify-between gap-4 px-5 py-4 lg:px-10">
@@ -31,10 +32,6 @@ export function SpacesHeader({ metaOverride, variant = "default" }: SpacesHeader
               {metaOverride}
             </p>
           ) : null}
-        </div>
-
-        <div className="shrink-0">
-          <ThemeToggle />
         </div>
       </div>
     </header>

@@ -1,6 +1,8 @@
-@AGENTS.md
+---
+description: Verify web features with Reticle after building them, and report Reticle problems back to its maintainers
+alwaysApply: true
+---
 
-<!-- reticle:begin (managed by `reticle init` — edit outside these markers) -->
 ## Verifying with Reticle
 
 This app is instrumented by **Reticle**, an in-app verification layer exposed as `reticle_*` MCP tools and the `npx @reticlehq/server` CLI (always through npx: Reticle's server is not installed into this project). Verifying is part of "done", not an optional extra.
@@ -62,4 +64,3 @@ A dev server that is already running does not pick up an edited build config or 
 **Report Reticle's own defects with `reticle_session { action: "feedback" }` the moment you notice**, then carry on with your task. You are the user Reticle is built for and the only one who can say what it cost you, and that knowledge is gone when your context is.
 
 📄 **The rest is in [RETICLE.md](./RETICLE.md): what to do when the tools are missing, when a result carries `version_skew` or `update_available`, when `reticle_look { action: "state" }` comes back empty, and how to write a feedback report that can be acted on. Read it when you hit one of those, not before.**
-<!-- reticle:end -->

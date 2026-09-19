@@ -32,6 +32,8 @@
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.15.12",
+    "@reticlehq/next": "^3.1.0",
+    "@reticlehq/react": "^3.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/google.maps": "^3.65.3",
     "@types/node": "^20",
