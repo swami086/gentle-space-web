@@ -37,7 +37,7 @@ Verified on this machine: Xcode 26.2, iOS 26.2 SDK, macOS 26.1. On-device AFM te
 
 ## Approach (selected: two-stage Speech → AFM)
 
-Record audio (AVFoundation), transcribe on-device (`SFSpeechRecognizer`, `requiresOnDeviceRecognition = true`, default locale `en-IN`), then extract a typed `@Generable` struct from the transcript with a `LanguageModelSession`. The broker sees and can edit the transcript before extraction, so transcription errors are catchable; each stage is independently testable.
+Record audio (AVFoundation), transcribe on-device with iOS 26 `SpeechAnalyzer` + `SpeechTranscriber` (file-based `.offlineTranscription` preset, en-IN with en-US fallback, locale model downloaded once via `AssetInventory`), then extract a typed `@Generable` struct from the transcript with a `LanguageModelSession`. SpeechAnalyzer is on-device by design (no server path) and has no ~1-minute session cap, unlike the legacy `SFSpeechRecognizer`. The broker sees and can edit the transcript before extraction, so transcription errors are catchable; each stage is independently testable.
 
 Rejected alternatives:
 
@@ -54,7 +54,7 @@ broker-field-ios/
   BrokerField/
     App/          BrokerFieldApp, RootView, theme (accent #6840B8)
     Recording/    AudioRecorder (actor): AVAudioRecorder wrapper, level metering, .m4a to sandbox
-    Transcription/ SpeechTranscriber: SFSpeechRecognizer, on-device, en-IN default
+    Transcription/ SpeechAnalyzerTranscriber: SpeechAnalyzer + SpeechTranscriber, on-device, en-IN default
     Extraction/   EnquiryExtractor (ModelProviding seam), FoundationModelsExtractor,
                   EnquiryExtraction (@Generable), availability mapping
     Model/        Enquiry (SwiftData), NeedType, LeadPayload (Codable), PhoneNormalizer

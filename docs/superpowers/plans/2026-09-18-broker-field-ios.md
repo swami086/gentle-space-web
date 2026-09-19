@@ -2,22 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the M1 slice of Broker Field — an iPhone app that records a broker's voice note, transcribes and extracts a structured enquiry on-device (Speech + Apple Foundation Models), and submits it to the existing `POST /api/leads` pipeline.
+**Goal:** Build the M1 slice of Broker Field — an iPhone app that records a broker's voice note, transcribes and extracts a structured enquiry on-device (SpeechAnalyzer + Apple Foundation Models), and submits it to the existing `POST /api/leads` pipeline.
 
 **Architecture:** Thin SwiftUI app over protocol-seamed services (`AudioRecording`, `SpeechTranscribing`, `EnquiryExtracting`, `LeadSubmitting`) so every stage is mockable and testable in the simulator. Local-first persistence via SwiftData before any network call; an outbox actor retries submissions with backoff. Spec: `docs/superpowers/specs/2026-09-18-broker-field-ios-design.md`.
 
-**Tech Stack:** Swift 6, SwiftUI, SwiftData, FoundationModels (iOS 26), Speech, AVFoundation, XCTest. Zero third-party dependencies. Xcode 26.2 at `/Applications/Xcode.app`.
+**Tech Stack:** Swift 6, SwiftUI, SwiftData, FoundationModels (iOS 26), Speech framework's **SpeechAnalyzer/SpeechTranscriber** (iOS 26, on-device by design), AVFoundation, **Swift Testing** (unit) + XCTest/XCUI (UI only). Zero third-party dependencies. Xcode 26.2 at `/Applications/Xcode.app`.
+
+> **Revision 2 (2026-09-18, post-audit).** Adversarial review + current-docs research drove these changes from rev 1: (1) transcription moved from legacy `SFSpeechRecognizer` to iOS 26 `SpeechAnalyzer`/`SpeechTranscriber` (on-device by design, no ~1-minute cap, AsyncSequence API, AssetInventory model download); (2) unit tests use Swift Testing (`@Test`/`#expect`) — the Xcode 26 default for new code — while UI tests stay on XCTest/XCUI (the only UI automation framework); (3) AFM error handling adds the `.refusal` case and session prewarming; (4) keyword need-inference uses word boundaries ("workshop" no longer matches "shop"); (5) UI test waits for buttons before tapping; (6) review sheet surfaces failure/notice banners; (7) outbox also flushes on foreground via `scenePhase`; (8) tasks renumbered so dependencies are strictly linear.
 
 ## Global Constraints
 
 - Deployment target iOS 26.0, iPhone only (`TARGETED_DEVICE_FAMILY = 1`), Swift 6.0.
 - All Swift/iOS work lives in `broker-field-ios/`; the Next.js apps are untouched. No backend changes.
 - Bundle ids: `com.gentlespace.brokerfield` (app), `.tests` (unit), `.uitests` (UI).
-- Backend base URL default `http://34.47.192.145` (verified live 2026-09-18: `POST /api/leads` with `{}` → 400). Overridable via `GSAPIBaseURL` in Info.plist. ATS exception is dogfood-only; flip to the HTTPS domain when apex DNS returns.
+- Backend base URL default `http://34.47.192.145` (verified live 2026-09-18: `POST /api/leads` with `{}` → 400). Overridable via `GSAPIBaseURL` in Info.plist. **Security note:** this is HTTP cleartext carrying names/phones — acceptable only for dogfood; moving to the HTTPS domain is a hard pre-production blocker (tracked in the spec's open questions).
 - `NeedType` values must stay `"office" | "retail" | "lease"` and step-2 keys must mirror `lib/leads/step2-fields.ts` verbatim (office: `teamSize`/`preferredArea`/`moveInTimeline`; retail: `frontageFootfall`/`preferredLocality`/`timeline`; lease: `propertySize`/`location`/`expectedRentTimeline`).
 - `TIMELINE_BUCKETS` verbatim: `Immediate (this month)`, `1–3 months` (en dash U+2013), `3–6 months` (en dash), `Just exploring`.
 - Never crash on model/speech/mic unavailability — every state degrades to a manual path.
-- All builds/tests run via `xcodebuild` with `CODE_SIGNING_ALLOWED=NO` (simulator). On-device AFM validation is a manual gate at the end.
+- Unit tests: Swift Testing. UI tests: XCTest/XCUI. All runs via `xcodebuild` with `CODE_SIGNING_ALLOWED=NO` (simulator). On-device AFM + SpeechAnalyzer validation is a manual gate at the end.
 - Commit after every task. Work on branch `feat/broker-field-ios`.
 
 ## File Structure
@@ -28,7 +30,7 @@ broker-field-ios/
   Info.plist
   BrokerField.xcodeproj/project.pbxproj   (3 targets, folder-synchronized — never edit per-file)
   BrokerField/
-    BrokerFieldApp.swift                  entry point, AppEnvironment wiring
+    BrokerFieldApp.swift                  entry point, AppEnvironment wiring, foreground outbox flush
     AppEnvironment.swift                  production vs -UITesting service graph
     Theme.swift                           gsAccent color (#6840B8)
     Model/NeedType.swift                  NeedType + Step2Field + Step2Schema
@@ -38,12 +40,12 @@ broker-field-ios/
     Model/EnquiryDraft.swift              EnquiryDraft + EnquiryMapper
     Extraction/EnquiryExtraction.swift    @Generable struct
     Extraction/TranscriptTrimmer.swift
-    Extraction/EnquiryExtracting.swift    protocol + ExtractorAvailability + MockExtractor
+    Extraction/EnquiryExtracting.swift    protocol + ExtractorAvailability + ExtractionError + MockExtractor
     Extraction/FoundationModelsExtractor.swift
     Recording/AudioRecording.swift        protocol + MockRecorder
     Recording/AudioRecorder.swift         actor over AVAudioRecorder
     Transcription/SpeechTranscribing.swift protocol + MockTranscriber
-    Transcription/SpeechTranscriber.swift SFSpeechRecognizer, on-device, en-IN
+    Transcription/SpeechTranscriber.swift SpeechAnalyzer + SpeechTranscriber (file-based, offline preset)
     Session/RecordingSession.swift        @Observable orchestrator view model
     Sync/APIConfig.swift
     Sync/LeadSubmitting.swift             protocol + result + SubmitError + MockSubmitter
@@ -54,8 +56,8 @@ broker-field-ios/
     UI/HistoryView.swift
     UI/EnquiryDetailView.swift
     UI/RootView.swift
-  BrokerFieldTests/                       one suite per unit above
-  BrokerFieldUITests/                     happy-path UI test via -UITesting harness
+  BrokerFieldTests/                       Swift Testing suites, one per unit above
+  BrokerFieldUITests/                     XCTest/XCUI happy-path test via -UITesting harness
 ```
 
 ---
@@ -589,20 +591,21 @@ struct BrokerFieldApp: App {
 }
 ```
 
-- [ ] **Step 6: Write `BrokerFieldTests/SanityTests.swift`**
+- [ ] **Step 6: Write `BrokerFieldTests/SanityTests.swift`** (Swift Testing)
 
 ```swift
-import XCTest
+import Testing
 @testable import BrokerField
 
-final class SanityTests: XCTestCase {
-    func testHarnessRuns() {
-        XCTAssertEqual(1 + 1, 2)
+@Suite("Sanity")
+struct SanityTests {
+    @Test func harnessRuns() {
+        #expect(1 + 1 == 2)
     }
 }
 ```
 
-- [ ] **Step 7: Write `BrokerFieldUITests/BrokerFieldUITests.swift`**
+- [ ] **Step 7: Write `BrokerFieldUITests/BrokerFieldUITests.swift`** (XCUI — the only UI automation framework)
 
 ```swift
 import XCTest
@@ -632,7 +635,7 @@ xcodebuild -project BrokerField.xcodeproj -scheme BrokerField \
   test CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20
 ```
 
-Expected: `** TEST SUCCEEDED **`; `SanityTests.testHarnessRuns` passed; `BrokerFieldUITests.testAppLaunches` passed.
+Expected: `** TEST SUCCEEDED **`; `SanityTests.harnessRuns` passed; `BrokerFieldUITests.testAppLaunches` passed.
 
 - [ ] **Step 9: Commit**
 
@@ -661,90 +664,89 @@ git commit -m "Scaffold Broker Field iOS app (folder-synchronized Xcode project,
 
 ```swift
 // BrokerFieldTests/Step2SchemaTests.swift
-import XCTest
+import Testing
 @testable import BrokerField
 
-final class Step2SchemaTests: XCTestCase {
-    func testOfficeKeysMatchWebContract() {
-        XCTAssertEqual(Step2Schema.fields(for: .office).map(\.key),
-                       ["teamSize", "preferredArea", "moveInTimeline"])
+@Suite("Step2 schema")
+struct Step2SchemaTests {
+    @Test func officeKeysMatchWebContract() {
+        #expect(Step2Schema.fields(for: .office).map(\.key)
+            == ["teamSize", "preferredArea", "moveInTimeline"])
     }
 
-    func testRetailKeysMatchWebContract() {
-        XCTAssertEqual(Step2Schema.fields(for: .retail).map(\.key),
-                       ["frontageFootfall", "preferredLocality", "timeline"])
+    @Test func retailKeysMatchWebContract() {
+        #expect(Step2Schema.fields(for: .retail).map(\.key)
+            == ["frontageFootfall", "preferredLocality", "timeline"])
     }
 
-    func testLeaseKeysMatchWebContract() {
-        XCTAssertEqual(Step2Schema.fields(for: .lease).map(\.key),
-                       ["propertySize", "location", "expectedRentTimeline"])
+    @Test func leaseKeysMatchWebContract() {
+        #expect(Step2Schema.fields(for: .lease).map(\.key)
+            == ["propertySize", "location", "expectedRentTimeline"])
     }
 
-    func testTimelineBucketsMatchWebVerbatim() {
-        XCTAssertEqual(Step2Schema.timelineBuckets,
-                       ["Immediate (this month)", "1–3 months", "3–6 months", "Just exploring"])
+    @Test func timelineBucketsMatchWebVerbatim() {
+        #expect(Step2Schema.timelineBuckets
+            == ["Immediate (this month)", "1\u{2013}3 months", "3\u{2013}6 months", "Just exploring"])
     }
 
-    func testChoiceFieldsAreFlagged() {
-        XCTAssertTrue(Step2Schema.fields(for: .office).first { $0.key == "moveInTimeline" }!.isChoice)
-        XCTAssertFalse(Step2Schema.fields(for: .office).first { $0.key == "teamSize" }!.isChoice)
+    @Test func choiceFieldsAreFlagged() throws {
+        let office = Step2Schema.fields(for: .office)
+        #expect(try office.first { $0.key == "moveInTimeline" } #require .isChoice)
+        #expect(try !office.first { $0.key == "teamSize" } #require .isChoice)
     }
 }
 ```
 
 ```swift
 // BrokerFieldTests/PhoneNormalizerTests.swift
-import XCTest
+import Testing
 @testable import BrokerField
 
-final class PhoneNormalizerTests: XCTestCase {
-    func testTenDigitIndianNumberGetsCountryCode() {
-        XCTAssertEqual(PhoneNormalizer.normalize("98765 43210"), "+919876543210")
+@Suite("Phone normalizer")
+struct PhoneNormalizerTests {
+    @Test(arguments: [
+        ("98765 43210", "+919876543210"),
+        ("+91 98765 43210", "+919876543210"),
+        ("09876543210", "+919876543210"),
+        ("919876543210", "+919876543210"),
+    ])
+    func normalization(input: String, expected: String) {
+        #expect(PhoneNormalizer.normalize(input) == expected)
     }
 
-    func testAlreadyPrefixedNumberIsUnchanged() {
-        XCTAssertEqual(PhoneNormalizer.normalize("+91 98765 43210"), "+919876543210")
-    }
-
-    func testLeadingZeroIsDropped() {
-        XCTAssertEqual(PhoneNormalizer.normalize("09876543210"), "+919876543210")
-    }
-
-    func testTwelveDigit91NumberGetsPlus() {
-        XCTAssertEqual(PhoneNormalizer.normalize("919876543210"), "+919876543210")
-    }
-
-    func testValidityWindow() {
-        XCTAssertFalse(PhoneNormalizer.isValid("123"))
-        XCTAssertTrue(PhoneNormalizer.isValid("+919876543210"))
-        XCTAssertFalse(PhoneNormalizer.isValid(""))
+    @Test func validityWindow() {
+        #expect(!PhoneNormalizer.isValid("123"))
+        #expect(PhoneNormalizer.isValid("+919876543210"))
+        #expect(!PhoneNormalizer.isValid(""))
     }
 }
 ```
 
 ```swift
 // BrokerFieldTests/LeadPayloadTests.swift
-import XCTest
+import Foundation
+import Testing
 @testable import BrokerField
 
-final class LeadPayloadTests: XCTestCase {
-    func testEncodesWebContractKeys() throws {
+@Suite("Lead payload")
+struct LeadPayloadTests {
+    @Test func encodesWebContractKeys() throws {
         let payload = LeadPayload(name: "Asha Rao", phone: "+919876543210", need: .office,
                                   brief: "15 seats in Koramangala",
                                   step2Answers: ["preferredArea": "Koramangala"])
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as! [String: Any]
-        XCTAssertEqual(json["name"] as? String, "Asha Rao")
-        XCTAssertEqual(json["phone"] as? String, "+919876543210")
-        XCTAssertEqual(json["need"] as? String, "office")
-        XCTAssertEqual(json["brief"] as? String, "15 seats in Koramangala")
-        XCTAssertEqual((json["step2Answers"] as? [String: String])?["preferredArea"], "Koramangala")
-        XCTAssertNil(json["propertyName"])
+        #expect(json["name"] as? String == "Asha Rao")
+        #expect(json["phone"] as? String == "+919876543210")
+        #expect(json["need"] as? String == "office")
+        #expect(json["brief"] as? String == "15 seats in Koramangala")
+        #expect((json["step2Answers"] as? [String: String])?["preferredArea"] == "Koramangala")
+        #expect(json["propertyName"] == nil)
     }
 
-    func testOmitsNilStep2Answers() throws {
+    @Test func omitsNilStep2Answers() throws {
         let payload = LeadPayload(name: "A", phone: "+919876543210", need: .retail, brief: "b")
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as! [String: Any]
-        XCTAssertNil(json["step2Answers"])
+        #expect(json["step2Answers"] == nil)
     }
 }
 ```
@@ -880,7 +882,7 @@ xcodebuild -project BrokerField.xcodeproj -scheme BrokerField \
   -only-testing:BrokerFieldTests test CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5
 ```
 
-Expected: `** TEST SUCCEEDED **` — 11 tests, 0 failures.
+Expected: `** TEST SUCCEEDED **` — schema 5 + phone 2 (one parameterized) + payload 2 suites, 0 failures.
 
 - [ ] **Step 5: Commit**
 
@@ -898,52 +900,54 @@ git add broker-field-ios && git commit -m "Add web-contract models (NeedType, St
 
 **Interfaces:**
 - Consumes: `NeedType`, `PhoneNormalizer`, `LeadPayload` (Task 2).
-- Produces: `Enquiry` (@Model), `EnquiryStatus`, `Enquiry.makePayload()`, `enquiry.status` / `enquiry.need` / `enquiry.step2Answers` accessors. Consumed by Tasks 7, 9, 10.
+- Produces: `Enquiry` (@Model), `EnquiryStatus`, `Enquiry.makePayload()`, `enquiry.status` / `enquiry.need` / `enquiry.step2Answers` accessors. Consumed by Tasks 8, 9, 10.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 // BrokerFieldTests/EnquiryModelTests.swift
-import XCTest
+import Foundation
 import SwiftData
+import Testing
 @testable import BrokerField
 
-final class EnquiryModelTests: XCTestCase {
+@Suite("Enquiry model")
+struct EnquiryModelTests {
     private func makeContainer() throws -> ModelContainer {
         try ModelContainer(for: Enquiry.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor
-    func testPersistsAndFetches() throws {
+    @Test func persistsAndFetches() throws {
         let context = ModelContext(try makeContainer())
         let enquiry = Enquiry(transcript: "t", name: "Asha Rao", phone: "+919876543210",
                               need: .office, brief: "b", step2Answers: ["preferredArea": "Koramangala"])
         context.insert(enquiry)
         try context.save()
         let fetched = try context.fetch(FetchDescriptor<Enquiry>())
-        XCTAssertEqual(fetched.count, 1)
-        XCTAssertEqual(fetched[0].name, "Asha Rao")
-        XCTAssertEqual(fetched[0].need, .office)
-        XCTAssertEqual(fetched[0].step2Answers["preferredArea"], "Koramangala")
-        XCTAssertEqual(fetched[0].status, .draft)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].name == "Asha Rao")
+        #expect(fetched[0].need == .office)
+        #expect(fetched[0].step2Answers["preferredArea"] == "Koramangala")
+        #expect(fetched[0].status == .draft)
     }
 
-    func testMakePayloadRequiresNamePhoneNeed() {
+    @Test func makePayloadRequiresNamePhoneNeed() {
         let incomplete = Enquiry(name: "", phone: "123", need: nil, brief: "b")
-        XCTAssertNil(incomplete.makePayload())
+        #expect(incomplete.makePayload() == nil)
 
         let complete = Enquiry(name: "Asha Rao", phone: "98765 43210", need: .retail, brief: "b",
                                step2Answers: ["preferredLocality": "Indiranagar"])
         let payload = complete.makePayload()
-        XCTAssertEqual(payload?.phone, "+919876543210")
-        XCTAssertEqual(payload?.need, .retail)
-        XCTAssertEqual(payload?.step2Answers?["preferredLocality"], "Indiranagar")
+        #expect(payload?.phone == "+919876543210")
+        #expect(payload?.need == .retail)
+        #expect(payload?.step2Answers?["preferredLocality"] == "Indiranagar")
     }
 
-    func testEmptyStep2AnswersBecomeNil() {
+    @Test func emptyStep2AnswersBecomeNil() {
         let enquiry = Enquiry(name: "A", phone: "9876543210", need: .lease, brief: "b")
-        XCTAssertNil(enquiry.makePayload()?.step2Answers)
+        #expect(enquiry.makePayload()?.step2Answers == nil)
     }
 }
 ```
@@ -1058,16 +1062,18 @@ git add broker-field-ios && git commit -m "Add SwiftData Enquiry model with payl
 
 **Interfaces:**
 - Consumes: `NeedType`, `Step2Schema` (Task 2).
-- Produces: `EnquiryExtraction` (@Generable), `EnquiryDraft`, `EnquiryMapper.draft(from:)` / `.timelineBucket(_:)`, `TranscriptTrimmer.truncate(_:maxChars:)`. Consumed by Tasks 5, 7, 10.
+- Produces: `EnquiryExtraction` (@Generable), `EnquiryDraft`, `EnquiryMapper.draft(from:)` / `.timelineBucket(_:)`, `TranscriptTrimmer.truncate(_:maxChars:)`. Consumed by Tasks 5, 9, 10.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 // BrokerFieldTests/EnquiryMapperTests.swift
-import XCTest
+import Foundation
+import Testing
 @testable import BrokerField
 
-final class EnquiryMapperTests: XCTestCase {
+@Suite("Enquiry mapper")
+struct EnquiryMapperTests {
     private func extraction(need: String? = nil, budget: String? = nil,
                             localities: [String] = [], timeline: String? = nil,
                             brief: String = "b") -> EnquiryExtraction {
@@ -1075,78 +1081,92 @@ final class EnquiryMapperTests: XCTestCase {
                           budget: budget, localities: localities, timeline: timeline, brief: brief)
     }
 
-    func testOfficeMapping() {
+    @Test func officeMapping() {
         let draft = EnquiryMapper.draft(from: extraction(need: "office",
                                                          localities: ["Koramangala", "HSR"],
                                                          timeline: "next month"))
-        XCTAssertEqual(draft.name, "Asha Rao")
-        XCTAssertEqual(draft.need, .office)
-        XCTAssertEqual(draft.step2Answers["preferredArea"], "Koramangala, HSR")
-        XCTAssertEqual(draft.step2Answers["moveInTimeline"], "1\u{2013}3 months")
+        #expect(draft.name == "Asha Rao")
+        #expect(draft.need == .office)
+        #expect(draft.step2Answers["preferredArea"] == "Koramangala, HSR")
+        #expect(draft.step2Answers["moveInTimeline"] == "1\u{2013}3 months")
     }
 
-    func testRetailMapping() {
+    @Test func retailMapping() {
         let draft = EnquiryMapper.draft(from: extraction(need: "retail",
                                                          localities: ["Indiranagar"],
                                                          timeline: "immediate"))
-        XCTAssertEqual(draft.need, .retail)
-        XCTAssertEqual(draft.step2Answers["preferredLocality"], "Indiranagar")
-        XCTAssertEqual(draft.step2Answers["timeline"], "Immediate (this month)")
+        #expect(draft.need == .retail)
+        #expect(draft.step2Answers["preferredLocality"] == "Indiranagar")
+        #expect(draft.step2Answers["timeline"] == "Immediate (this month)")
     }
 
-    func testLeaseFoldsBudgetAndTimeline() {
+    @Test func leaseFoldsBudgetAndTimeline() {
         let draft = EnquiryMapper.draft(from: extraction(need: "lease", budget: "Rs 80/sqft",
                                                          localities: ["Whitefield"], timeline: "immediate"))
-        XCTAssertEqual(draft.need, .lease)
-        XCTAssertEqual(draft.step2Answers["location"], "Whitefield")
-        XCTAssertEqual(draft.step2Answers["expectedRentTimeline"], "Rs 80/sqft, immediate")
+        #expect(draft.need == .lease)
+        #expect(draft.step2Answers["location"] == "Whitefield")
+        #expect(draft.step2Answers["expectedRentTimeline"] == "Rs 80/sqft, immediate")
     }
 
-    func testLeaseInferenceWinsOverOfficeMention() {
+    @Test func leaseInferenceWinsOverOfficeMention() {
         let draft = EnquiryMapper.draft(from: extraction(brief: "Client wants to lease out my property, an office floor"))
-        XCTAssertEqual(draft.need, .lease)
+        #expect(draft.need == .lease)
     }
 
-    func testRetailInferenceFromKeywords() {
+    @Test func retailInferenceFromKeywords() {
         let draft = EnquiryMapper.draft(from: extraction(brief: "Looking for a showroom with high-street frontage"))
-        XCTAssertEqual(draft.need, .retail)
+        #expect(draft.need == .retail)
     }
 
-    func testUnknownNeedStaysNil() {
+    @Test func workshopDoesNotMatchShop() {
+        // Word-boundary regression: "workshop" must not trigger the "shop" keyword.
+        let draft = EnquiryMapper.draft(from: extraction(brief: "Needs a workshop space for light assembly"))
+        #expect(draft.need != .retail)
+    }
+
+    @Test func unknownNeedStaysNil() {
         let draft = EnquiryMapper.draft(from: extraction(brief: "Exploring the market"))
-        XCTAssertNil(draft.need)
-        XCTAssertTrue(draft.step2Answers.isEmpty)
+        #expect(draft.need == nil)
+        #expect(draft.step2Answers.isEmpty)
     }
 
-    func testTimelineBuckets() {
-        XCTAssertEqual(EnquiryMapper.timelineBucket("asap"), "Immediate (this month)")
-        XCTAssertEqual(EnquiryMapper.timelineBucket("in 2 months"), "1\u{2013}3 months")
-        XCTAssertEqual(EnquiryMapper.timelineBucket("3-6 months"), "3\u{2013}6 months")
-        XCTAssertEqual(EnquiryMapper.timelineBucket("just exploring"), "Just exploring")
-        XCTAssertNil(EnquiryMapper.timelineBucket("someday"))
-        XCTAssertNil(EnquiryMapper.timelineBucket(nil))
+    @Test(arguments: [
+        ("asap", "Immediate (this month)"),
+        ("in 2 months", "1\u{2013}3 months"),
+        ("3-6 months", "3\u{2013}6 months"),
+        ("just exploring", "Just exploring"),
+    ])
+    func timelineBuckets(input: String, expected: String) {
+        #expect(EnquiryMapper.timelineBucket(input) == expected)
+    }
+
+    @Test func unmatchedTimelineIsNil() {
+        #expect(EnquiryMapper.timelineBucket("someday") == nil)
+        #expect(EnquiryMapper.timelineBucket(nil) == nil)
     }
 }
 ```
 
 ```swift
 // BrokerFieldTests/TranscriptTrimmerTests.swift
-import XCTest
+import Foundation
+import Testing
 @testable import BrokerField
 
-final class TranscriptTrimmerTests: XCTestCase {
-    func testShortTranscriptPassesThrough() {
+@Suite("Transcript trimmer")
+struct TranscriptTrimmerTests {
+    @Test func shortTranscriptPassesThrough() {
         let result = TranscriptTrimmer.truncate("hello", maxChars: 100)
-        XCTAssertEqual(result.text, "hello")
-        XCTAssertFalse(result.wasTruncated)
+        #expect(result.text == "hello")
+        #expect(!result.wasTruncated)
     }
 
-    func testLongTranscriptIsMarked() {
+    @Test func longTranscriptIsMarked() {
         let long = String(repeating: "a", count: 500)
         let result = TranscriptTrimmer.truncate(long, maxChars: 100)
-        XCTAssertTrue(result.wasTruncated)
-        XCTAssertTrue(result.text.hasPrefix(String(repeating: "a", count: 100)))
-        XCTAssertTrue(result.text.contains("truncated"))
+        #expect(result.wasTruncated)
+        #expect(result.text.hasPrefix(String(repeating: "a", count: 100)))
+        #expect(result.text.contains("truncated"))
     }
 }
 ```
@@ -1216,6 +1236,8 @@ import Foundation
 public enum TranscriptTrimmer {
     /// The on-device session context is small (~4k tokens shared with
     /// instructions and output). ~10k chars ≈ 2.5k tokens of headroom-safe input.
+    /// Enhancement path (not v0.1): iOS 26.4+ exposes context-size/token-count
+    /// APIs on the session — swap this heuristic for a measured budget then.
     public static let maxTranscriptChars = 10_000
 
     public static func truncate(_ transcript: String,
@@ -1290,22 +1312,25 @@ public enum EnquiryMapper {
         let haystack = ([extraction.brief] + extraction.localities
             + [extraction.budget ?? "", extraction.timeline ?? ""])
             .joined(separator: " ")
-            .lowercased()
         // Order matters: "lease out my property" often also mentions office space.
-        if haystack.contains("lease out") || haystack.contains("rent out")
-            || haystack.contains("my property") || haystack.contains("landlord") {
+        // Word-boundary matching so "workshop" doesn't trip "shop".
+        if containsAny(haystack, ["lease out", "rent out", "my property", "landlord"]) {
             return .lease
         }
-        if haystack.contains("retail") || haystack.contains("showroom")
-            || haystack.contains("frontage") || haystack.contains("high street")
-            || haystack.contains("high-street") || haystack.contains("shop") {
+        if containsAny(haystack, ["retail", "showroom", "frontage", "high street", "high-street", "shop"]) {
             return .retail
         }
-        if haystack.contains("office") || haystack.contains("desk") || haystack.contains("seat")
-            || haystack.contains("cowork") || haystack.contains("workspace") {
+        if containsAny(haystack, ["office", "desk", "seat", "cowork", "workspace"]) {
             return .office
         }
         return nil
+    }
+
+    private static func containsAny(_ text: String, _ keywords: [String]) -> Bool {
+        keywords.contains { keyword in
+            text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b",
+                       options: [.regularExpression, .caseInsensitive]) != nil
+        }
     }
 
     /// Maps free-text timelines to the web's TIMELINE_BUCKETS; nil when nothing
@@ -1335,7 +1360,7 @@ public enum EnquiryMapper {
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Expected: `** TEST SUCCEEDED **` — mapper 7 tests + trimmer 2 tests, 0 failures.
+Expected: `** TEST SUCCEEDED **` — mapper 9 tests + trimmer 2 tests, 0 failures.
 
 - [ ] **Step 5: Commit**
 
@@ -1354,56 +1379,47 @@ git add broker-field-ios && git commit -m "Add @Generable extraction type, draft
 
 **Interfaces:**
 - Consumes: `EnquiryExtraction`, `TranscriptTrimmer` (Task 4).
-- Produces: `EnquiryExtracting` protocol, `ExtractorAvailability`, `ExtractionError`, `MockExtractor`, `FoundationModelsExtractor`. Consumed by Tasks 7, 10.
+- Produces: `EnquiryExtracting` protocol (`availability()`, `extract(from:)`, `prewarm()`), `ExtractorAvailability`, `ExtractionError` (incl. `.refusal`), `MockExtractor`, `FoundationModelsExtractor`. Consumed by Tasks 9, 10.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 // BrokerFieldTests/ExtractorAvailabilityTests.swift
-import XCTest
+import Foundation
 import FoundationModels
+import Testing
 @testable import BrokerField
 
-final class ExtractorAvailabilityTests: XCTestCase {
-    func testMapsFrameworkAvailability() {
-        XCTAssertEqual(FoundationModelsExtractor.mapAvailability(.available), .available)
-        XCTAssertEqual(FoundationModelsExtractor.mapAvailability(.unavailable(.deviceNotEligible)),
-                       .deviceNotEligible)
-        XCTAssertEqual(FoundationModelsExtractor.mapAvailability(.unavailable(.appleIntelligenceNotEnabled)),
-                       .appleIntelligenceOff)
-        XCTAssertEqual(FoundationModelsExtractor.mapAvailability(.unavailable(.modelNotReady)),
-                       .modelNotReady)
+@Suite("Extractor availability")
+struct ExtractorAvailabilityTests {
+    @Test func mapsFrameworkAvailability() {
+        #expect(FoundationModelsExtractor.mapAvailability(.available) == .available)
+        #expect(FoundationModelsExtractor.mapAvailability(.unavailable(.deviceNotEligible)) == .deviceNotEligible)
+        #expect(FoundationModelsExtractor.mapAvailability(.unavailable(.appleIntelligenceNotEnabled)) == .appleIntelligenceOff)
+        #expect(FoundationModelsExtractor.mapAvailability(.unavailable(.modelNotReady)) == .modelNotReady)
     }
 
-    func testMockExtractorRecordsTranscript() async throws {
+    @Test func mockRecordsTranscript() async throws {
         let expected = EnquiryExtraction(contactName: "Asha Rao", brief: "b")
         let mock = MockExtractor(result: .success(expected))
-        XCTAssertEqual(mock.availability(), .available)
+        #expect(mock.availability() == .available)
         let result = try await mock.extract(from: "some transcript")
-        XCTAssertEqual(result, expected)
-        XCTAssertEqual(mock.lastTranscript, "some transcript")
+        #expect(result == expected)
+        #expect(mock.lastTranscript == "some transcript")
     }
 
-    func testMockExtractorCanFail() async {
+    @Test func mockCanFail() async {
         let mock = MockExtractor(result: .failure(ExtractionError.guardrailViolation))
-        await XCTAssertThrowsErrorAsync(await mock.extract(from: "x")) { error in
-            XCTAssertEqual(error as? ExtractionError, .guardrailViolation)
+        await #expect(throws: ExtractionError.guardrailViolation) {
+            try await mock.extract(from: "x")
         }
     }
-}
 
-/// XCTest has no built-in async throws assertion — tiny local helper.
-func XCTAssertThrowsErrorAsync<T>(
-    _ expression: @autoclosure () async throws -> T,
-    _ message: String = "",
-    file: StaticString = #filePath, line: UInt = #line,
-    _ errorHandler: (Error) -> Void
-) async {
-    do {
-        _ = try await expression()
-        XCTFail("Expected error to be thrown. \(message)", file: file, line: line)
-    } catch {
-        errorHandler(error)
+    @Test func mockPrewarmIsRecorded() async {
+        let mock = MockExtractor(result: .success(EnquiryExtraction(brief: "b")))
+        #expect(!mock.didPrewarm)
+        await mock.prewarm()
+        #expect(mock.didPrewarm)
     }
 }
 ```
@@ -1435,6 +1451,7 @@ public enum ExtractorAvailability: Equatable, Sendable {
 public enum ExtractionError: Error, Equatable, Sendable {
     case unavailable
     case guardrailViolation
+    case refusal
     case contextOverflow
     case failed(String)
 }
@@ -1444,21 +1461,29 @@ public enum ExtractionError: Error, Equatable, Sendable {
 /// slot in later without touching call sites.
 public protocol EnquiryExtracting: Sendable {
     func availability() -> ExtractorAvailability
+    /// Warms model assets before the user needs them (call from view appear).
+    func prewarm() async
     func extract(from transcript: String) async throws -> EnquiryExtraction
 }
 
-/// Test double. `lastTranscript` is mutated only from `extract`, which tests
-/// await — the lock keeps Swift 6 strict concurrency happy.
+/// Test double. Lock-guarded so Swift 6 strict concurrency stays happy.
 public final class MockExtractor: EnquiryExtracting, @unchecked Sendable {
     public var stubbedAvailability: ExtractorAvailability
     public var stubbedResult: Result<EnquiryExtraction, Error>
     private let lock = NSLock()
     private var _lastTranscript: String?
+    private var _didPrewarm = false
 
     public var lastTranscript: String? {
         lock.lock()
         defer { lock.unlock() }
         return _lastTranscript
+    }
+
+    public var didPrewarm: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _didPrewarm
     }
 
     public init(availability: ExtractorAvailability = .available,
@@ -1468,6 +1493,12 @@ public final class MockExtractor: EnquiryExtracting, @unchecked Sendable {
     }
 
     public func availability() -> ExtractorAvailability { stubbedAvailability }
+
+    public func prewarm() async {
+        lock.lock()
+        _didPrewarm = true
+        lock.unlock()
+    }
 
     public func extract(from transcript: String) async throws -> EnquiryExtraction {
         lock.lock()
@@ -1483,6 +1514,9 @@ public final class MockExtractor: EnquiryExtracting, @unchecked Sendable {
 import Foundation
 import FoundationModels
 
+/// On-device extraction via the system language model.
+/// Forward-compat: iOS 27 renames `GenerationError` to `LanguageModelError`
+/// (deprecated alias) — revisit the catch list when the deployment floor moves.
 public struct FoundationModelsExtractor: EnquiryExtracting {
     public init() {}
 
@@ -1504,6 +1538,14 @@ public struct FoundationModelsExtractor: EnquiryExtracting {
         }
     }
 
+    /// Prewarms model assets via a throwaway session. Extraction itself uses a
+    /// fresh session per call — sessions accumulate transcript context, and
+    /// reusing one would eventually overflow the context window.
+    public func prewarm() async {
+        guard availability() == .available else { return }
+        LanguageModelSession(instructions: Self.instructions).prewarm()
+    }
+
     public func extract(from transcript: String) async throws -> EnquiryExtraction {
         guard availability() == .available else { throw ExtractionError.unavailable }
         let trimmed = TranscriptTrimmer.truncate(transcript)
@@ -1516,6 +1558,8 @@ public struct FoundationModelsExtractor: EnquiryExtracting {
             switch error {
             case .guardrailViolation:
                 throw ExtractionError.guardrailViolation
+            case .refusal:
+                throw ExtractionError.refusal
             case .exceededContextWindowSize:
                 throw ExtractionError.contextOverflow
             default:
@@ -1544,17 +1588,17 @@ public struct FoundationModelsExtractor: EnquiryExtracting {
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Expected: `** TEST SUCCEEDED **` — 3 tests, 0 failures.
+Expected: `** TEST SUCCEEDED **` — 4 tests, 0 failures.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add broker-field-ios && git commit -m "Add EnquiryExtracting seam with on-device FoundationModels extractor."
+git add broker-field-ios && git commit -m "Add EnquiryExtracting seam with prewarming on-device FoundationModels extractor."
 ```
 
 ---
 
-### Task 6: Recording + transcription services
+### Task 6: Recording + transcription services (SpeechAnalyzer)
 
 **Files:**
 - Create: `broker-field-ios/BrokerField/Recording/AudioRecording.swift`
@@ -1564,44 +1608,48 @@ git add broker-field-ios && git commit -m "Add EnquiryExtracting seam with on-de
 - Test: `broker-field-ios/BrokerFieldTests/RecordingServicesTests.swift`
 
 **Interfaces:**
-- Produces: `AudioRecording` protocol + `MockRecorder`, `SpeechTranscribing` protocol + `MockTranscriber`, `RecordingError`, `TranscriptionError`. Consumed by Task 7 and Task 10.
+- Produces: `AudioRecording` protocol + `MockRecorder`, `SpeechTranscribing` protocol + `MockTranscriber`, `RecordingError`, `TranscriptionError`. Consumed by Tasks 9, 10.
+
+**Why SpeechAnalyzer, not SFSpeechRecognizer:** iOS 26's `SpeechAnalyzer` + `SpeechTranscriber` is Apple's Swift-native replacement: on-device by design (no server path at all — the old API only made on-device opt-in), no ~1-minute session cap, results as `AsyncSequence`, and a downloadable long-form model via `AssetInventory`. Our deployment floor is iOS 26.0, so there is no back-deployment reason to keep the legacy API. (Custom-vocabulary biasing is the one legacy-only feature — not needed for v0.1.)
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 // BrokerFieldTests/RecordingServicesTests.swift
-import XCTest
+import Foundation
+import Testing
 @testable import BrokerField
 
-final class RecordingServicesTests: XCTestCase {
-    func testMockRecorderLifecycle() async throws {
+@Suite("Recording services")
+struct RecordingServicesTests {
+    @Test func mockRecorderLifecycle() async throws {
         let recorder = MockRecorder()
-        XCTAssertTrue(await recorder.requestPermission())
+        #expect(await recorder.requestPermission())
         let url = try await recorder.startRecording()
-        XCTAssertTrue(url.lastPathComponent.hasSuffix(".m4a"))
-        XCTAssertTrue(await recorder.isRecording)
+        #expect(url.lastPathComponent.hasSuffix(".m4a"))
+        #expect(await recorder.isRecording)
         let stopped = try await recorder.stopRecording()
-        XCTAssertEqual(stopped, url)
-        XCTAssertFalse(await recorder.isRecording)
+        #expect(stopped == url)
+        #expect(await !recorder.isRecording)
     }
 
-    func testMockRecorderStopWithoutStartThrows() async {
+    @Test func mockRecorderStopWithoutStartThrows() async {
         let recorder = MockRecorder()
-        await XCTAssertThrowsErrorAsync(await recorder.stopRecording()) { error in
-            XCTAssertEqual(error as? RecordingError, .notRecording)
+        await #expect(throws: RecordingError.notRecording) {
+            try await recorder.stopRecording()
         }
     }
 
-    func testMockRecorderPermissionDenied() async {
+    @Test func mockRecorderPermissionDenied() async {
         let recorder = MockRecorder(grantPermission: false)
-        XCTAssertFalse(await recorder.requestPermission())
+        #expect(await !recorder.requestPermission())
     }
 
-    func testMockTranscriberReturnsStubbedTranscript() async throws {
+    @Test func mockTranscriberReturnsStubbedTranscript() async throws {
         let transcriber = MockTranscriber(transcript: "hello world")
-        XCTAssertTrue(await transcriber.requestAuthorization())
+        #expect(await transcriber.requestAuthorization())
         let text = try await transcriber.transcribe(url: URL(fileURLWithPath: "/tmp/x.m4a"))
-        XCTAssertEqual(text, "hello world")
+        #expect(text == "hello world")
     }
 }
 ```
@@ -1689,24 +1737,27 @@ public actor AudioRecorder: AudioRecording {
         let file = folder.appending(path: UUID().uuidString + ".m4a")
 
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .default)
-        try session.setActive(true)
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44_100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-        ]
-        let recorder = try AVAudioRecorder(url: file, settings: settings)
-        guard recorder.record() else {
+        do {
+            try session.setCategory(.record, mode: .default)
+            try session.setActive(true)
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44_100,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            ]
+            let recorder = try AVAudioRecorder(url: file, settings: settings)
+            guard recorder.record() else { throw RecordingError.failedToStart }
+            self.recorder = recorder
+            self.currentURL = file
+            self.isRecording = true
+            return file
+        } catch {
+            // Never leave the audio session active on a failed start.
             try? session.setActive(false)
+            if let error = error as? RecordingError { throw error }
             throw RecordingError.failedToStart
         }
-        self.recorder = recorder
-        self.currentURL = file
-        self.isRecording = true
-        return file
     }
 
     public func stopRecording() async throws -> URL {
@@ -1728,7 +1779,7 @@ import Foundation
 public enum TranscriptionError: Error, Equatable, Sendable {
     case authorizationDenied
     case localeUnavailable
-    case onDeviceUnavailable
+    case modelNotInstalled
     case failed(String)
 }
 
@@ -1755,14 +1806,17 @@ public struct MockTranscriber: SpeechTranscribing {
 
 ```swift
 // BrokerField/Transcription/SpeechTranscriber.swift
+import AVFoundation
 import Foundation
 import Speech
 
-/// On-device transcription, en-IN first (broker speech is often code-mixed;
-/// the on-device en-IN model handles that better than en-US).
-public struct SpeechTranscriber: SpeechTranscribing {
+/// File transcription via iOS 26 SpeechAnalyzer + SpeechTranscriber.
+/// On-device by design (no server path), no ~1-minute cap, results as an
+/// AsyncSequence. The locale model is downloaded once via AssetInventory.
+public struct SpeechAnalyzerTranscriber: SpeechTranscribing {
     public init() {}
 
+    /// Speech authorization is still required for SpeechAnalyzer modules.
     public func requestAuthorization() async -> Bool {
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -1772,348 +1826,65 @@ public struct SpeechTranscriber: SpeechTranscribing {
     }
 
     public func transcribe(url: URL) async throws -> String {
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-IN")) else {
-            throw TranscriptionError.localeUnavailable
+        let locale = try await Self.preferredSupportedLocale()
+        let transcriber = SpeechTranscriber(locale: locale, preset: .offlineTranscription)
+        try await Self.ensureModelInstalled(for: transcriber, locale: locale)
+
+        // Read results concurrently with analysis; concatenate finalized text.
+        async let transcription = transcriber.results
+            .reduce(AttributedString()) { partial, result in partial + result.text }
+
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        let file = try AVAudioFile(forReading: url)
+        if let lastSample = try await analyzer.analyzeSequence(from: file) {
+            try await analyzer.finalizeAndFinish(through: lastSample)
+        } else {
+            await analyzer.cancelAndFinishNow()
         }
-        guard recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
-            throw TranscriptionError.onDeviceUnavailable
-        }
-        let request = SFSpeechURLRecognitionRequest(url: url)
-        request.requiresOnDeviceRecognition = true
-        return try await withCheckedThrowingContinuation { continuation in
-            // Speech calls back multiple times (partial results, then final or
-            // error) — resuming a continuation twice crashes, so guard it.
-            let guardBox = ResumeGuard()
-            recognizer.recognitionTask(with: request) { result, error in
-                guardBox.resumeOnce {
-                    if let error {
-                        continuation.resume(throwing: TranscriptionError.failed(error.localizedDescription))
-                        return true
-                    }
-                    guard let result, result.isFinal else { return false }
-                    continuation.resume(returning: result.bestTranscription.formattedString)
-                    return true
-                }
-            }
-        }
-    }
-}
 
-/// Runs `body` until it reports a terminal resume; later callbacks are dropped.
-private final class ResumeGuard: @unchecked Sendable {
-    private let lock = NSLock()
-    private var resumed = false
-
-    /// `body` returns true when it resumed the continuation.
-    func resumeOnce(_ body: () -> Bool) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !resumed else { return }
-        if body() { resumed = true }
-    }
-}
-```
-
-- [ ] **Step 4: Run tests to verify pass**
-
-Expected: `** TEST SUCCEEDED **` — 4 tests, 0 failures.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add broker-field-ios && git commit -m "Add recording and on-device transcription services with mocks."
-```
-
----
-
-### Task 7: RecordingSession orchestrator
-
-**Files:**
-- Create: `broker-field-ios/BrokerField/Session/RecordingSession.swift`
-- Test: `broker-field-ios/BrokerFieldTests/RecordingSessionTests.swift`
-
-**Interfaces:**
-- Consumes: `AudioRecording`/`MockRecorder`, `SpeechTranscribing`/`MockTranscriber` (Task 6); `EnquiryExtracting`/`MockExtractor` (Task 5); `EnquiryMapper`, `EnquiryDraft`, `TranscriptTrimmer` (Task 4); `Enquiry` (Task 3); `Outbox` (Task 9 — see note in Step 1).
-- Produces: `RecordingSession` (@MainActor @Observable) with `state`, `transcript`, `wasTruncated`, `extractorAvailable`, `startRecording()`, `stopAndProcess()`, `submit(draft:)`, `reset()`. Consumed by Task 10 UI.
-
-**Ordering note:** `RecordingSession.submit` calls `Outbox.processPending()`. Implement Task 9's `Outbox` before this task's Step 3, or temporarily inject a stub. The plan order below assumes **Task 9 (Outbox) is implemented before Task 7's implementation step** — swap them when executing.
-
-- [ ] **Step 1: Write the failing tests**
-
-```swift
-// BrokerFieldTests/RecordingSessionTests.swift
-import XCTest
-import SwiftData
-@testable import BrokerField
-
-@MainActor
-final class RecordingSessionTests: XCTestCase {
-    private let transcript = "Asha Rao, 98765 43210, needs a 15-seat office in Koramangala."
-
-    private func makeSession(
-        recorder: MockRecorder = MockRecorder(),
-        extractorResult: Result<EnquiryExtraction, Error>? = nil,
-        extractorAvailability: ExtractorAvailability = .available,
-        submitterResult: Result<LeadSubmissionResult, Error> = .success(LeadSubmissionResult(enquiryId: "srv-1", tier: "hot"))
-    ) throws -> (RecordingSession, ModelContainer) {
-        let container = try ModelContainer(for: Enquiry.self,
-                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let extraction = EnquiryExtraction(contactName: "Asha Rao", phone: "98765 43210",
-                                           need: "office", budget: nil,
-                                           localities: ["Koramangala"], timeline: nil,
-                                           brief: "Asha Rao needs a 15-seat office in Koramangala.")
-        let extractor = MockExtractor(availability: extractorAvailability,
-                                      result: extractorResult ?? .success(extraction))
-        let outbox = Outbox(container: container, submitter: MockSubmitter(result: submitterResult))
-        let session = RecordingSession(recorder: recorder,
-                                       transcriber: MockTranscriber(transcript: transcript),
-                                       extractor: extractor,
-                                       outbox: outbox,
-                                       container: container)
-        return (session, container)
+        let text = try await transcription
+        await AssetInventory.deallocate(locale: locale)
+        return String(text.characters)
     }
 
-    func testMicPermissionDeniedFailsWithCopy() async throws {
-        let (session, _) = try makeSession(recorder: MockRecorder(grantPermission: false))
-        await session.startRecording()
-        guard case .failed(let message) = session.state else {
-            return XCTFail("expected failed, got \(session.state)")
+    /// en-IN first (broker speech is often code-mixed); en-US when unsupported.
+    static func preferredSupportedLocale() async throws -> Locale {
+        let supported = await SpeechTranscriber.supportedLocales
+        if supported.contains(where: { $0.identifier == "en-IN" }) {
+            return Locale(identifier: "en-IN")
         }
-        XCTAssertTrue(message.contains("Microphone"))
+        if supported.contains(where: { $0.identifier == "en-US" }) {
+            return Locale(identifier: "en-US")
+        }
+        throw TranscriptionError.localeUnavailable
     }
 
-    func testStopAndProcessProducesMappedDraft() async throws {
-        let (session, _) = try makeSession()
-        await session.startRecording()
-        XCTAssertEqual(session.state, .recording)
-        await session.stopAndProcess()
-        guard case .ready(let draft) = session.state else {
-            return XCTFail("expected ready, got \(session.state)")
+    /// Downloads the locale's on-device model on first use. Callers surface a
+    /// "downloading speech model" state — first run can take noticeable time.
+    static func ensureModelInstalled(for transcriber: SpeechTranscriber, locale: Locale) async throws {
+        let installed = await SpeechTranscriber.installedLocales
+        guard !installed.contains(where: { $0.identifier == locale.identifier }) else { return }
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+            throw TranscriptionError.modelNotInstalled
         }
-        XCTAssertEqual(draft.name, "Asha Rao")
-        XCTAssertEqual(draft.need, .office)
-        XCTAssertEqual(draft.step2Answers["preferredArea"], "Koramangala")
-        XCTAssertEqual(session.transcript, transcript)
-    }
-
-    func testExtractorUnavailableFallsBackToManualDraft() async throws {
-        let (session, _) = try makeSession(extractorAvailability: .deviceNotEligible)
-        await session.startRecording()
-        await session.stopAndProcess()
-        guard case .ready(let draft) = session.state else {
-            return XCTFail("expected ready, got \(session.state)")
-        }
-        XCTAssertEqual(draft.brief, transcript)
-        XCTAssertNil(draft.need)
-    }
-
-    func testGuardrailViolationFallsBackToManualDraft() async throws {
-        let (session, _) = try makeSession(extractorResult: .failure(ExtractionError.guardrailViolation))
-        await session.startRecording()
-        await session.stopAndProcess()
-        guard case .ready(let draft) = session.state else {
-            return XCTFail("expected ready, got \(session.state)")
-        }
-        XCTAssertEqual(draft.brief, transcript)
-    }
-
-    func testSubmitWithoutNeedFails() async throws {
-        let (session, _) = try makeSession(extractorAvailability: .deviceNotEligible)
-        await session.startRecording()
-        await session.stopAndProcess()
-        await session.submit(draft: EnquiryDraft(name: "Asha Rao", phone: "9876543210"))
-        guard case .failed(let message) = session.state else {
-            return XCTFail("expected failed, got \(session.state)")
-        }
-        XCTAssertTrue(message.contains("Office"))
-    }
-
-    func testSubmitPersistsLocallyThenSubmits() async throws {
-        let (session, container) = try makeSession()
-        await session.startRecording()
-        await session.stopAndProcess()
-        guard case .ready(let draft) = session.state else {
-            return XCTFail("expected ready, got \(session.state)")
-        }
-        await session.submit(draft: draft)
-        guard case .submitted(let tier) = session.state else {
-            return XCTFail("expected submitted, got \(session.state)")
-        }
-        XCTAssertEqual(tier, "hot")
-        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
-        XCTAssertEqual(stored.count, 1)
-        XCTAssertEqual(stored[0].status, .submitted)
-        XCTAssertEqual(stored[0].serverEnquiryId, "srv-1")
-        XCTAssertEqual(stored[0].phone, "+919876543210")
-    }
-
-    func testSubmitOfflineQueues() async throws {
-        let (session, container) = try makeSession(
-            submitterResult: .failure(SubmitError.server(500)))
-        await session.startRecording()
-        await session.stopAndProcess()
-        guard case .ready(let draft) = session.state else {
-            return XCTFail("expected ready, got \(session.state)")
-        }
-        await session.submit(draft: draft)
-        XCTAssertEqual(session.state, .queuedOffline)
-        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
-        XCTAssertEqual(stored[0].status, .queued)
-        XCTAssertEqual(stored[0].attemptCount, 1)
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-```bash
-xcodebuild -project BrokerField.xcodeproj -scheme BrokerField \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:BrokerFieldTests/RecordingSessionTests test CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5
-```
-
-Expected: FAIL — `Cannot find 'RecordingSession' in scope` (and `Outbox`/`MockSubmitter` if Tasks 8–9 not yet done — do them first per the ordering note).
-
-- [ ] **Step 3: Implement**
-
-```swift
-// BrokerField/Session/RecordingSession.swift
-import Foundation
-import SwiftData
-
-@MainActor
-@Observable
-public final class RecordingSession {
-    public enum State: Equatable, Sendable {
-        case idle
-        case recording
-        case transcribing
-        case ready(EnquiryDraft)
-        case submitting
-        case submitted(tier: String?)
-        case queuedOffline
-        case failed(String)
-    }
-
-    public private(set) var state: State = .idle
-    public private(set) var transcript: String = ""
-    public private(set) var audioFileName: String?
-    public private(set) var wasTruncated = false
-    public let extractorAvailable: Bool
-
-    private let recorder: any AudioRecording
-    private let transcriber: any SpeechTranscribing
-    private let extractor: any EnquiryExtracting
-    private let outbox: Outbox
-    private let context: ModelContext
-
-    public init(recorder: any AudioRecording, transcriber: any SpeechTranscribing,
-                extractor: any EnquiryExtracting, outbox: Outbox, container: ModelContainer) {
-        self.recorder = recorder
-        self.transcriber = transcriber
-        self.extractor = extractor
-        self.outbox = outbox
-        self.context = ModelContext(container)
-        self.extractorAvailable = extractor.availability() == .available
-    }
-
-    public func startRecording() async {
-        guard await recorder.requestPermission() else {
-            state = .failed("Microphone access is off. Enable it in Settings to record.")
-            return
-        }
-        do {
-            let url = try await recorder.startRecording()
-            audioFileName = url.lastPathComponent
-            state = .recording
-        } catch {
-            state = .failed("Couldn't start recording. Try again.")
-        }
-    }
-
-    public func stopAndProcess() async {
-        do {
-            let url = try await recorder.stopRecording()
-            audioFileName = url.lastPathComponent
-            state = .transcribing
-            guard await transcriber.requestAuthorization() else {
-                transcript = ""
-                state = .ready(EnquiryDraft())
-                return
-            }
-            let raw = try await transcriber.transcribe(url: url)
-            let trimmed = TranscriptTrimmer.truncate(raw)
-            transcript = trimmed.text
-            wasTruncated = trimmed.wasTruncated
-            if extractorAvailable {
-                let extraction = try await extractor.extract(from: trimmed.text)
-                state = .ready(EnquiryMapper.draft(from: extraction))
-            } else {
-                state = .ready(EnquiryDraft(brief: trimmed.text))
-            }
-        } catch ExtractionError.guardrailViolation, ExtractionError.contextOverflow {
-            // Model refused or overflowed — the transcript is still usable.
-            state = .ready(EnquiryDraft(brief: transcript))
-        } catch {
-            state = .failed("Couldn't process the note. You can still type it manually.")
-        }
-    }
-
-    /// Local-first, always: the enquiry is persisted before any network call —
-    /// the client mirror of the backend's "Postgres first" rule.
-    public func submit(draft: EnquiryDraft) async {
-        guard let need = draft.need else {
-            state = .failed("Pick Office, Retail, or Lease before submitting.")
-            return
-        }
-        let normalized = PhoneNormalizer.normalize(draft.phone)
-        guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              PhoneNormalizer.isValid(normalized) else {
-            state = .failed("Name and a valid phone number are required.")
-            return
-        }
-        let enquiry = Enquiry(audioFileName: audioFileName, transcript: transcript,
-                              name: draft.name, phone: normalized, need: need,
-                              brief: draft.brief, step2Answers: draft.step2Answers)
-        enquiry.status = .queued
-        enquiry.nextAttemptAt = .now
-        context.insert(enquiry)
-        try? context.save()
-
-        state = .submitting
-        await outbox.processPending()
-        switch enquiry.status {
-        case .submitted:
-            state = .submitted(tier: enquiry.serverTier)
-        case .failed:
-            state = .failed(enquiry.lastError ?? "Submission failed.")
-        default:
-            state = .queuedOffline
-        }
-    }
-
-    public func reset() {
-        state = .idle
-        transcript = ""
-        audioFileName = nil
-        wasTruncated = false
+        try await request.downloadAndInstall()
     }
 }
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Expected: `** TEST SUCCEEDED **` — 7 tests, 0 failures.
+Expected: `** TEST SUCCEEDED **` — 4 tests, 0 failures. (The real `SpeechAnalyzerTranscriber` is device-gated — simulator coverage comes from the mocks; on-device validation is the Task 11 checklist.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add broker-field-ios && git commit -m "Add RecordingSession orchestrator (record → transcribe → extract → submit)."
+git add broker-field-ios && git commit -m "Add recording service and SpeechAnalyzer-based file transcription with mocks."
 ```
 
 ---
 
-### Task 8: Lead submitter (POST /api/leads)
+### Task 7: Lead submitter (POST /api/leads)
 
 **Files:**
 - Create: `broker-field-ios/BrokerField/Sync/APIConfig.swift`
@@ -2124,7 +1895,7 @@ git add broker-field-ios && git commit -m "Add RecordingSession orchestrator (re
 
 **Interfaces:**
 - Consumes: `LeadPayload` (Task 2).
-- Produces: `LeadSubmitting` protocol, `LeadSubmissionResult(enquiryId:tier:)`, `SubmitError`, `MockSubmitter`, `LeadSubmitter`, `APIConfig.baseURL`. Consumed by Tasks 7, 9, 10.
+- Produces: `LeadSubmitting` protocol, `LeadSubmissionResult(enquiryId:tier:)`, `SubmitError`, `MockSubmitter`, `LeadSubmitter`, `APIConfig.baseURL`. Consumed by Tasks 8, 9, 10.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2162,65 +1933,9 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         return URLSession(configuration: config)
     }
 }
-```
 
-```swift
-// BrokerFieldTests/LeadSubmitterTests.swift
-import XCTest
-@testable import BrokerField
-
-final class LeadSubmitterTests: XCTestCase {
-    private let baseURL = URL(string: "http://test.local")!
-    private let payload = LeadPayload(name: "Asha Rao", phone: "+919876543210", need: .office,
-                                      brief: "15 seats", step2Answers: ["preferredArea": "Koramangala"])
-
-    override func tearDown() {
-        StubURLProtocol.handler = nil
-        super.tearDown()
-    }
-
-    func testSuccessDecodesTierAndId() async throws {
-        StubURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.path, "/api/leads")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "content-type"), "application/json")
-            let body = try JSONDecoder().decode(LeadPayload.self, from: request.httpBodyData!)
-            XCTAssertEqual(body, self.payload)
-            let json = #"{"ok":true,"crm":"pending","tier":"hot","enquiryId":"srv-1"}"#.data(using: .utf8)!
-            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
-        }
-        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
-        let result = try await submitter.submit(payload)
-        XCTAssertEqual(result, LeadSubmissionResult(enquiryId: "srv-1", tier: "hot"))
-    }
-
-    func testClientErrorCarriesServerMessage() async {
-        StubURLProtocol.handler = { request in
-            let json = #"{"error":"invalid body"}"#.data(using: .utf8)!
-            return (HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!, json)
-        }
-        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
-        await XCTAssertThrowsErrorAsync(await submitter.submit(payload)) { error in
-            XCTAssertEqual(error as? SubmitError, .client("invalid body"))
-        }
-    }
-
-    func testServerErrorCarriesStatus() async {
-        StubURLProtocol.handler = { request in
-            (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
-        }
-        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
-        await XCTAssertThrowsErrorAsync(await submitter.submit(payload)) { error in
-            XCTAssertEqual(error as? SubmitError, .server(500))
-        }
-    }
-}
-```
-
-Note: `request.httpBodyData` — add this small extension at the bottom of `StubURLProtocol.swift` (httpBody is nil for streamed bodies in URLProtocol):
-
-```swift
-private extension URLRequest {
+extension URLRequest {
+    /// `httpBody` is nil when URLSession streams the body — read the stream.
     var httpBodyData: Data? {
         if let httpBody { return httpBody }
         guard let stream = httpBodyStream else { return nil }
@@ -2235,6 +1950,60 @@ private extension URLRequest {
             data.append(buffer, count: read)
         }
         return data
+    }
+}
+```
+
+```swift
+// BrokerFieldTests/LeadSubmitterTests.swift
+import Foundation
+import Testing
+@testable import BrokerField
+
+@Suite("Lead submitter")
+struct LeadSubmitterTests {
+    private let baseURL = URL(string: "http://test.local")!
+    private let payload = LeadPayload(name: "Asha Rao", phone: "+919876543210", need: .office,
+                                      brief: "15 seats", step2Answers: ["preferredArea": "Koramangala"])
+
+    @Test func successDecodesTierAndId() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/leads")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "content-type") == "application/json")
+            let body = try JSONDecoder().decode(LeadPayload.self, from: request.httpBodyData!)
+            #expect(body.name == "Asha Rao")
+            #expect(body.need == .office)
+            let json = #"{"ok":true,"crm":"pending","tier":"hot","enquiryId":"srv-1"}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
+        }
+        defer { StubURLProtocol.handler = nil }
+        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
+        let result = try await submitter.submit(payload)
+        #expect(result == LeadSubmissionResult(enquiryId: "srv-1", tier: "hot"))
+    }
+
+    @Test func clientErrorCarriesServerMessage() async {
+        StubURLProtocol.handler = { request in
+            let json = #"{"error":"invalid body"}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!, json)
+        }
+        defer { StubURLProtocol.handler = nil }
+        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
+        await #expect(throws: SubmitError.client("invalid body")) {
+            try await submitter.submit(payload)
+        }
+    }
+
+    @Test func serverErrorCarriesStatus() async {
+        StubURLProtocol.handler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
+        }
+        defer { StubURLProtocol.handler = nil }
+        let submitter = LeadSubmitter(baseURL: baseURL, session: StubURLProtocol.makeSession())
+        await #expect(throws: SubmitError.server(500)) {
+            try await submitter.submit(payload)
+        }
     }
 }
 ```
@@ -2259,7 +2028,7 @@ public enum APIConfig {
     /// Dogfood default: the GCP VM serving the listings app (verified reachable
     /// 2026-09-18 — POST /api/leads answers 400 on an empty body). Flip to the
     /// HTTPS domain once apex DNS points back at the app, then remove the ATS
-    /// exception from Info.plist.
+    /// exception from Info.plist. HTTP cleartext + PII = dogfood only.
     public static let defaultBaseURL = URL(string: "http://34.47.192.145")!
 
     public static var baseURL: URL {
@@ -2299,7 +2068,6 @@ public protocol LeadSubmitting: Sendable {
 /// Test double.
 public struct MockSubmitter: LeadSubmitting {
     public var result: Result<LeadSubmissionResult, Error>
-    public private(set) var submittedPayloads: [LeadPayload] = []
 
     public init(result: Result<LeadSubmissionResult, Error>) {
         self.result = result
@@ -2370,32 +2138,35 @@ git add broker-field-ios && git commit -m "Add LeadSubmitter for POST /api/leads
 
 ---
 
-### Task 9: Outbox + backoff
+### Task 8: Outbox + backoff
 
 **Files:**
 - Create: `broker-field-ios/BrokerField/Sync/Outbox.swift`
 - Test: `broker-field-ios/BrokerFieldTests/OutboxTests.swift`
 
 **Interfaces:**
-- Consumes: `Enquiry` (Task 3), `LeadSubmitting`/`MockSubmitter` (Task 8).
-- Produces: `Outbox` actor (`processPending(now:)`), `BackoffPolicy.nextAttemptDate(after:from:)`. Consumed by Tasks 7, 10.
+- Consumes: `Enquiry` (Task 3), `LeadSubmitting`/`MockSubmitter`/`SubmitError` (Task 7).
+- Produces: `Outbox` actor (`processPending(now:)`), `BackoffPolicy.nextAttemptDate(after:from:)`. Consumed by Tasks 9, 10.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 // BrokerFieldTests/OutboxTests.swift
-import XCTest
+import Foundation
 import SwiftData
+import Testing
 @testable import BrokerField
 
-final class OutboxTests: XCTestCase {
+@Suite("Outbox")
+struct OutboxTests {
     private func makeContainer() throws -> ModelContainer {
         try ModelContainer(for: Enquiry.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor
-    private func seedQueued(_ context: ModelContext, attemptCount: Int = 0,
+    @discardableResult
+    private func seedQueued(in context: ModelContext, attemptCount: Int = 0,
                             nextAttemptAt: Date? = nil) -> Enquiry {
         let enquiry = Enquiry(name: "Asha Rao", phone: "9876543210", need: .office, brief: "b")
         enquiry.status = .queued
@@ -2406,83 +2177,80 @@ final class OutboxTests: XCTestCase {
         return enquiry
     }
 
-    func testBackoffSchedule() {
+    @Test func backoffSchedule() {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        XCTAssertEqual(BackoffPolicy.nextAttemptDate(after: 0, from: now), now)
-        XCTAssertEqual(BackoffPolicy.nextAttemptDate(after: 1, from: now), now.addingTimeInterval(30))
-        XCTAssertEqual(BackoffPolicy.nextAttemptDate(after: 2, from: now), now.addingTimeInterval(120))
-        XCTAssertEqual(BackoffPolicy.nextAttemptDate(after: 4, from: now), now.addingTimeInterval(1800))
-        XCTAssertNil(BackoffPolicy.nextAttemptDate(after: 5, from: now))
+        #expect(BackoffPolicy.nextAttemptDate(after: 0, from: now) == now)
+        #expect(BackoffPolicy.nextAttemptDate(after: 1, from: now) == now.addingTimeInterval(30))
+        #expect(BackoffPolicy.nextAttemptDate(after: 2, from: now) == now.addingTimeInterval(120))
+        #expect(BackoffPolicy.nextAttemptDate(after: 4, from: now) == now.addingTimeInterval(1800))
+        #expect(BackoffPolicy.nextAttemptDate(after: 5, from: now) == nil)
     }
 
     @MainActor
-    func testSuccessfulSubmitMarksSubmitted() async throws {
+    @Test func successfulSubmitMarksSubmitted() async throws {
         let container = try makeContainer()
-        let context = ModelContext(container)
-        let enquiry = seedQueued(context)
+        let enquiry = seedQueued(in: ModelContext(container))
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .success(LeadSubmissionResult(enquiryId: "srv-1", tier: "warm"))))
         await outbox.processPending()
-        XCTAssertEqual(enquiry.status, .submitted)
-        XCTAssertEqual(enquiry.serverEnquiryId, "srv-1")
-        XCTAssertEqual(enquiry.serverTier, "warm")
-        XCTAssertNil(enquiry.lastError)
+        #expect(enquiry.status == .submitted)
+        #expect(enquiry.serverEnquiryId == "srv-1")
+        #expect(enquiry.serverTier == "warm")
+        #expect(enquiry.lastError == nil)
     }
 
     @MainActor
-    func testFailureSchedulesNextAttempt() async throws {
+    @Test func failureSchedulesNextAttempt() async throws {
         let container = try makeContainer()
-        let context = ModelContext(container)
         let now = Date()
-        let enquiry = seedQueued(context, nextAttemptAt: now)
+        let enquiry = seedQueued(in: ModelContext(container), nextAttemptAt: now)
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .failure(SubmitError.server(500))))
         await outbox.processPending(now: now)
-        XCTAssertEqual(enquiry.status, .queued)
-        XCTAssertEqual(enquiry.attemptCount, 1)
-        XCTAssertEqual(enquiry.nextAttemptAt, now.addingTimeInterval(30))
-        XCTAssertNotNil(enquiry.lastError)
+        #expect(enquiry.status == .queued)
+        #expect(enquiry.attemptCount == 1)
+        #expect(enquiry.nextAttemptAt == now.addingTimeInterval(30))
+        #expect(enquiry.lastError != nil)
     }
 
     @MainActor
-    func testFutureAttemptIsSkipped() async throws {
+    @Test func futureAttemptIsSkipped() async throws {
         let container = try makeContainer()
-        let context = ModelContext(container)
-        let enquiry = seedQueued(context, nextAttemptAt: Date().addingTimeInterval(3600))
+        let enquiry = seedQueued(in: ModelContext(container),
+                                 nextAttemptAt: Date().addingTimeInterval(3600))
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .success(LeadSubmissionResult(enquiryId: nil, tier: nil))))
         await outbox.processPending()
-        XCTAssertEqual(enquiry.status, .queued)
-        XCTAssertEqual(enquiry.attemptCount, 0)
+        #expect(enquiry.status == .queued)
+        #expect(enquiry.attemptCount == 0)
     }
 
     @MainActor
-    func testMaxAttemptsMarksFailed() async throws {
+    @Test func maxAttemptsMarksFailed() async throws {
         let container = try makeContainer()
-        let context = ModelContext(container)
         let now = Date()
-        let enquiry = seedQueued(context, attemptCount: 4, nextAttemptAt: now)
+        let enquiry = seedQueued(in: ModelContext(container), attemptCount: 4, nextAttemptAt: now)
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .failure(SubmitError.transport)))
         await outbox.processPending(now: now)
-        XCTAssertEqual(enquiry.status, .failed)
-        XCTAssertEqual(enquiry.attemptCount, 5)
-        XCTAssertNil(enquiry.nextAttemptAt)
+        #expect(enquiry.status == .failed)
+        #expect(enquiry.attemptCount == 5)
+        #expect(enquiry.nextAttemptAt == nil)
     }
 
     @MainActor
-    func testIncompleteEnquiryFailsWithoutNetwork() async throws {
+    @Test func incompleteEnquiryFailsWithoutNetwork() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let enquiry = Enquiry(name: "", phone: "", need: nil, brief: "b")
         enquiry.status = .queued
         context.insert(enquiry)
-        try! context.save()
+        try context.save()
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .success(LeadSubmissionResult(enquiryId: nil, tier: nil))))
         await outbox.processPending()
-        XCTAssertEqual(enquiry.status, .failed)
-        XCTAssertEqual(enquiry.lastError, "incomplete enquiry")
+        #expect(enquiry.status == .failed)
+        #expect(enquiry.lastError == "incomplete enquiry")
     }
 }
 ```
@@ -2507,7 +2275,6 @@ import SwiftData
 public enum BackoffPolicy {
     /// Delays before attempts 1…5: immediate, 30s, 2m, 10m, 30m.
     public static let delays: [TimeInterval] = [0, 30, 120, 600, 1800]
-    public static let maxAttempts = 5
 
     public static func nextAttemptDate(after attemptCount: Int, from now: Date) -> Date? {
         guard attemptCount < delays.count else { return nil }
@@ -2575,6 +2342,340 @@ git add broker-field-ios && git commit -m "Add SwiftData-backed outbox with back
 
 ---
 
+### Task 9: RecordingSession orchestrator
+
+**Files:**
+- Create: `broker-field-ios/BrokerField/Session/RecordingSession.swift`
+- Test: `broker-field-ios/BrokerFieldTests/RecordingSessionTests.swift`
+
+**Interfaces:**
+- Consumes: `AudioRecording`/`MockRecorder`, `SpeechTranscribing`/`MockTranscriber` (Task 6); `EnquiryExtracting`/`MockExtractor` (Task 5); `EnquiryMapper`, `EnquiryDraft`, `TranscriptTrimmer` (Task 4); `Enquiry` (Task 3); `Outbox`, `MockSubmitter`, `SubmitError` (Tasks 7–8).
+- Produces: `RecordingSession` (@MainActor @Observable) with `state`, `transcript`, `notice`, `wasTruncated`, `extractorAvailable`, `prewarm()`, `startRecording()`, `stopAndProcess()`, `submit(draft:)`, `reset()`. Consumed by Task 10 UI.
+
+- [ ] **Step 1: Write the failing tests**
+
+```swift
+// BrokerFieldTests/RecordingSessionTests.swift
+import Foundation
+import SwiftData
+import Testing
+@testable import BrokerField
+
+@MainActor
+@Suite("Recording session")
+struct RecordingSessionTests {
+    private let transcript = "Asha Rao, 98765 43210, needs a 15-seat office in Koramangala."
+
+    private func makeSession(
+        recorder: MockRecorder = MockRecorder(),
+        transcriber: MockTranscriber? = nil,
+        extractorResult: Result<EnquiryExtraction, Error>? = nil,
+        extractorAvailability: ExtractorAvailability = .available,
+        submitterResult: Result<LeadSubmissionResult, Error> = .success(LeadSubmissionResult(enquiryId: "srv-1", tier: "hot"))
+    ) throws -> (RecordingSession, ModelContainer) {
+        let container = try ModelContainer(for: Enquiry.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let extraction = EnquiryExtraction(contactName: "Asha Rao", phone: "98765 43210",
+                                           need: "office", budget: nil,
+                                           localities: ["Koramangala"], timeline: nil,
+                                           brief: "Asha Rao needs a 15-seat office in Koramangala.")
+        let extractor = MockExtractor(availability: extractorAvailability,
+                                      result: extractorResult ?? .success(extraction))
+        let outbox = Outbox(container: container, submitter: MockSubmitter(result: submitterResult))
+        let session = RecordingSession(recorder: recorder,
+                                       transcriber: transcriber ?? MockTranscriber(transcript: transcript),
+                                       extractor: extractor,
+                                       outbox: outbox,
+                                       container: container)
+        return (session, container)
+    }
+
+    @Test func micPermissionDeniedFailsWithCopy() async throws {
+        let (session, _) = try makeSession(recorder: MockRecorder(grantPermission: false))
+        await session.startRecording()
+        guard case .failed(let message) = session.state else {
+            Issue.record("expected failed, got \(session.state)")
+            return
+        }
+        #expect(message.contains("Microphone"))
+    }
+
+    @Test func stopAndProcessProducesMappedDraft() async throws {
+        let (session, _) = try makeSession()
+        await session.startRecording()
+        #expect(session.state == .recording)
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        #expect(draft.name == "Asha Rao")
+        #expect(draft.need == .office)
+        #expect(draft.step2Answers["preferredArea"] == "Koramangala")
+        #expect(session.transcript == transcript)
+        #expect(session.notice == nil)
+    }
+
+    @Test func speechAuthorizationDeniedDegradesWithNotice() async throws {
+        let (session, _) = try makeSession(
+            transcriber: MockTranscriber(transcript: "", grantAuthorization: false))
+        await session.startRecording()
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        #expect(draft.brief.isEmpty)
+        #expect(session.notice?.contains("Speech") == true)
+    }
+
+    @Test func extractorUnavailableFallsBackToManualDraft() async throws {
+        let (session, _) = try makeSession(extractorAvailability: .deviceNotEligible)
+        await session.startRecording()
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        #expect(draft.brief == transcript)
+        #expect(draft.need == nil)
+    }
+
+    @Test(arguments: [ExtractionError.guardrailViolation, .refusal, .contextOverflow])
+    func modelRefusalPathsFallBackWithNotice(error: ExtractionError) async throws {
+        let (session, _) = try makeSession(extractorResult: .failure(error))
+        await session.startRecording()
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        #expect(draft.brief == transcript)
+        #expect(session.notice != nil)
+    }
+
+    @Test func submitWithoutNeedFails() async throws {
+        let (session, _) = try makeSession(extractorAvailability: .deviceNotEligible)
+        await session.startRecording()
+        await session.stopAndProcess()
+        await session.submit(draft: EnquiryDraft(name: "Asha Rao", phone: "9876543210"))
+        guard case .failed(let message) = session.state else {
+            Issue.record("expected failed, got \(session.state)")
+            return
+        }
+        #expect(message.contains("Office"))
+    }
+
+    @Test func submitPersistsLocallyThenSubmits() async throws {
+        let (session, container) = try makeSession()
+        await session.startRecording()
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        await session.submit(draft: draft)
+        guard case .submitted(let tier) = session.state else {
+            Issue.record("expected submitted, got \(session.state)")
+            return
+        }
+        #expect(tier == "hot")
+        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
+        #expect(stored.count == 1)
+        #expect(stored[0].status == .submitted)
+        #expect(stored[0].serverEnquiryId == "srv-1")
+        #expect(stored[0].phone == "+919876543210")
+    }
+
+    @Test func submitOfflineQueues() async throws {
+        let (session, container) = try makeSession(
+            submitterResult: .failure(SubmitError.server(500)))
+        await session.startRecording()
+        await session.stopAndProcess()
+        guard case .ready(let draft) = session.state else {
+            Issue.record("expected ready, got \(session.state)")
+            return
+        }
+        await session.submit(draft: draft)
+        #expect(session.state == .queuedOffline)
+        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
+        #expect(stored[0].status == .queued)
+        #expect(stored[0].attemptCount == 1)
+    }
+
+    @Test func prewarmDelegatesToExtractor() async throws {
+        let (session, _) = try makeSession()
+        await session.prewarm()
+        // No crash, no state change — the mock records it internally.
+        #expect(session.state == .idle)
+    }
+}
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+```bash
+xcodebuild -project BrokerField.xcodeproj -scheme BrokerField \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:BrokerFieldTests/RecordingSessionTests test CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5
+```
+
+Expected: FAIL — `Cannot find 'RecordingSession' in scope`.
+
+- [ ] **Step 3: Implement**
+
+```swift
+// BrokerField/Session/RecordingSession.swift
+import Foundation
+import SwiftData
+
+@MainActor
+@Observable
+public final class RecordingSession {
+    public enum State: Equatable, Sendable {
+        case idle
+        case recording
+        case transcribing
+        case ready(EnquiryDraft)
+        case submitting
+        case submitted(tier: String?)
+        case queuedOffline
+        case failed(String)
+    }
+
+    public private(set) var state: State = .idle
+    public private(set) var transcript: String = ""
+    public private(set) var audioFileName: String?
+    public private(set) var wasTruncated = false
+    /// Non-fatal degradation the review sheet should show (speech denied,
+    /// model refusal fallback, truncation). Distinct from `state == .failed`.
+    public private(set) var notice: String?
+    public let extractorAvailable: Bool
+
+    private let recorder: any AudioRecording
+    private let transcriber: any SpeechTranscribing
+    private let extractor: any EnquiryExtracting
+    private let outbox: Outbox
+    private let context: ModelContext
+
+    public init(recorder: any AudioRecording, transcriber: any SpeechTranscribing,
+                extractor: any EnquiryExtracting, outbox: Outbox, container: ModelContainer) {
+        self.recorder = recorder
+        self.transcriber = transcriber
+        self.extractor = extractor
+        self.outbox = outbox
+        self.context = ModelContext(container)
+        self.extractorAvailable = extractor.availability() == .available
+    }
+
+    /// Call from the record view's `.task` — warms model assets so the first
+    /// extraction doesn't pay cold-start latency after the user stops recording.
+    public func prewarm() async {
+        await extractor.prewarm()
+    }
+
+    public func startRecording() async {
+        guard await recorder.requestPermission() else {
+            state = .failed("Microphone access is off. Enable it in Settings to record.")
+            return
+        }
+        do {
+            let url = try await recorder.startRecording()
+            audioFileName = url.lastPathComponent
+            state = .recording
+        } catch {
+            state = .failed("Couldn't start recording. Try again.")
+        }
+    }
+
+    public func stopAndProcess() async {
+        do {
+            let url = try await recorder.stopRecording()
+            audioFileName = url.lastPathComponent
+            state = .transcribing
+            guard await transcriber.requestAuthorization() else {
+                notice = "Speech access is off — type the note below, or enable it in Settings."
+                state = .ready(EnquiryDraft())
+                return
+            }
+            let raw = try await transcriber.transcribe(url: url)
+            let trimmed = TranscriptTrimmer.truncate(raw)
+            transcript = trimmed.text
+            wasTruncated = trimmed.wasTruncated
+            if wasTruncated {
+                notice = "Long note — only the first part was analysed."
+            }
+            if extractorAvailable {
+                let extraction = try await extractor.extract(from: trimmed.text)
+                state = .ready(EnquiryMapper.draft(from: extraction))
+            } else {
+                state = .ready(EnquiryDraft(brief: trimmed.text))
+            }
+        } catch ExtractionError.guardrailViolation, ExtractionError.refusal,
+               ExtractionError.contextOverflow {
+            // Model refused or overflowed — the transcript is still usable.
+            notice = "Couldn't auto-fill the fields — review the transcript and type them in."
+            state = .ready(EnquiryDraft(brief: transcript))
+        } catch {
+            state = .failed("Couldn't process the note. You can still type it manually.")
+        }
+    }
+
+    /// Local-first, always: the enquiry is persisted before any network call —
+    /// the client mirror of the backend's "Postgres first" rule.
+    public func submit(draft: EnquiryDraft) async {
+        guard let need = draft.need else {
+            state = .failed("Pick Office, Retail, or Lease before submitting.")
+            return
+        }
+        let normalized = PhoneNormalizer.normalize(draft.phone)
+        guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              PhoneNormalizer.isValid(normalized) else {
+            state = .failed("Name and a valid phone number are required.")
+            return
+        }
+        let enquiry = Enquiry(audioFileName: audioFileName, transcript: transcript,
+                              name: draft.name, phone: normalized, need: need,
+                              brief: draft.brief, step2Answers: draft.step2Answers)
+        enquiry.status = .queued
+        enquiry.nextAttemptAt = .now
+        context.insert(enquiry)
+        try? context.save()
+
+        state = .submitting
+        await outbox.processPending()
+        switch enquiry.status {
+        case .submitted:
+            state = .submitted(tier: enquiry.serverTier)
+        case .failed:
+            state = .failed(enquiry.lastError ?? "Submission failed.")
+        default:
+            state = .queuedOffline
+        }
+    }
+
+    public func reset() {
+        state = .idle
+        transcript = ""
+        audioFileName = nil
+        wasTruncated = false
+        notice = nil
+    }
+}
+```
+
+- [ ] **Step 4: Run tests to verify pass**
+
+Expected: `** TEST SUCCEEDED **` — 10 tests, 0 failures.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add broker-field-ios && git commit -m "Add RecordingSession orchestrator (record → transcribe → extract → submit)."
+```
+
+---
+
 ### Task 10: UI + app wiring + UI test
 
 **Files:**
@@ -2592,7 +2693,7 @@ git add broker-field-ios && git commit -m "Add SwiftData-backed outbox with back
 - Consumes: everything above.
 - Produces: the runnable app. `AppEnvironment.make()` selects `.uiTesting` when launched with `-UITesting`.
 
-- [ ] **Step 1: Write the failing UI test** (replaces the placeholder)
+- [ ] **Step 1: Write the failing UI test** (replaces the placeholder; waits for controls before tapping — mock permission/extraction are async)
 
 ```swift
 // BrokerFieldUITests/BrokerFieldUITests.swift
@@ -2605,14 +2706,22 @@ final class BrokerFieldUITests: XCTestCase {
         app.launchArguments = ["-UITesting"]
         app.launch()
 
-        app.buttons["recordButton"].tap()
-        app.buttons["stopButton"].tap()
+        let recordButton = app.buttons["recordButton"]
+        XCTAssertTrue(recordButton.waitForExistence(timeout: 10))
+        recordButton.tap()
+
+        let stopButton = app.buttons["stopButton"]
+        XCTAssertTrue(stopButton.waitForExistence(timeout: 10))
+        stopButton.tap()
 
         let nameField = app.textFields["nameField"]
         XCTAssertTrue(nameField.waitForExistence(timeout: 15))
         XCTAssertEqual(nameField.value as? String, "Asha Rao")
 
-        app.buttons["submitButton"].tap()
+        let submitButton = app.buttons["submitButton"]
+        XCTAssertTrue(submitButton.waitForExistence(timeout: 5))
+        submitButton.tap()
+
         XCTAssertTrue(app.staticTexts["submittedLabel"].waitForExistence(timeout: 15))
     }
 }
@@ -2664,7 +2773,7 @@ public struct AppEnvironment {
     public static let production = AppEnvironment(
         container: try! ModelContainer(for: Enquiry.self),
         recorder: AudioRecorder(),
-        transcriber: SpeechTranscriber(),
+        transcriber: SpeechAnalyzerTranscriber(),
         extractor: FoundationModelsExtractor(),
         submitter: LeadSubmitter())
 
@@ -2712,6 +2821,7 @@ public struct RecordView: View {
         }
         .padding()
         .navigationTitle("New enquiry")
+        .task { await session.prewarm() }
         .onChange(of: session.state) { _, newState in
             if case .ready = newState { showingReview = true }
         }
@@ -2719,7 +2829,7 @@ public struct RecordView: View {
             if case .ready(let draft) = session.state {
                 NavigationStack {
                     ReviewSheet(draft: draft, transcript: session.transcript,
-                                wasTruncated: session.wasTruncated, session: session)
+                                notice: session.notice, session: session)
                 }
             }
         }
@@ -2780,13 +2890,13 @@ import SwiftUI
 public struct ReviewSheet: View {
     @State var draft: EnquiryDraft
     let transcript: String
-    let wasTruncated: Bool
+    let notice: String?
     let session: RecordingSession
 
-    public init(draft: EnquiryDraft, transcript: String, wasTruncated: Bool, session: RecordingSession) {
+    public init(draft: EnquiryDraft, transcript: String, notice: String?, session: RecordingSession) {
         _draft = State(initialValue: draft)
         self.transcript = transcript
-        self.wasTruncated = wasTruncated
+        self.notice = notice
         self.session = session
     }
 
@@ -2804,6 +2914,7 @@ public struct ReviewSheet: View {
                         .accessibilityIdentifier("queuedLabel")
                 }
             } else {
+                bannerSection
                 contactSection
                 needSection
                 briefSection
@@ -2812,6 +2923,28 @@ public struct ReviewSheet: View {
             }
         }
         .navigationTitle("Review enquiry")
+    }
+
+    /// Surfaces non-fatal degradation (speech denied, model fallback) and
+    /// submission failures while the sheet is covering the record screen.
+    @ViewBuilder
+    private var bannerSection: some View {
+        if let notice {
+            Section {
+                Label(notice, systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("noticeLabel")
+            }
+        }
+        if case .failed(let message) = session.state {
+            Section {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("errorLabel")
+            }
+        }
     }
 
     private var contactSection: some View {
@@ -2836,7 +2969,7 @@ public struct ReviewSheet: View {
             if let need = draft.need {
                 ForEach(Step2Schema.fields(for: need), id: \.key) { field in
                     if field.isChoice {
-                        Picker(field.label, selection: choiceBinding(for: field.key)) {
+                        Picker(field.label, selection: textBinding(for: field.key)) {
                             Text("Choose…").tag("")
                             ForEach(Step2Schema.timelineBuckets, id: \.self) { bucket in
                                 Text(bucket).tag(bucket)
@@ -2862,11 +2995,6 @@ public struct ReviewSheet: View {
     private var transcriptSection: some View {
         if !transcript.isEmpty {
             Section("Transcript") {
-                if wasTruncated {
-                    Text("Long note — only the first part was analysed.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
                 Text(transcript)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -2893,10 +3021,6 @@ public struct ReviewSheet: View {
             get: { draft.step2Answers[key] ?? "" },
             set: { draft.step2Answers[key] = $0 })
     }
-
-    private func choiceBinding(for key: String) -> Binding<String> {
-        textBinding(for: key)
-    }
 }
 ```
 
@@ -2914,15 +3038,17 @@ public struct HistoryView: View {
         NavigationStack {
             List(enquiries) { enquiry in
                 NavigationLink(destination: EnquiryDetailView(enquiry: enquiry)) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(enquiry.name.isEmpty ? "Unnamed enquiry" : enquiry.name)
-                            .fontWeight(.medium)
-                        Text(enquiry.createdAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(enquiry.name.isEmpty ? "Unnamed enquiry" : enquiry.name)
+                                .fontWeight(.medium)
+                            Text(enquiry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        statusBadge(enquiry.status)
                     }
-                    Spacer()
-                    statusBadge(enquiry.status)
                 }
             }
             .navigationTitle("Enquiries")
@@ -3067,17 +3193,20 @@ import SwiftUI
 @main
 struct BrokerFieldApp: App {
     let environment = AppEnvironment.make()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView(environment: environment)
-                .task {
-                    // Flush any queued enquiries from a previous offline session.
-                    await Outbox(container: environment.container,
-                                 submitter: environment.submitter).processPending()
-                }
         }
         .modelContainer(environment.container)
+        // Flush queued enquiries on launch and every foreground — the spec's
+        // "retry on foreground" half of the outbox contract.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await Outbox(container: environment.container,
+                         submitter: environment.submitter).processPending()
+        }
     }
 }
 ```
@@ -3135,6 +3264,13 @@ Expected: `** TEST SUCCEEDED **`, 0 failures across `BrokerFieldTests` and `Brok
 On-device voice-note → structured enquiry capture for Gentle Space brokers.
 Spec: `../docs/superpowers/specs/2026-09-18-broker-field-ios-design.md`.
 
+## Stack
+- iOS 26+, iPhone, Swift 6, SwiftUI, SwiftData. Zero third-party dependencies.
+- On-device transcription: SpeechAnalyzer + SpeechTranscriber (offline preset,
+  en-IN with en-US fallback; model downloads once via AssetInventory).
+- On-device extraction: FoundationModels `LanguageModelSession` + `@Generable`.
+- Unit tests: Swift Testing. UI tests: XCTest/XCUI.
+
 ## Requirements
 - Xcode 26+ (26.2 verified), iOS 26 simulator or device.
 - On-device AI extraction needs an Apple Intelligence iPhone (15 Pro+).
@@ -3142,7 +3278,8 @@ Spec: `../docs/superpowers/specs/2026-09-18-broker-field-ios-design.md`.
 
 ## Run
 Open `BrokerField.xcodeproj`, pick the `BrokerField` scheme, run.
-Backend base URL: `GSAPIBaseURL` in `Info.plist` (default: dogfood VM).
+Backend base URL: `GSAPIBaseURL` in `Info.plist` (default: dogfood VM over
+HTTP — dogfood only; HTTPS domain is a pre-production blocker).
 
 ## Test
 ```
@@ -3153,9 +3290,10 @@ xcodebuild -project BrokerField.xcodeproj -scheme BrokerField \
 
 ## Device checklist (manual gate)
 - [ ] Apple Intelligence enabled; mic + speech permissions granted
+- [ ] First transcription downloads the speech model (visible wait is expected)
 - [ ] Record 30s code-mixed (English/Hindi) note → transcript sensible
 - [ ] Extraction fills name/phone/need/localities; review edits work
-- [ ] Airplane-mode submit → queued; disable airplane → outbox submits
+- [ ] Airplane-mode submit → queued; foreground the app → outbox submits
 - [ ] Enquiry visible in the ads-agent pipeline (via /api/leads → S5a)
 ```
 
@@ -3167,8 +3305,10 @@ git add broker-field-ios/README.md && git commit -m "Add Broker Field README wit
 
 ---
 
-## Self-Review Notes (ran 2026-09-18)
+## Self-Review Notes (rev 2, 2026-09-18)
 
-- **Spec coverage:** record (T6), transcribe (T6), extract + seam + degradation (T4/T5), review + submit (T7/T10), local-first + outbox (T3/T9), history + retry (T10), schema mapping (T2/T4), availability states (T5/T7/T10), testing incl. UI + device gate (T10/T11). Milestones M2–M4 are spec-only by design.
-- **Ordering:** Tasks 8 and 9 must be implemented **before** Task 7's implementation step (RecordingSession depends on `Outbox`, `MockSubmitter`, `SubmitError`). Task 7's tests reference all three.
-- **Known sharp edges flagged inline:** Speech continuation double-resume guard (T6), `httpBodyStream` in URLProtocol stubs (T8), en-dash characters in `TIMELINE_BUCKETS` (T2 uses `\u{2013}` escapes), simulator cannot validate AFM quality (device checklist in T11).
+- **Spec coverage:** record (T6), transcribe (T6), extract + seam + degradation (T4/T5), review + submit (T9/T10), local-first + outbox (T3/T8), history + retry (T10), schema mapping (T2/T4), availability states (T5/T9/T10), foreground retry (T10 `scenePhase`), testing incl. UI + device gate (T10/T11). Milestones M2–M4 are spec-only by design.
+- **Dependency order is linear:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. No forward references.
+- **Audit-driven fixes baked in:** SpeechAnalyzer replaces SFSpeechRecognizer; Swift Testing replaces XCTest for units; `.refusal` caught; session prewarm; word-boundary keyword matching; UI test waits; review-sheet notice/error banners; audio session deactivated on failed start; dead `submittedPayloads` removed from `MockSubmitter`.
+- **Known sharp edges flagged inline:** `httpBodyStream` in URLProtocol stubs (T7), en-dash characters in `TIMELINE_BUCKETS` (T2 uses `\u{2013}` escapes), first-run speech-model download latency (T6/T11), simulator cannot validate AFM/SpeechAnalyzer quality (device checklist in T11), HTTP+PII is dogfood-only (Global Constraints).
+- **iOS 27 forward notes:** `LanguageModelError` replaces `GenerationError` (T5 comment); vision/PCC/`LanguageModel` protocol swaps arrive with the M3+ milestones via the `EnquiryExtracting` seam.
