@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { isAiSearchConfigured } from "@/lib/ai/client";
 import { getListingById } from "@/lib/db/listings";
 import { emptyQueryEntities, type QueryEntities } from "../../../../lib/graph/types";
+import { newSessionId, readSessionId, sessionCookie } from "../../../../lib/portal/session";
+import { getPostHogClient, readPostHogRequestContext } from "@/lib/posthog-server";
 import { buildInsight } from "@/lib/spaces/insight";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -100,6 +102,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "insight unavailable" }, { status: 503 });
   }
 
+  const existingSession = readSessionId(req.headers.get("cookie"));
+  const sessionId = existingSession ?? newSessionId();
+  const requestContext = readPostHogRequestContext(req);
+  const posthog = getPostHogClient();
+
   try {
     const listing = await getListingById(parsed.listingId);
     if (!listing) {
@@ -115,9 +122,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "insight failed" }, { status: 502 });
     }
 
-    return NextResponse.json(insight);
+    if (posthog) {
+      posthog.capture({
+        distinctId: requestContext.distinctId ?? sessionId,
+        event: "space_insight_generated",
+        properties: {
+          listing_id: parsed.listingId,
+          has_summary: Boolean(insight.summary),
+          highlight_count: insight.highlights.length,
+          nearby_group_count: insight.nearby.length,
+          ...(requestContext.sessionId ? { $session_id: requestContext.sessionId } : {}),
+        },
+      });
+      await posthog.flush();
+    }
+
+    const res = NextResponse.json(insight);
+    if (!existingSession) res.headers.set("Set-Cookie", sessionCookie(sessionId));
+    return res;
   } catch (err) {
     console.error(err);
+    if (posthog) {
+      posthog.captureException(err, requestContext.distinctId ?? sessionId);
+      await posthog.flush();
+    }
     return NextResponse.json({ error: "insight failed" }, { status: 502 });
   }
 }

@@ -57,3 +57,4 @@ deploy/openmemory/02-secrets.local.yaml
 .bin/
 CLAUDE.md
 AGENTS.md
+.env.local

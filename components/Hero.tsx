@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
 import { Reveal } from "@/components/motion/Reveal";
 import { CONTENT } from "@/lib/content";
@@ -29,13 +30,13 @@ export function Hero() {
               >
                 {CONTENT.hero.primaryCta}
               </button>
-              <a
+              <Link
                 href="/spaces"
                 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[var(--ink)] transition hover:text-[var(--accent)]"
               >
                 See Available Properties
                 <span aria-hidden="true">→</span>
-              </a>
+              </Link>
             </div>
 
             <p className="max-w-[480px] text-sm leading-[1.4] text-[var(--muted)]">

@@ -6,6 +6,7 @@ import {
   EMPTY_FILTERS,
   type SpacesFilterState,
 } from "@/lib/listings/filterListings";
+import { capturePostHogEvent } from "@/lib/posthog-client";
 
 const DESK_TYPES = ["Hot desk", "Private cabin", "Dedicated desk", "Meeting room"] as const;
 const AMENITY_PRESETS = ["Near Metro", "Parking", "Meeting rooms", "24×7", "Quiet zone"] as const;
@@ -47,6 +48,16 @@ export function SpacesFiltersModal({
   const areas = Array.from(new Set(listings.map((listing) => listing.area))).sort((a, b) =>
     a.localeCompare(b),
   );
+
+  const handleApply = () => {
+    capturePostHogEvent("space_filters_applied", {
+      desk_type_count: value.deskTypes.length,
+      area_count: value.areas.length,
+      amenity_count: value.amenities.length,
+      result_count: resultCount,
+    });
+    onClose();
+  };
 
   return (
     <div
@@ -172,7 +183,7 @@ export function SpacesFiltersModal({
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleApply}
             className="inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--accent)] px-5 py-3.5 text-[15px] font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           >
             Show {resultCount} space{resultCount === 1 ? "" : "s"}

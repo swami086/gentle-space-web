@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
 import { Reveal } from "@/components/motion/Reveal";
 
@@ -24,12 +25,12 @@ export function CtaBand() {
           >
             Contact Us
           </button>
-          <a
+          <Link
             href="/spaces"
             className="rounded-[var(--radius)] border border-[var(--on-accent)]/55 px-6 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--on-accent)]/10"
           >
             See Available Properties
-          </a>
+          </Link>
         </div>
       </Reveal>
     </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandLogoMark } from "@/components/BrandLogoMark";
 import { BrandWordmark } from "@/components/BrandWordmark";
@@ -65,14 +66,14 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-10">
-        <a
+        <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5"
           aria-label={SITE.name}
         >
           <BrandLogoMark />
           <BrandWordmark className="text-[19px] font-bold" />
-        </a>
+        </Link>
 
         <nav
           aria-label="Primary"

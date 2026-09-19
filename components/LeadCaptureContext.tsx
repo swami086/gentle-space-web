@@ -8,6 +8,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { capturePostHogEvent } from "@/lib/posthog-client";
 
 export type PropertyLeadContext = { propertyName: string; propertyUrl: string };
 
@@ -43,7 +44,11 @@ export function LeadCaptureProvider({ children }: { children: ReactNode }) {
       open,
       propertyContext,
       openModal: (ctx?: OpenModalArg) => {
-        setPropertyContext(isPropertyLeadContext(ctx) ? ctx : null);
+        const hasPropertyContext = isPropertyLeadContext(ctx);
+        capturePostHogEvent("lead_capture_opened", {
+          has_property_context: hasPropertyContext,
+        });
+        setPropertyContext(hasPropertyContext ? ctx : null);
         setOpen(true);
       },
       closeModal: () => {

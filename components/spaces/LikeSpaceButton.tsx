@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from "react";
 import { useLeadCapture } from "@/components/LeadCaptureContext";
+import { capturePostHogEvent } from "@/lib/posthog-client";
 
 type LikeSpaceButtonProps = {
   propertyName: string;
@@ -38,6 +39,9 @@ export function LikeSpaceButton({
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    capturePostHogEvent("space_interest_expressed", {
+      cta_variant: variant,
+    });
     openModal({ propertyName, propertyUrl });
   };
 

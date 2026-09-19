@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { qualifyLead } from "@/lib/ai/client";
 import { captureEnquiry } from "@/lib/enquiries/capture";
 import { foldStep2Answers } from "@/lib/leads/step2-fields";
+import { getPostHogClient, readPostHogRequestContext } from "@/lib/posthog-server";
 import type { LeadPayload, NeedType } from "@/lib/whatsapp";
 
 // Node runtime (not edge) so this handler keeps running the AI call and the
@@ -85,6 +86,23 @@ export async function POST(request: Request) {
     listingName: payload.propertyName ?? null,
     tier: qualification.tier,
   });
+
+  const posthog = getPostHogClient();
+  if (posthog) {
+    const { distinctId, sessionId } = readPostHogRequestContext(request);
+    posthog.capture({
+      distinctId: distinctId ?? captured.enquiryId,
+      event: "lead_created",
+      properties: {
+        need: payload.need,
+        qualification_tier: qualification.tier,
+        has_property_context: Boolean(payload.propertyUrl),
+        answered_detail_count: Object.keys(payload.step2Answers ?? {}).length,
+        ...(sessionId ? { $session_id: sessionId } : {}),
+      },
+    });
+    await posthog.flush();
+  }
 
   // `crm: "pending"` keeps the existing response shape the form already reads,
   // and is now honest: the CRM write has not happened yet and will be done by

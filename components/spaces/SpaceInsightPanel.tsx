@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { QueryEntities } from "@/lib/graph/types";
+import { postHogCorrelationHeaders } from "@/lib/posthog-client";
 import type { InsightResponse } from "@/lib/spaces/insight-types";
 
 type SpaceInsightPanelProps = {
@@ -23,7 +24,10 @@ export function SpaceInsightPanel({ listingId, query, entities }: SpaceInsightPa
     try {
       const res = await fetch("/api/spaces/insight", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...postHogCorrelationHeaders(),
+        },
         body: JSON.stringify({ listingId, query, entities }),
       });
       if (!res.ok) {

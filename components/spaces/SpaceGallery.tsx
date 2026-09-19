@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { capturePostHogEvent } from "@/lib/posthog-client";
 
 type SpaceGalleryProps = {
   title: string;
@@ -40,6 +41,10 @@ export function SpaceGallery({ title, images }: SpaceGalleryProps) {
   }, []);
 
   const openAt = (index: number) => {
+    capturePostHogEvent("space_gallery_opened", {
+      photo_count: images.length,
+      opened_photo_index: index,
+    });
     pendingScrollRef.current = index;
     setOpenIndex(index);
   };

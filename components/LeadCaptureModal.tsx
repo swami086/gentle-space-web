@@ -4,6 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { NEED_LABELS, type LeadPayload, type NeedType } from "@/lib/whatsapp";
 import { step2FieldDisplayLabel, step2FieldsFor, type Step2Answers } from "@/lib/leads/step2-fields";
 import { submitWhatsAppHandoff } from "@/lib/leads/whatsapp-handoff";
+import {
+  capturePostHogEvent,
+  identifyPostHogPerson,
+  postHogCorrelationHeaders,
+} from "@/lib/posthog-client";
 import { LeadCaptureConfirmation } from "./LeadCaptureConfirmation";
 import {
   canAdvanceFromIdentify,
@@ -37,7 +42,10 @@ async function postLead(payload: LeadPayload) {
   try {
     await fetch("/api/leads", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...postHogCorrelationHeaders(),
+      },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(LEADS_FETCH_TIMEOUT_MS),
     });
@@ -123,6 +131,13 @@ export function LeadCaptureModal() {
         propertyUrl: propertyContext.propertyUrl,
       }),
     };
+    identifyPostHogPerson({ name, phone });
+    capturePostHogEvent("lead_whatsapp_handoff_started", {
+      need,
+      has_property_context: Boolean(propertyContext),
+      answered_detail_count: Object.keys(step2Answers).length,
+      has_notes: Boolean(notes.trim()),
+    });
     const { whatsappUrl } = submitWhatsAppHandoff(lead, {
       openWindow: window.open.bind(window),
       postLead,

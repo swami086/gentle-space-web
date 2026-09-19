@@ -18,6 +18,7 @@ import {
 import type { QueryEntities } from "@/lib/graph/types";
 import type { PublicListing } from "@/lib/listings/public";
 import type { SyncRun } from "@/lib/listings/types";
+import { postHogCorrelationHeaders } from "@/lib/posthog-client";
 
 type MetaMode = "sync" | "matches" | "empty-search";
 
@@ -110,7 +111,10 @@ export function SpacesBrowseClient({
     try {
       const response = await fetch("/api/spaces/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...postHogCorrelationHeaders(),
+        },
         body: JSON.stringify({ query: trimmed }),
       });
 
