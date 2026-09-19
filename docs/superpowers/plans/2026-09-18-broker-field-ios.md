@@ -1485,6 +1485,7 @@ Expected: FAIL — `Cannot find 'MockExtractor' in scope` etc.
 ```swift
 // BrokerField/Extraction/EnquiryExtracting.swift
 import Foundation
+import os
 
 public enum ExtractorAvailability: Equatable, Sendable {
     case available
@@ -1514,22 +1515,21 @@ public protocol EnquiryExtracting: Sendable {
 
 /// Test double. Lock-guarded so Swift 6 strict concurrency stays happy.
 public final class MockExtractor: EnquiryExtracting, @unchecked Sendable {
+    private struct State {
+        var lastTranscript: String?
+        var didPrewarm = false
+    }
+
     public var stubbedAvailability: ExtractorAvailability
     public var stubbedResult: Result<EnquiryExtraction, Error>
-    private let lock = NSLock()
-    private var _lastTranscript: String?
-    private var _didPrewarm = false
+    private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
     public var lastTranscript: String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return _lastTranscript
+        stateLock.withLock { $0.lastTranscript }
     }
 
     public var didPrewarm: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return _didPrewarm
+        stateLock.withLock { $0.didPrewarm }
     }
 
     public init(availability: ExtractorAvailability = .available,
@@ -1541,15 +1541,11 @@ public final class MockExtractor: EnquiryExtracting, @unchecked Sendable {
     public func availability() -> ExtractorAvailability { stubbedAvailability }
 
     public func prewarm() async {
-        lock.lock()
-        _didPrewarm = true
-        lock.unlock()
+        stateLock.withLock { $0.didPrewarm = true }
     }
 
     public func extract(from transcript: String) async throws -> EnquiryExtraction {
-        lock.lock()
-        _lastTranscript = transcript
-        lock.unlock()
+        stateLock.withLock { $0.lastTranscript = transcript }
         return try stubbedResult.get()
     }
 }
@@ -1873,7 +1869,7 @@ public struct SpeechAnalyzerTranscriber: SpeechTranscribing {
 
     public func transcribe(url: URL) async throws -> String {
         let locale = try await Self.preferredSupportedLocale()
-        let transcriber = SpeechTranscriber(locale: locale, preset: .offlineTranscription)
+        let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
         try await Self.ensureModelInstalled(for: transcriber, locale: locale)
 
         // Read results concurrently with analysis; concatenate finalized text.
@@ -1889,7 +1885,7 @@ public struct SpeechAnalyzerTranscriber: SpeechTranscribing {
         }
 
         let text = try await transcription
-        await AssetInventory.deallocate(locale: locale)
+        _ = await AssetInventory.release(reservedLocale: locale)
         return String(text.characters)
     }
 
@@ -2006,7 +2002,7 @@ import Foundation
 import Testing
 @testable import BrokerField
 
-@Suite("Lead submitter")
+@Suite("Lead submitter", .serialized)
 struct LeadSubmitterTests {
     private let baseURL = URL(string: "http://test.local")!
     private let payload = LeadPayload(name: "Asha Rao", phone: "+919876543210", need: .office,
@@ -2235,7 +2231,7 @@ struct OutboxTests {
     @MainActor
     @Test func successfulSubmitMarksSubmitted() async throws {
         let container = try makeContainer()
-        let enquiry = seedQueued(in: ModelContext(container))
+        let enquiry = seedQueued(in: container.mainContext)
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .success(LeadSubmissionResult(enquiryId: "srv-1", tier: "warm"))))
         await outbox.processPending()
@@ -2249,7 +2245,7 @@ struct OutboxTests {
     @Test func failureSchedulesNextAttempt() async throws {
         let container = try makeContainer()
         let now = Date()
-        let enquiry = seedQueued(in: ModelContext(container), nextAttemptAt: now)
+        let enquiry = seedQueued(in: container.mainContext, nextAttemptAt: now)
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .failure(SubmitError.server(500))))
         await outbox.processPending(now: now)
@@ -2262,7 +2258,7 @@ struct OutboxTests {
     @MainActor
     @Test func futureAttemptIsSkipped() async throws {
         let container = try makeContainer()
-        let enquiry = seedQueued(in: ModelContext(container),
+        let enquiry = seedQueued(in: container.mainContext,
                                  nextAttemptAt: Date().addingTimeInterval(3600))
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .success(LeadSubmissionResult(enquiryId: nil, tier: nil))))
@@ -2275,7 +2271,7 @@ struct OutboxTests {
     @Test func maxAttemptsMarksFailed() async throws {
         let container = try makeContainer()
         let now = Date()
-        let enquiry = seedQueued(in: ModelContext(container), attemptCount: 4, nextAttemptAt: now)
+        let enquiry = seedQueued(in: container.mainContext, attemptCount: 4, nextAttemptAt: now)
         let outbox = Outbox(container: container,
                             submitter: MockSubmitter(result: .failure(SubmitError.transport)))
         await outbox.processPending(now: now)
@@ -2287,7 +2283,7 @@ struct OutboxTests {
     @MainActor
     @Test func incompleteEnquiryFailsWithoutNetwork() async throws {
         let container = try makeContainer()
-        let context = ModelContext(container)
+        let context = container.mainContext
         let enquiry = Enquiry(name: "", phone: "", need: nil, brief: "b")
         enquiry.status = .queued
         context.insert(enquiry)
@@ -2340,7 +2336,12 @@ public actor Outbox {
     }
 
     public func processPending(now: Date = .now) async {
-        let context = ModelContext(container)
+        await processPendingOnMainActor(now: now)
+    }
+
+    @MainActor
+    private func processPendingOnMainActor(now: Date) async {
+        let context = container.mainContext
         let queuedRaw = EnquiryStatus.queued.rawValue
         let descriptor = FetchDescriptor<Enquiry>(
             predicate: #Predicate { $0.statusRaw == queuedRaw })
@@ -2526,7 +2527,7 @@ struct RecordingSessionTests {
             return
         }
         #expect(tier == "hot")
-        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
+        let stored = try container.mainContext.fetch(FetchDescriptor<Enquiry>())
         #expect(stored.count == 1)
         #expect(stored[0].status == .submitted)
         #expect(stored[0].serverEnquiryId == "srv-1")
@@ -2544,7 +2545,7 @@ struct RecordingSessionTests {
         }
         await session.submit(draft: draft)
         #expect(session.state == .queuedOffline)
-        let stored = try ModelContext(container).fetch(FetchDescriptor<Enquiry>())
+        let stored = try container.mainContext.fetch(FetchDescriptor<Enquiry>())
         #expect(stored[0].status == .queued)
         #expect(stored[0].attemptCount == 1)
     }
@@ -2610,7 +2611,7 @@ public final class RecordingSession {
         self.transcriber = transcriber
         self.extractor = extractor
         self.outbox = outbox
-        self.context = ModelContext(container)
+        self.context = container.mainContext
         self.extractorAvailable = extractor.availability() == .available
     }
 
@@ -3359,3 +3360,11 @@ git add broker-field-ios/README.md && git commit -m "Add Broker Field README wit
 - **Known sharp edges flagged inline:** `httpBodyStream` in URLProtocol stubs (T7), en-dash characters in `TIMELINE_BUCKETS` (T2 uses `\u{2013}` escapes), first-run speech-model download latency (T6/T11), simulator cannot validate AFM/SpeechAnalyzer quality (device checklist in T11), HTTP+PII is dogfood-only (Global Constraints).
 - **iOS 27 forward notes:** `LanguageModelError` replaces `GenerationError` (T5 comment); vision/PCC/`LanguageModel` protocol swaps arrive with the M3+ milestones via the `EnquiryExtracting` seam.
 - **Execution model (rev 3):** wave-parallel sub-agent orchestration added — wave 0 foundation, wave 1 = 4 file-disjoint domain implementers in parallel (worktree-isolated, one simulator each) + 4 parallel reviewers, then sequential integration tail (T8→T9→T10→T11). Implementers run Composer 2.5 (`composer-2.5-fast`) — the plan carries complete code, so implementation is transcription + TDD verification; reviewers run a judgment-tier model; the final whole-branch review runs the most capable model. Parallelism is capped at the domain boundary deliberately: the integration tail shares files and build state, so it stays sequential.
+
+## Self-Review Notes (rev 4, 2026-09-19, post-implementation)
+
+- **M1 slice shipped** on `feat/broker-field-ios` (`broker-field-ios/README.md`); clean simulator gate: `** TEST SUCCEEDED **` for `BrokerFieldTests` + `BrokerFieldUITests.testRecordReviewSubmitHappyPath` (`-UITesting` mocks).
+- **Xcode 26.2 SDK deltas (shipped code):** `SpeechTranscriber` preset `.transcription` (not `.offlineTranscription`); `AssetInventory.release(reservedLocale:)` (not `deallocate(locale:)`).
+- **Swift 6 concurrency:** `MockExtractor` uses `OSAllocatedUnfairLock` (NSLock forbidden in async); `LeadSubmitterTests` uses `@Suite(.serialized)` because `StubURLProtocol.handler` is process-global.
+- **SwiftData:** `Outbox`, `RecordingSession`, and their tests share `container.mainContext` so async submit/outbox mutations are visible to tests without refetch.
+- **Formal per-task / Opus whole-branch review** from rev 3 was not run; device checklist in README remains the manual gate for AFM/SpeechAnalyzer quality.
