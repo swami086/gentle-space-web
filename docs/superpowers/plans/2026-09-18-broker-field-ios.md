@@ -1,6 +1,6 @@
 # Broker Field iOS Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development, executed under the **Parallel Execution Model** below (wave-parallel implementers + per-task reviewers). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the M1 slice of Broker Field — an iPhone app that records a broker's voice note, transcribes and extracts a structured enquiry on-device (SpeechAnalyzer + Apple Foundation Models), and submits it to the existing `POST /api/leads` pipeline.
 
@@ -59,6 +59,52 @@ broker-field-ios/
   BrokerFieldTests/                       Swift Testing suites, one per unit above
   BrokerFieldUITests/                     XCTest/XCUI happy-path test via -UITesting harness
 ```
+
+---
+
+## Parallel Execution Model (sub-agent orchestration)
+
+**Why this shape:** the task graph has one foundation, four file-disjoint domains, and an integration tail. Parallelism is only safe where domains share no files and no build state — `subagent-driven-development` forbids parallel implementers on a shared tree, and `dispatching-parallel-agents` requires independence. Both constraints are satisfied by **worktree isolation + disjoint file ownership**, and nowhere else. Do not exceed the wave structure to chase agent count — the integration tail is inherently sequential.
+
+**Model policy (explicit per dispatch, per the skill's model-selection rules):**
+- **Implementers: `composer-2.5-fast` (Composer 2.5).** Every task in this plan contains the complete code to write — implementation is transcription + TDD verification, which the skill assigns to the cheapest/fastest tier.
+- **Task reviewers: `claude-4.5-sonnet-thinking`.** Review is judgment work, not transcription; mid-tier is the skill's floor for reviewers.
+- **Final whole-branch review: `claude-opus-4.8-thinking-high`.** The skill assigns the final review to the most capable available model.
+- **Controller (this session):** orchestrates, merges, holds the ledger; writes no implementation code.
+
+**Skill alignment per agent (every dispatch names its skills):**
+
+| Role | Skills the sub-agent must follow |
+|---|---|
+| All implementers | `superpowers:test-driven-development` (red-green-commit per task) + `swift-expert` (Swift 6 / SwiftUI / concurrency patterns) |
+| T1+T2 foundation implementer | + `build-engineer` (project/build-system verification discipline) |
+| T6 recording/transcription implementer | + `swift-expert` actor-isolation guidance (AVAudioRecorder actor, SpeechAnalyzer async sequences) |
+| T10 UI implementer | + `apple-hig-expert` (HIG compliance for the SwiftUI views) |
+| Task reviewers | `superpowers:subagent-driven-development` task-reviewer template + `code-reviewer` stance |
+| Final whole-branch reviewer | `superpowers:requesting-code-review` + `adversarial-reviewer` (three-persona pass) |
+| Controller | `superpowers:subagent-driven-development` (ledger, task-brief/review-package scripts) + `superpowers:dispatching-parallel-agents` (waves) + `superpowers:using-git-worktrees` (isolation) |
+
+**Waves:**
+
+| Wave | Tasks | Agents (peak concurrent) | Isolation | Gate to proceed |
+|---|---|---|---|---|
+| 0 — Foundation | T1 (shell) + T2 (models) | 1 implementer + 1 reviewer | main worktree, branch `feat/broker-field-ios` | build + unit tests green, review clean, merged |
+| 1 — Domains (parallel) | T3 Enquiry · T4+T5 extraction · T6 recording/transcription · T7 submitter | **4 implementers in parallel**, then **4 reviewers in parallel** (8 sub-agents in the wave) | each implementer: own worktree `.worktrees/bf-w1-t<N>`, branch `feat/bf-w1-t<N>` off the wave-0 merge, own DerivedData (automatic — DerivedData keys on project path), own simulator (T3→iPhone 17, T4+5→iPhone 17 Pro, T6→iPhone 17 Pro Max, T7→iPhone Air) | all 4 reviews clean; controller merges all 4 branches (`git merge --no-ff`, disjoint files → clean); full suite green on `feat/broker-field-ios` |
+| 2 — Outbox | T8 | 1 implementer + 1 reviewer | main worktree | tests green, review clean |
+| 3 — Session | T9 | 1 implementer + 1 reviewer | main worktree | tests green, review clean |
+| 4 — UI | T10 | 1 implementer + 1 reviewer | main worktree | unit + UI tests green, review clean |
+| 5 — Gate | T11 | controller runs directly (clean full-suite run + README commit) | main worktree | `** TEST SUCCEEDED **` across both test targets |
+| Final | whole-branch review | 1 reviewer (`claude-opus-4.8-thinking-high`) | review package from `git merge-base` | findings triaged; fix wave (ONE fix subagent) if needed |
+
+**Totals:** 16 sub-agent dispatches; peak concurrency 4 implementers (wave 1), 8 sub-agents across wave 1 including reviewers — inside the requested ≤10 envelope.
+
+**Controller protocol (binding):**
+1. Before wave 0: run the skill's pre-flight plan review; create the progress ledger at `.superpowers/sdd/progress.md`; record BASE commit.
+2. Every implementer dispatch: brief via `scripts/task-brief` (never paste the whole plan), report file per task, explicit model, named skills, worktree/branch/simulator assignment for wave-1 agents.
+3. Every review: `scripts/review-package BASE HEAD` → reviewer gets brief + report + diff paths + this plan's Global Constraints verbatim.
+4. Wave-1 merges happen only after all four reviews are clean; re-run the full suite after merging, before wave 2.
+5. Ledger line per completed task (`Task N: complete (commits …, review clean)`); trust the ledger over memory after any compaction.
+6. If a wave-1 implementer is BLOCKED, resolve per the skill (context → re-dispatch; reasoning → stronger model; too large → split) — never force a retry without changes.
 
 ---
 
@@ -3312,3 +3358,4 @@ git add broker-field-ios/README.md && git commit -m "Add Broker Field README wit
 - **Audit-driven fixes baked in:** SpeechAnalyzer replaces SFSpeechRecognizer; Swift Testing replaces XCTest for units; `.refusal` caught; session prewarm; word-boundary keyword matching; UI test waits; review-sheet notice/error banners; audio session deactivated on failed start; dead `submittedPayloads` removed from `MockSubmitter`.
 - **Known sharp edges flagged inline:** `httpBodyStream` in URLProtocol stubs (T7), en-dash characters in `TIMELINE_BUCKETS` (T2 uses `\u{2013}` escapes), first-run speech-model download latency (T6/T11), simulator cannot validate AFM/SpeechAnalyzer quality (device checklist in T11), HTTP+PII is dogfood-only (Global Constraints).
 - **iOS 27 forward notes:** `LanguageModelError` replaces `GenerationError` (T5 comment); vision/PCC/`LanguageModel` protocol swaps arrive with the M3+ milestones via the `EnquiryExtracting` seam.
+- **Execution model (rev 3):** wave-parallel sub-agent orchestration added — wave 0 foundation, wave 1 = 4 file-disjoint domain implementers in parallel (worktree-isolated, one simulator each) + 4 parallel reviewers, then sequential integration tail (T8→T9→T10→T11). Implementers run Composer 2.5 (`composer-2.5-fast`) — the plan carries complete code, so implementation is transcription + TDD verification; reviewers run a judgment-tier model; the final whole-branch review runs the most capable model. Parallelism is capped at the domain boundary deliberately: the integration tail shares files and build state, so it stays sequential.
