@@ -25,7 +25,9 @@ struct Step2SchemaTests {
 
     @Test func choiceFieldsAreFlagged() throws {
         let office = Step2Schema.fields(for: .office)
-        #expect(try office.first { $0.key == "moveInTimeline" } #require .isChoice)
-        #expect(try !office.first { $0.key == "teamSize" } #require .isChoice)
+        let moveIn = try #require(office.first { $0.key == "moveInTimeline" })
+        let teamSize = try #require(office.first { $0.key == "teamSize" })
+        #expect(moveIn.isChoice)
+        #expect(!teamSize.isChoice)
     }
 }
