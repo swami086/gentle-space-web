@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import type { GoogleAdsMcpSurface } from "./surface";
 
 const toolsMock = vi.hoisted(() => ({
   fetchGoogleAdsPerformance: vi.fn(),
@@ -14,41 +15,61 @@ const toolsMock = vi.hoisted(() => ({
 vi.mock("./tools", () => toolsMock);
 
 import { buildGoogleAdsMcpServer } from "./index";
+import { resolveGoogleAdsMcpPort, resolveGoogleAdsMcpSurface } from "./surface";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-async function connectedClient() {
+async function registeredToolNames(surface: GoogleAdsMcpSurface) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = buildGoogleAdsMcpServer();
+  const server = buildGoogleAdsMcpServer(surface);
+  const client = new Client({ name: "test", version: "1.0.0" });
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  const { tools } = await client.listTools();
+  const names = tools.map((t) => t.name).sort();
+  await client.close();
+  return names;
+}
+
+async function connectedClient(surface: GoogleAdsMcpSurface = "write") {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const server = buildGoogleAdsMcpServer(surface);
   const client = new Client({ name: "test", version: "1.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return client;
 }
 
-const READ_TOOL_NAMES = ["list_campaign_performance", "search_terms_report", "list_accessible_customers"];
-const WRITE_TOOL_NAMES = [
-  "create_campaign",
-  "pause_campaign",
-  "update_campaign_budget",
-  "add_negative_keyword",
-  "propose_change",
-];
-
-describe("buildGoogleAdsMcpServer", () => {
-  it("registers exactly 8 tools: 3 read + 5 write", async () => {
-    const client = await connectedClient();
-    const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual([...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES].sort());
-    await client.close();
+describe("buildGoogleAdsMcpServer surface split", () => {
+  it("read surface does not register create_campaign", async () => {
+    const names = await registeredToolNames("read");
+    expect(names).toEqual([
+      "list_accessible_customers",
+      "list_campaign_performance",
+      "search_terms_report",
+    ]);
+    expect(names).not.toContain("create_campaign");
   });
 
+  it("write surface registers mutate tools and not list_campaign_performance", async () => {
+    const names = await registeredToolNames("write");
+    expect(names).toEqual([
+      "add_negative_keyword",
+      "create_campaign",
+      "pause_campaign",
+      "propose_change",
+      "update_campaign_budget",
+    ]);
+    expect(names).not.toContain("list_campaign_performance");
+  });
+});
+
+describe("buildGoogleAdsMcpServer tool handlers", () => {
   it("list_campaign_performance calls fetchGoogleAdsPerformance and returns its rows as JSON", async () => {
     toolsMock.fetchGoogleAdsPerformance.mockResolvedValue([
       { externalCampaignId: "1", spend: 1, clicks: 1, impressions: 1, conversions: 0 },
     ]);
-    const client = await connectedClient();
+    const client = await connectedClient("read");
     const result = await client.callTool({ name: "list_campaign_performance", arguments: {} });
     const text = (result.content as { type: string; text: string }[])[0].text;
     expect(JSON.parse(text)).toEqual([{ externalCampaignId: "1", spend: 1, clicks: 1, impressions: 1, conversions: 0 }]);
@@ -57,7 +78,7 @@ describe("buildGoogleAdsMcpServer", () => {
 
   it("pause_campaign calls pauseGoogleCampaign with the given resource name", async () => {
     toolsMock.pauseGoogleCampaign.mockResolvedValue(undefined);
-    const client = await connectedClient();
+    const client = await connectedClient("write");
     await client.callTool({ name: "pause_campaign", arguments: { campaignResourceName: "customers/1/campaigns/2" } });
     expect(toolsMock.pauseGoogleCampaign).toHaveBeenCalledWith("customers/1/campaigns/2");
     await client.close();
@@ -65,7 +86,7 @@ describe("buildGoogleAdsMcpServer", () => {
 
   it("create_campaign calls createFullGoogleCampaign with the parsed input and returns its resource name", async () => {
     toolsMock.createFullGoogleCampaign.mockResolvedValue("customers/1/campaigns/999");
-    const client = await connectedClient();
+    const client = await connectedClient("write");
     const input = {
       name: "Whitefield Search",
       dailyBudgetInr: 500,
@@ -85,7 +106,7 @@ describe("buildGoogleAdsMcpServer", () => {
 
   it("propose_change calls proposeChange with the parsed input and returns the new proposal id", async () => {
     toolsMock.proposeChange.mockResolvedValue({ proposalId: "prop-99" });
-    const client = await connectedClient();
+    const client = await connectedClient("write");
     const input = {
       kind: "campaign_strategy" as const,
       campaignId: null,
@@ -97,6 +118,28 @@ describe("buildGoogleAdsMcpServer", () => {
     const text = (result.content as { type: string; text: string }[])[0].text;
     expect(JSON.parse(text)).toEqual({ proposalId: "prop-99" });
     await client.close();
+  });
+});
+
+describe("resolveGoogleAdsMcpSurface", () => {
+  it('defaults to read when unset or invalid', () => {
+    expect(resolveGoogleAdsMcpSurface({})).toBe("read");
+    expect(resolveGoogleAdsMcpSurface({ GOOGLE_ADS_MCP_SURFACE: "bogus" })).toBe("read");
+  });
+
+  it('returns write only when GOOGLE_ADS_MCP_SURFACE is exactly "write"', () => {
+    expect(resolveGoogleAdsMcpSurface({ GOOGLE_ADS_MCP_SURFACE: "write" })).toBe("write");
+  });
+});
+
+describe("resolveGoogleAdsMcpPort", () => {
+  it("defaults to 8766 when unset or invalid", () => {
+    expect(resolveGoogleAdsMcpPort({})).toBe(8766);
+    expect(resolveGoogleAdsMcpPort({ GOOGLE_ADS_MCP_PORT: "nope" })).toBe(8766);
+  });
+
+  it("honors GOOGLE_ADS_MCP_PORT when valid", () => {
+    expect(resolveGoogleAdsMcpPort({ GOOGLE_ADS_MCP_PORT: "8769" })).toBe(8769);
   });
 });
 

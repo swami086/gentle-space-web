@@ -111,4 +111,17 @@ describe("draftHermesReply", () => {
     expect(systemContent).not.toContain("never emit OpenUI-lang");
     expect(systemContent).toContain("OpportunityCard");
   });
+
+  it("uses SetupCard campaign prompt when origin is campaign", async () => {
+    isHermesConfigured.mockReturnValue(true);
+    getSession.mockResolvedValue(null);
+    callMeteredStreamingChatCompletion.mockReturnValueOnce(fakeStream("ok"));
+    await drain(draftHermesReply({ history: [], userMessage: "draft Whitefield at 500", origin: "campaign" }));
+    const [, request] = callMeteredStreamingChatCompletion.mock.calls[0];
+    const systemContent = request.messages[0].content as string;
+    expect(systemContent).toContain("SetupCard");
+    expect(systemContent).toMatch(/finalUrl|final URL/i);
+    expect(systemContent).toContain("SetupCard arguments are POSITIONAL");
+    expect(systemContent).not.toContain("root = OpportunityList");
+  });
 });

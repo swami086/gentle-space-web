@@ -72,6 +72,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
         let accumulated = "";
         for await (const event of streamHermesChat({
           origin: "campaign",
+          draftId: draft.id,
           userMessage: content,
           history: messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
         })) {
@@ -95,6 +96,7 @@ export function CampaignDraftChat({ initialDraft, initialMessages }: Props) {
                 hermes: true,
               },
             ]);
+            if ("draft" in event && event.draft) setDraft(event.draft);
           }
         }
         return;

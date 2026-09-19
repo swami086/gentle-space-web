@@ -7,6 +7,15 @@ export const RSA_DESCRIPTION_MAX_LEN = 90;
 export const RSA_DESCRIPTION_MIN_COUNT = 2;
 export const RSA_DESCRIPTION_MAX_COUNT = 4;
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function validateDraftFields(fields: CampaignDraftFields): string[] {
   const errors: string[] = [];
 
@@ -48,6 +57,15 @@ export function validateDraftFields(fields: CampaignDraftFields): string[] {
     errors.push("dailyBudgetInr must be greater than 0");
   }
 
+  if (fields.finalUrl !== undefined) {
+    const trimmed = fields.finalUrl.trim();
+    if (!trimmed) {
+      errors.push("finalUrl must not be blank");
+    } else if (!isHttpUrl(trimmed)) {
+      errors.push("finalUrl must be a valid http or https URL");
+    }
+  }
+
   return errors;
 }
 
@@ -59,5 +77,6 @@ export function isDraftReady(draft: CampaignDraft): boolean {
   if (draft.headlines.some((headline) => headline.trim().length === 0)) return false;
   if (draft.descriptions.length < RSA_DESCRIPTION_MIN_COUNT || draft.descriptions.length > RSA_DESCRIPTION_MAX_COUNT) return false;
   if (draft.descriptions.some((description) => description.trim().length === 0)) return false;
+  if (!draft.finalUrl?.trim() || !isHttpUrl(draft.finalUrl.trim())) return false;
   return validateDraftFields(draft).length === 0;
 }

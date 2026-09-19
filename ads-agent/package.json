@@ -23,6 +23,7 @@
     "worker:inbound": "tsx --env-file=.env.local scripts/run-inbound-worker.ts",
     "cycle:run": "tsx --env-file=.env.local scripts/run-once.ts",
     "mcp:google-ads": "tsx --env-file=.env.local scripts/run-google-ads-mcp.ts",
+    "smoke:google-ads-surfaces": "tsx --env-file=.env.local scripts/smoke-google-ads-surfaces.mts",
     "mcp:app-data": "tsx --env-file=.env.local scripts/run-app-data-mcp.ts",
     "mcp:context": "tsx --env-file=.env.local scripts/run-context-mcp.ts",
     "seed:performance": "tsx --env-file=.env.local scripts/seed-dev-performance.ts",

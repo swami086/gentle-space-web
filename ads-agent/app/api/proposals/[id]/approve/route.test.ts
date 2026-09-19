@@ -13,6 +13,7 @@ const {
   getConnectorStatus,
   getCampaignById,
   executeProposal,
+  probeGoogleAdsReadMcp,
 } = vi.hoisted(() => ({
   getProposalById: vi.fn(),
   scheduleProposal: vi.fn(),
@@ -22,12 +23,14 @@ const {
   getConnectorStatus: vi.fn(),
   getCampaignById: vi.fn(),
   executeProposal: vi.fn(),
+  probeGoogleAdsReadMcp: vi.fn(),
 }));
 
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, scheduleProposal }));
 vi.mock("@/lib/db/org-settings", () => ({ getOrgSettings }));
 vi.mock("@/lib/metering/ledger", () => ({ getOrgBalance }));
 vi.mock("@/lib/env-status", () => ({ getConnectorStatus }));
+vi.mock("@/lib/connectors/google-ads-health", () => ({ probeGoogleAdsReadMcp }));
 vi.mock("@/lib/db/campaigns", () => ({ getCampaignById }));
 vi.mock("@/lib/executor/execute", () => ({ executeProposal }));
 vi.mock("@/lib/auth/guard", async () => {
@@ -99,6 +102,7 @@ beforeEach(() => {
     bifrost: false,
   });
   getCampaignById.mockResolvedValue(googleCampaign());
+  probeGoogleAdsReadMcp.mockResolvedValue({ configured: true, reachable: true });
 });
 
 describe("POST /api/proposals/[id]/approve", () => {
@@ -114,6 +118,26 @@ describe("POST /api/proposals/[id]/approve", () => {
     expect(res.status).toBe(409);
     expect(scheduleProposal).not.toHaveBeenCalled();
     expect(executeProposal).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 when Google read MCP is unreachable for a google proposal", async () => {
+    getProposalById.mockResolvedValue(pendingProposal());
+    probeGoogleAdsReadMcp.mockResolvedValue({
+      configured: true,
+      reachable: false,
+      error: "connection refused",
+    });
+
+    const res = await POST(new Request("http://localhost"), { params: Promise.resolve({ id: "prop-1" }) });
+
+    expect(probeGoogleAdsReadMcp).toHaveBeenCalledWith({ timeoutMs: 2000 });
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.preflight.checks.find((c: { id: string }) => c.id === "connector_health")).toMatchObject({
+      ok: false,
+      message: "Google Ads MCP read surface unreachable",
+    });
+    expect(scheduleProposal).not.toHaveBeenCalled();
   });
 
   it("returns 422 when preflight fails", async () => {

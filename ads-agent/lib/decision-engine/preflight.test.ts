@@ -141,6 +141,44 @@ describe("runPreflight", () => {
       );
       expect(result.checks.find((c) => c.id === "connector_health")).toBeUndefined();
     });
+
+    it("blocks google kinds when googleAds is configured but read MCP is unreachable", () => {
+      const result = runPreflight(
+        base({
+          kind: "budget_change",
+          payload: { campaignId: "c1", platform: "google", newDailyBudgetInr: 500 },
+          connectors: { googleAds: true, googleAdsReachable: false, meta: true },
+        }),
+      );
+      expect(result.checks.find((c) => c.id === "connector_health")).toMatchObject({
+        ok: false,
+        severity: "block",
+        message: "Google Ads MCP read surface unreachable",
+      });
+      expect(result.ok).toBe(false);
+    });
+
+    it("passes google connector_health when googleAdsReachable is omitted", () => {
+      const result = runPreflight(
+        base({
+          kind: "pause",
+          payload: { campaignId: "c1", platform: "google" },
+          connectors: { googleAds: true, meta: true },
+        }),
+      );
+      expect(result.checks.find((c) => c.id === "connector_health")).toMatchObject({ ok: true });
+    });
+
+    it("does not apply googleAdsReachable to meta platform kinds", () => {
+      const result = runPreflight(
+        base({
+          kind: "pause",
+          payload: { campaignId: "c1", platform: "meta" },
+          connectors: { googleAds: true, googleAdsReachable: false, meta: true },
+        }),
+      );
+      expect(result.checks.find((c) => c.id === "connector_health")).toMatchObject({ ok: true });
+    });
   });
 
   describe("credit_balance", () => {

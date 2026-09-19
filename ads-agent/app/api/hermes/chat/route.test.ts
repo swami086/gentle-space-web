@@ -2,13 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 const scope = { kind: "org" as const, orgId: "o1" };
 
-const { guard, draftHermesReply } = vi.hoisted(() => ({
-  guard: vi.fn(),
-  draftHermesReply: vi.fn(),
-}));
+const { guard, ownedOr404, draftHermesReply, getDraftById, persistCampaignDraftFromHermesReply } = vi.hoisted(
+  () => ({
+    guard: vi.fn(),
+    ownedOr404: vi.fn(),
+    draftHermesReply: vi.fn(),
+    getDraftById: vi.fn(),
+    persistCampaignDraftFromHermesReply: vi.fn(),
+  }),
+);
 
-vi.mock("@/lib/auth/guard", () => ({ guard }));
+vi.mock("@/lib/auth/guard", () => ({ guard, ownedOr404 }));
 vi.mock("@/lib/decision-engine/hermes-chat", () => ({ draftHermesReply }));
+vi.mock("@/lib/db/campaign-drafts", () => ({ getDraftById }));
+vi.mock("@/lib/hermes/persist-campaign-draft", () => ({ persistCampaignDraftFromHermesReply }));
 
 import { POST } from "./route";
 
@@ -69,6 +76,52 @@ describe("POST /api/hermes/chat", () => {
     expect(events[1]).toEqual({ delta: "up 12%." });
     expect(events[2]).toEqual({ done: true, reply: "Spend is up 12%." });
     expect(draftHermesReply).toHaveBeenCalledWith({ history: [], userMessage: "how's spend?", origin: "reports" });
+  });
+
+  it("requires draftId when origin is campaign", async () => {
+    authorized();
+    const res = await POST(postRequest({ userMessage: "hi", history: [], origin: "campaign" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("persists campaign draft fields and returns draft on done when origin is campaign", async () => {
+    authorized();
+    const chatting = {
+      id: "draft-1",
+      orgId: "o1",
+      status: "chatting" as const,
+      corridor: null,
+      dailyBudgetInr: null,
+      adGroupName: null,
+      keywords: [],
+      headlines: [],
+      descriptions: [],
+      finalUrl: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const ready = { ...chatting, status: "ready" as const, corridor: "whitefield", dailyBudgetInr: 500 };
+    ownedOr404.mockImplementation(async (loader) => {
+      const entity = await loader(scope);
+      return entity ? { ok: true as const, entity } : { ok: false as const, response: new Response(null, { status: 404 }) };
+    });
+    getDraftById.mockResolvedValue(chatting);
+    draftHermesReply.mockImplementation(async function* () {
+      yield { type: "done", reply: 'root = SetupCard("ok", "ready", ...)' };
+    });
+    persistCampaignDraftFromHermesReply.mockResolvedValue(ready);
+
+    const res = await POST(
+      postRequest({ userMessage: "Whitefield 500/day", history: [], origin: "campaign", draftId: "draft-1" }),
+    );
+    const events = await readEvents(res);
+    expect(events.at(-1)).toEqual({ done: true, reply: 'root = SetupCard("ok", "ready", ...)', draft: ready });
+    expect(persistCampaignDraftFromHermesReply).toHaveBeenCalledWith(
+      scope,
+      "draft-1",
+      'root = SetupCard("ok", "ready", ...)',
+      chatting,
+    );
   });
 
   it("forwards tool_progress events as {tool} frames before the delta/done frames", async () => {

@@ -5,6 +5,9 @@ import { InsufficientCreditsError, type MeteringContext } from "../metering/type
 import { getSession } from "../auth/dal";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
 import { hermesPromptLibrary } from "../openui/hermes-prompt-library";
+import { buildCampaignPromptOptions, campaignLibrary } from "../openui/campaign-library";
+import { playbookContextFor } from "./playbook-context";
+import { STRATEGY } from "./strategy-config";
 
 export type HermesChatMessage = { role: "user" | "assistant"; content: string };
 export type HermesChatOrigin = "copilot" | "crm" | "reports" | "campaign";
@@ -50,7 +53,33 @@ function buildHermesSystemPreamble(): string {
   });
 }
 
-const SYSTEM_PREAMBLE = buildHermesSystemPreamble();
+/** Same SetupCard contract as Bifrost campaign chat — required so Hermes replies persist via parseSetupCardResponse. */
+function buildHermesCampaignSystemPreamble(): string {
+  const grounding = playbookContextFor("manual_campaign_creation");
+  const preamble = [
+    `You help a non-technical business owner draft a real Google Search ad campaign inside ads-agent (Hermes mode).
+Always render a SetupCard reflecting everything you know about the draft so far — fill a subset of
+fields per turn as you learn them. The first positional arg is the short conversational reply.
+
+CRITICAL: Never claim you wrote headlines, descriptions, keywords, or other draft fields in
+the reply unless those exact values are also present in later SetupCard args. When proposing ad
+copy, include both headlines (3-15) and descriptions (2-4) in the same SetupCard.
+
+Never claim you created or launched a campaign; a human always reviews and approves before anything
+goes live. Prefer https://www.gentlespacesolutions.com/spaces as finalUrl when unset.`,
+    grounding ? `Performance-marketing grounding: ${grounding}` : "",
+    `Sane defaults if the user has no strong preference: daily budget around ₹${Math.round(STRATEGY.monthlyBudgetInr / 30)}.`,
+    "You may use MCP read tools for research, but this reply must still be a single root = SetupCard(...) — never OpportunityList/TrendChart for campaign drafting.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return campaignLibrary.prompt(buildCampaignPromptOptions(preamble));
+}
+
+function systemPreambleFor(origin: HermesChatOrigin): string {
+  return origin === "campaign" ? buildHermesCampaignSystemPreamble() : buildHermesSystemPreamble();
+}
 
 async function* runHermesModel(
   ctx: MeteringContext,
@@ -99,7 +128,7 @@ export async function* draftHermesReply(input: {
   };
 
   const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM_PREAMBLE },
+    { role: "system", content: systemPreambleFor(input.origin) },
     ...input.history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: input.userMessage },
   ];

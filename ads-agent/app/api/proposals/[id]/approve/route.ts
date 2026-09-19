@@ -7,6 +7,7 @@ import { budgetDeltaInr } from "@/lib/decision-engine/budget-delta";
 import { brokerRationale } from "@/lib/decision-engine/broker-rationale";
 import { runPreflight } from "@/lib/decision-engine/preflight";
 import { semanticDiff } from "@/lib/decision-engine/semantic-diff";
+import { probeGoogleAdsReadMcp } from "@/lib/connectors/google-ads-health";
 import { getConnectorStatus } from "@/lib/env-status";
 import { getOrgBalance } from "@/lib/metering/ledger";
 
@@ -40,13 +41,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     getOrgBalance(scope.orgId),
   ]);
   const connectors = getConnectorStatus();
+  const health = await probeGoogleAdsReadMcp({ timeoutMs: 2000 });
 
   const preflight = runPreflight({
     kind: proposal.kind,
     payload,
     orgDailyBudgetCapInr: settings.approvalThresholdInr,
     creditBalance,
-    connectors: { googleAds: connectors.googleAds, meta: connectors.meta },
+    connectors: {
+      googleAds: connectors.googleAds,
+      googleAdsReachable: health.configured && health.reachable,
+      meta: connectors.meta,
+    },
   });
 
   if (!preflight.ok) {

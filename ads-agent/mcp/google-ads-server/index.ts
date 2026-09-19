@@ -16,6 +16,14 @@ import {
   proposeChange,
   updateGoogleCampaignBudget,
 } from "./tools";
+import {
+  type GoogleAdsMcpSurface,
+  resolveGoogleAdsMcpPort,
+  resolveGoogleAdsMcpSurface,
+} from "./surface";
+
+export type { GoogleAdsMcpSurface } from "./surface";
+export { resolveGoogleAdsMcpPort, resolveGoogleAdsMcpSurface } from "./surface";
 
 const MATCH_TYPES = ["broad", "phrase", "exact"] as const;
 
@@ -48,12 +56,7 @@ export function resolveGoogleAdsMcpBind(): string {
   return raw && raw.length > 0 ? raw : "localhost";
 }
 
-/** Builds (but does not connect/serve) the Google Ads MCP server — 3 read tools + 5 write tools.
- * Exported separately from startGoogleAdsMcpServer so tests can wire it to an in-memory transport
- * instead of a real HTTP port (see index.test.ts). */
-export function buildGoogleAdsMcpServer(): McpServer {
-  const server = new McpServer({ name: "google-ads-mcp", version: "1.0.0" });
-
+function registerReadTools(server: McpServer): void {
   server.registerTool(
     "list_campaign_performance",
     { description: "List last-3-day spend/clicks/impressions/conversions for enabled Google Ads campaigns" },
@@ -71,7 +74,9 @@ export function buildGoogleAdsMcpServer(): McpServer {
     { description: "List Google Ads customer IDs accessible to the configured refresh token" },
     async () => ({ content: [{ type: "text", text: JSON.stringify(await listAccessibleCustomers()) }] }),
   );
+}
 
+function registerWriteTools(server: McpServer): void {
   server.registerTool(
     "create_campaign",
     {
@@ -143,7 +148,18 @@ export function buildGoogleAdsMcpServer(): McpServer {
       content: [{ type: "text", text: JSON.stringify(await proposeChange(input)) }],
     }),
   );
+}
 
+/** Builds (but does not connect/serve) the Google Ads MCP server for the given surface.
+ * Exported separately from startGoogleAdsMcpServer so tests can wire it to an in-memory transport
+ * instead of a real HTTP port (see index.test.ts). */
+export function buildGoogleAdsMcpServer(surface: GoogleAdsMcpSurface = resolveGoogleAdsMcpSurface()): McpServer {
+  const server = new McpServer({ name: "google-ads-mcp", version: "1.0.0" });
+  if (surface === "read") {
+    registerReadTools(server);
+  } else {
+    registerWriteTools(server);
+  }
   return server;
 }
 
@@ -159,8 +175,9 @@ export function buildGoogleAdsMcpServer(): McpServer {
  * every listTools/callTool via withClient(), and a single shared transport rejects the
  * second initialize with "Server already initialized".
  */
-export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
-  const handler = createMcpHandler(() => buildGoogleAdsMcpServer());
+export async function startGoogleAdsMcpServer(port = resolveGoogleAdsMcpPort()): Promise<void> {
+  const surface = resolveGoogleAdsMcpSurface();
+  const handler = createMcpHandler(() => buildGoogleAdsMcpServer(surface));
   const nodeHandler = toNodeHandler(handler);
   const validateHost = hostHeaderValidation(resolveGoogleAdsMcpAllowedHosts());
   const validateOrigin = localhostOriginValidation();
@@ -174,6 +191,6 @@ export async function startGoogleAdsMcpServer(port = 8766): Promise<void> {
     }
     void nodeHandler(req, res);
   }).listen(port, bind, () => {
-    console.log(`google-ads-mcp listening on http://${bind}:${port}/mcp`);
+    console.log(`google-ads-mcp (${surface}) listening on http://${bind}:${port}/mcp`);
   });
 }

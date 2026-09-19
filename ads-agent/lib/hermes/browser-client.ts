@@ -1,8 +1,10 @@
 export type HermesChatOrigin = "copilot" | "crm" | "reports" | "campaign";
+import type { CampaignDraft } from "@/lib/types";
+
 export type HermesStreamEvent =
   | { delta: string }
   | { tool: string }
-  | { done: true; reply: string }
+  | { done: true; reply: string; draft?: CampaignDraft }
   | { done: true; error: string };
 
 /**
@@ -15,11 +17,17 @@ export async function* streamHermesChat(params: {
   origin: HermesChatOrigin;
   userMessage: string;
   history: { role: "user" | "assistant"; content: string }[];
+  draftId?: string;
 }): AsyncGenerator<HermesStreamEvent, void, unknown> {
   const res = await fetch("/api/hermes/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userMessage: params.userMessage, history: params.history, origin: params.origin }),
+    body: JSON.stringify({
+      userMessage: params.userMessage,
+      history: params.history,
+      origin: params.origin,
+      ...(params.draftId ? { draftId: params.draftId } : {}),
+    }),
   });
 
   if (!res.ok || !res.body) {

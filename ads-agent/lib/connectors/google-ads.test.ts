@@ -51,7 +51,7 @@ describe("createFullGoogleCampaign", () => {
     callGoogleAdsTool.mockResolvedValue({ resourceName: "customers/1234567890/campaigns/999" });
     const resourceName = await createFullGoogleCampaign(input);
     expect(resourceName).toBe("customers/1234567890/campaigns/999");
-    expect(callGoogleAdsTool).toHaveBeenCalledWith("create_campaign", input);
+    expect(callGoogleAdsTool).toHaveBeenCalledWith("create_campaign", input, { surface: "write" });
   });
 });
 
@@ -61,7 +61,7 @@ describe("pauseGoogleCampaign", () => {
     await pauseGoogleCampaign("customers/1234567890/campaigns/999");
     expect(callGoogleAdsTool).toHaveBeenCalledWith("pause_campaign", {
       campaignResourceName: "customers/1234567890/campaigns/999",
-    });
+    }, { surface: "write" });
   });
 });
 
@@ -72,7 +72,7 @@ describe("updateGoogleCampaignBudget", () => {
     expect(callGoogleAdsTool).toHaveBeenCalledWith("update_campaign_budget", {
       campaignResourceName: "customers/1234567890/campaigns/999",
       dailyBudgetInr: 750,
-    });
+    }, { surface: "write" });
   });
 });
 
@@ -83,6 +83,6 @@ describe("addGoogleNegativeKeyword", () => {
     expect(callGoogleAdsTool).toHaveBeenCalledWith("add_negative_keyword", {
       campaignResourceName: "customers/1234567890/campaigns/999",
       keywordText: "residential",
-    });
+    }, { surface: "write" });
   });
 });

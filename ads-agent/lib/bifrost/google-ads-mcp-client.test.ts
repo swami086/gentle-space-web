@@ -14,7 +14,14 @@ vi.mock("@modelcontextprotocol/client", () => ({
   }),
 }));
 
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { callGoogleAdsTool, listGoogleAdsTools } from "./google-ads-mcp-client";
+import { GOOGLE_ADS_MCP_URL, GOOGLE_ADS_MCP_WRITE_URL } from "./google-ads-mcp-tools";
+
+function lastTransportUrl(): string {
+  const calls = vi.mocked(StreamableHTTPClientTransport).mock.calls;
+  return (calls.at(-1)?.[0] as URL).href;
+}
 
 beforeEach(() => {
   connect.mockReset().mockResolvedValue(undefined);
@@ -40,6 +47,7 @@ describe("listGoogleAdsTools", () => {
     ]);
     expect(connect).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
+    expect(lastTransportUrl()).toBe(GOOGLE_ADS_MCP_URL);
   });
 
   it("still closes the connection when listTools throws", async () => {
@@ -59,6 +67,27 @@ describe("callGoogleAdsTool", () => {
 
     expect(result).toEqual([{ externalCampaignId: "111", spend: 40.5 }]);
     expect(callTool).toHaveBeenCalledWith({ name: "list_campaign_performance", arguments: {} });
+    expect(lastTransportUrl()).toBe(GOOGLE_ADS_MCP_URL);
+  });
+
+  it("connects to the write URL for write tool names", async () => {
+    callTool.mockResolvedValue({ content: [{ type: "text", text: '{"ok":true}' }] });
+    await callGoogleAdsTool("pause_campaign", { campaignResourceName: "x" });
+    expect(lastTransportUrl()).toBe(GOOGLE_ADS_MCP_WRITE_URL);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses write tools when surface is read before connecting", async () => {
+    await expect(
+      callGoogleAdsTool("pause_campaign", { campaignResourceName: "x" }, { surface: "read" }),
+    ).rejects.toThrow(/refusing to call write tool "pause_campaign" on read surface/);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("uses write URL when surface is write even for read tool names", async () => {
+    callTool.mockResolvedValue({ content: [{ type: "text", text: "[]" }] });
+    await callGoogleAdsTool("list_campaign_performance", {}, { surface: "write" });
+    expect(lastTransportUrl()).toBe(GOOGLE_ADS_MCP_WRITE_URL);
   });
 
   it("throws when the tool result has isError set", async () => {

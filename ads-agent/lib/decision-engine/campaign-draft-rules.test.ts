@@ -68,6 +68,10 @@ describe("validateDraftFields", () => {
       "keywords[1].text must not be blank",
     ]);
   });
+
+  it("validateDraftFields rejects blank finalUrl when provided", () => {
+    expect(validateDraftFields({ finalUrl: "  " }).some((e) => e.includes("finalUrl"))).toBe(true);
+  });
 });
 
 describe("isDraftReady", () => {
@@ -113,5 +117,13 @@ describe("isDraftReady", () => {
 
   it("is false when a keyword text is blank", () => {
     expect(isDraftReady(draft({ keywords: [{ text: "office space", matchType: "phrase" }, { text: "  ", matchType: "exact" }] }))).toBe(false);
+  });
+
+  it("is false when finalUrl is missing", () => {
+    expect(isDraftReady(draft({ finalUrl: "" }))).toBe(false);
+  });
+
+  it("is false when finalUrl is not http(s)", () => {
+    expect(isDraftReady(draft({ finalUrl: "javascript:alert(1)" }))).toBe(false);
   });
 });

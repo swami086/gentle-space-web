@@ -36,24 +36,34 @@ export type FullGoogleCampaignInput = {
 };
 
 export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): Promise<string> {
-  const result = (await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.createCampaign, input)) as { resourceName: string };
+  const result = (await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.createCampaign, input, {
+    surface: "write",
+  })) as { resourceName: string };
   return result.resourceName;
 }
 
 export async function pauseGoogleCampaign(campaignResourceName: string): Promise<void> {
-  await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.pauseCampaign, { campaignResourceName });
+  await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.pauseCampaign, { campaignResourceName }, { surface: "write" });
 }
 
 export async function updateGoogleCampaignBudget(
   campaignResourceName: string,
   dailyBudgetInr: number,
 ): Promise<void> {
-  await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.updateCampaignBudget, { campaignResourceName, dailyBudgetInr });
+  await callGoogleAdsTool(
+    GOOGLE_ADS_MCP_TOOLS.updateCampaignBudget,
+    { campaignResourceName, dailyBudgetInr },
+    { surface: "write" },
+  );
 }
 
 export async function addGoogleNegativeKeyword(
   campaignResourceName: string,
   keywordText: string,
 ): Promise<void> {
-  await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.addNegativeKeyword, { campaignResourceName, keywordText });
+  await callGoogleAdsTool(
+    GOOGLE_ADS_MCP_TOOLS.addNegativeKeyword,
+    { campaignResourceName, keywordText },
+    { surface: "write" },
+  );
 }

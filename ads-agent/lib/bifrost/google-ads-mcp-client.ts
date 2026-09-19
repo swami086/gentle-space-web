@@ -1,10 +1,24 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { GOOGLE_ADS_MCP_URL } from "./google-ads-mcp-tools";
+import {
+  GOOGLE_ADS_MCP_URL,
+  GOOGLE_ADS_MCP_WRITE_TOOL_NAMES,
+  GOOGLE_ADS_MCP_WRITE_URL,
+} from "./google-ads-mcp-tools";
 import { parseMcpToolText, type McpToolSchema } from "./mcp-client";
 
-async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
+export type GoogleAdsMcpCallOptions = { surface?: "read" | "write" };
+
+function urlFor(name: string, surface?: "read" | "write"): string {
+  const wantWrite = surface === "write" || GOOGLE_ADS_MCP_WRITE_TOOL_NAMES.has(name);
+  if (GOOGLE_ADS_MCP_WRITE_TOOL_NAMES.has(name) && surface === "read") {
+    throw new Error(`refusing to call write tool "${name}" on read surface`);
+  }
+  return wantWrite ? GOOGLE_ADS_MCP_WRITE_URL : GOOGLE_ADS_MCP_URL;
+}
+
+async function withClient<T>(mcpUrl: string, fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ name: "ads-agent", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(GOOGLE_ADS_MCP_URL)));
+  await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
   try {
     return await fn(client);
   } finally {
@@ -19,7 +33,7 @@ async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
 
 /** Live tool schemas from the Google Ads MCP server — used to build Bifrost's `tools` param. */
 export async function listGoogleAdsTools(): Promise<McpToolSchema[]> {
-  return withClient(async (client) => {
+  return withClient(GOOGLE_ADS_MCP_URL, async (client) => {
     const { tools } = await client.listTools();
     return tools as McpToolSchema[];
   });
@@ -31,8 +45,13 @@ export async function listGoogleAdsTools(): Promise<McpToolSchema[]> {
  * the chat-triggered resolve loop (resolve-tools-then-generate.ts) once a tool_call has been
  * decided by the model.
  */
-export async function callGoogleAdsTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  return withClient(async (client) => {
+export async function callGoogleAdsTool(
+  name: string,
+  args: Record<string, unknown>,
+  opts?: GoogleAdsMcpCallOptions,
+): Promise<unknown> {
+  const mcpUrl = urlFor(name, opts?.surface);
+  return withClient(mcpUrl, async (client) => {
     const result = await client.callTool({ name, arguments: args });
     const textBlock = result.content?.find(
       (block): block is { type: "text"; text: string } => block.type === "text",

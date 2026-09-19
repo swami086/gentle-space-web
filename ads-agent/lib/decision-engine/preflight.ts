@@ -22,7 +22,7 @@ export type PreflightInput = {
   payload: Record<string, unknown>;
   orgDailyBudgetCapInr: number | null;
   creditBalance: number;
-  connectors: { googleAds: boolean; meta: boolean };
+  connectors: { googleAds: boolean; googleAdsReachable?: boolean; meta: boolean };
   existingKeywords?: string[];
 };
 
@@ -113,22 +113,49 @@ function checkConnectorHealth(input: PreflightInput): PreflightCheck | null {
   const platform = requiredPlatform(input.kind, input.payload);
   if (!platform) return null;
 
-  const healthy = platform === "google" ? input.connectors.googleAds : input.connectors.meta;
-  if (healthy) {
+  if (platform === "google") {
+    if (!input.connectors.googleAds) {
+      return {
+        id: "connector_health",
+        ok: false,
+        severity: "block",
+        message: "Google Ads connector is not configured",
+        detail: { platform },
+      };
+    }
+    if (input.connectors.googleAdsReachable === false) {
+      return {
+        id: "connector_health",
+        ok: false,
+        severity: "block",
+        message: "Google Ads MCP read surface unreachable",
+        detail: { platform },
+      };
+    }
     return {
       id: "connector_health",
       ok: true,
       severity: "block",
-      message: `${platform === "google" ? "Google Ads" : "Meta"} connector is configured`,
+      message: "Google Ads connector is configured",
+      detail: { platform },
+    };
+  }
+
+  if (!input.connectors.meta) {
+    return {
+      id: "connector_health",
+      ok: false,
+      severity: "block",
+      message: "Meta connector is not configured",
       detail: { platform },
     };
   }
 
   return {
     id: "connector_health",
-    ok: false,
+    ok: true,
     severity: "block",
-    message: `${platform === "google" ? "Google Ads" : "Meta"} connector is not configured`,
+    message: "Meta connector is configured",
     detail: { platform },
   };
 }

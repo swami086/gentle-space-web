@@ -3,6 +3,10 @@
 export const GOOGLE_ADS_MCP_URL =
   process.env.GOOGLE_ADS_MCP_URL || "http://localhost:8766/mcp";
 
+/** Write-surface MCP endpoint (Compose service on :8769). */
+export const GOOGLE_ADS_MCP_WRITE_URL =
+  process.env.GOOGLE_ADS_MCP_WRITE_URL || "http://localhost:8769/mcp";
+
 /** Tool names exposed by mcp/google-ads-server/index.ts. */
 export const GOOGLE_ADS_MCP_TOOLS = {
   listCampaignPerformance: "list_campaign_performance",
@@ -24,3 +28,12 @@ export const GOOGLE_ADS_MCP_READ_TOOL_NAMES = [
   GOOGLE_ADS_MCP_TOOLS.searchTermsReport,
   GOOGLE_ADS_MCP_TOOLS.listAccessibleCustomers,
 ] as const;
+
+/** Mutate / proposal tools — always routed to {@link GOOGLE_ADS_MCP_WRITE_URL}. */
+export const GOOGLE_ADS_MCP_WRITE_TOOL_NAMES = new Set<string>([
+  GOOGLE_ADS_MCP_TOOLS.createCampaign,
+  GOOGLE_ADS_MCP_TOOLS.pauseCampaign,
+  GOOGLE_ADS_MCP_TOOLS.updateCampaignBudget,
+  GOOGLE_ADS_MCP_TOOLS.addNegativeKeyword,
+  GOOGLE_ADS_MCP_TOOLS.proposeChange,
+]);

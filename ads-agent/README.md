@@ -74,17 +74,48 @@ not through Bifrost's MCP Gateway feature.
 MCP server (`mcp/google-ads-server/`) — the same "AI copilots integrate to external tools via MCP
 only on the backend" convention as the Twenty CRM integration below. See
 [`docs/superpowers/specs/2026-08-07-google-ads-mcp-integration-design.md`](../docs/superpowers/specs/2026-08-07-google-ads-mcp-integration-design.md)
-for the full design.
+for the full design. Gate-integrity split (read vs write surfaces):
+[`docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md`](../docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md).
 
 1. Fill in the 5 Google Ads credential env vars above (start with a **test account** — see the
-   spec's rollout runbook for how to create one with zero real-spend risk)
-2. Add `GOOGLE_ADS_MCP_URL=http://localhost:8766/mcp` to `.env.local` (already in `.env.example`)
-3. `npm run mcp:google-ads` (starts the MCP server; leave running in its own terminal)
-4. `npm run dev` / `npm run worker` as usual — `cycle.ts`, `execute.ts`, and Copilot/Reports chat
-   all reach Google Ads through this server now
+   spec's rollout runbook for how to create one with zero real-spend risk). If API calls fail with
+   `invalid_grant`, regenerate `GOOGLE_ADS_REFRESH_TOKEN` (manual OAuth — not automated here).
+2. In `.env.local` (see `.env.example`):
+   - `GOOGLE_ADS_MCP_URL=http://localhost:8766/mcp` — **read** surface (chat / cycle / health)
+   - `GOOGLE_ADS_MCP_WRITE_URL=http://localhost:8769/mcp` — **write** surface (approve → executor only)
+3. Start both MCP processes (recommended — matches production split):
 
-The server exposes 3 read tools (advertised to chat) and 4 write tools (never advertised — writes
-only ever happen through the existing approve-button → executor path).
+   ```bash
+   docker compose up -d bifrost google-ads-mcp google-ads-mcp-write
+   ```
+
+   - `google-ads-mcp` → host **8766**, `GOOGLE_ADS_MCP_SURFACE=read` (3 read tools only)
+   - `google-ads-mcp-write` → host **8769**, `GOOGLE_ADS_MCP_SURFACE=write` (mutate tools + `propose_change`)
+
+   Local single-process dev (read only): `npm run mcp:google-ads` on `:8766` — you still need the
+   write service on `:8769` for proposal approval that hits Google Ads.
+
+4. Verify surfaces (no secrets printed):
+
+   ```bash
+   npm run smoke:google-ads-surfaces
+   ```
+
+5. `npm run dev`, `npm run worker:proposals`, and auth-service as usual — chat/Hermes use the read
+   URL; approved proposals execute against the write URL.
+
+**Dogfood checklist (manual, test customer):**
+
+1. Refresh `GOOGLE_ADS_REFRESH_TOKEN` if you see `invalid_grant`.
+2. Confirm test `GOOGLE_ADS_CUSTOMER_ID` (+ `GOOGLE_ADS_LOGIN_CUSTOMER_ID` if using an MCC).
+3. `docker compose up -d bifrost google-ads-mcp google-ads-mcp-write`
+4. `npm run dev` + `npm run worker:proposals` + auth-service
+5. **Campaigns → New Campaign** → chat or manual edit until draft is `ready` (non-empty `finalUrl`) →
+   **Create Proposal** → **Approve** → wait undo window → confirm a test campaign in Google Ads or a
+   `failed` proposal with a visible error
+
+The read surface exposes 3 tools (advertised to chat). Write tools live only on `:8769` and are never
+advertised — mutations go through approve → executor only.
 
 Meta Ads MCP integration remains a documented, not-yet-implemented target — see Meta's official
 hosted MCP endpoint (`mcp.facebook.com/ads`) noted below.
