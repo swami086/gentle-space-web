@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-sfc2dd3d2-3226-4513-97f0-9ef17a7152fe",
+  "createdAt": 1789827067385,
+  "durationMs": 108027,
+  "profile": "dev",
+  "project": {
+    "name": "gentle-space-web-5e6bf129",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "dm2cs089",
+    "locator": "http://127.0.0.1:3002/"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (a route change containing '/spaces'; a console message)",
+      "status": "no",
+      "evidence": {
+        "source": "components/SiteHeader.tsx:82"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (the page to go idle; a console message; text containing 'Whitefield')",
+      "status": "no-fault",
+      "evidence": {
+        "source": "components/FAQ.tsx:60"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "fail",
+    "reasons": [
+      "check failed: all of (a route change containing '/spaces'; a console message)"
+    ],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

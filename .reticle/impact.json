@@ -1,0 +1,57 @@
+{
+  "counts": {
+    "calls": 42,
+    "verdicts": 14,
+    "passed": 7,
+    "failed": 1,
+    "unknown": 6,
+    "refusals": 0,
+    "marks": 1,
+    "sessions": 7,
+    "tokensReturned": 26162,
+    "drivingMs": 131868
+  },
+  "days": [
+    {
+      "date": "2026-09-19",
+      "counts": {
+        "calls": 42,
+        "verdicts": 14,
+        "passed": 7,
+        "failed": 1,
+        "unknown": 6,
+        "refusals": 0,
+        "marks": 1,
+        "sessions": 7,
+        "tokensReturned": 26162,
+        "drivingMs": 131868
+      }
+    }
+  ],
+  "records": {
+    "longestRunMs": 0,
+    "bestVerdictDay": 14,
+    "bestDefectDay": 1,
+    "streakDays": 1,
+    "bestStreakDays": 1
+  },
+  "savings": {
+    "tokens": {
+      "value": 0,
+      "basis": "vs an agent reading the app through screenshots"
+    },
+    "minutes": {
+      "value": 11,
+      "basis": "vs checking each consequence by hand, plus one re-prompt cycle per defect caught"
+    }
+  },
+  "since": 1789826846270,
+  "defects": [
+    {
+      "at": 1789826885275,
+      "title": "Spaces",
+      "detail": "current route (no route change in the window) '/' does not contain '/spaces'",
+      "source": "components/SiteHeader.tsx:82"
+    }
+  ]
+}

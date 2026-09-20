@@ -1,0 +1,317 @@
+{
+  "version": 1,
+  "intents": {
+    "inline:nav-spaces-link-from-home-lands-on-spaces-with-n-a138d7ea": {
+      "id": "inline:nav-spaces-link-from-home-lands-on-spaces-with-n-a138d7ea",
+      "statement": "Nav Spaces link from home lands on /spaces with no console errors",
+      "state": "bound",
+      "declaredAt": 1789826876802,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "contains": "/spaces"
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      }
+    },
+    "inline:faq-accordion-expands-location-coverage-answer-o-763a68a7": {
+      "id": "inline:faq-accordion-expands-location-coverage-answer-o-763a68a7",
+      "statement": "FAQ accordion expands location coverage answer on the marketing home without console errors",
+      "state": "bound",
+      "declaredAt": 1789827062818,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "settled"
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "Whitefield",
+            "visible": true
+          }
+        ]
+      }
+    },
+    "inline:faq-locations-accordion-reveals-the-all-of-banga-9017420d": {
+      "id": "inline:faq-locations-accordion-reveals-the-all-of-banga-9017420d",
+      "statement": "FAQ locations accordion reveals the All-of-Bangalore coverage answer",
+      "state": "proved",
+      "declaredAt": 1789827110794,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "All of Bangalore and the areas around it",
+            "visible": true
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/FAQ.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827112000",
+        "grade": "presence",
+        "at": 1789827112000
+      }
+    },
+    "inline:contact-us-opens-the-lead-capture-dialog-04c67b8a": {
+      "id": "inline:contact-us-opens-the-lead-capture-dialog-04c67b8a",
+      "statement": "Contact Us opens the lead capture dialog",
+      "state": "bound",
+      "declaredAt": 1789827400203,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "dialog"
+            }
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      }
+    },
+    "inline:header-contact-us-opens-lead-capture-dialog-d9d628a6": {
+      "id": "inline:header-contact-us-opens-lead-capture-dialog-d9d628a6",
+      "statement": "Header Contact Us opens lead capture dialog",
+      "state": "proved",
+      "declaredAt": 1789827410724,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "dialog"
+            }
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/SiteHeader.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827412338",
+        "grade": "presence",
+        "at": 1789827412338
+      }
+    },
+    "inline:disabled-next-does-nothing-until-identify-fields-89ae3801": {
+      "id": "inline:disabled-next-does-nothing-until-identify-fields-89ae3801",
+      "statement": "Disabled Next does nothing until identify fields are filled",
+      "state": "declared",
+      "declaredAt": 1789827424580
+    },
+    "inline:after-identify-next-advances-to-step-2-of-the-le-f1016941": {
+      "id": "inline:after-identify-next-advances-to-step-2-of-the-le-f1016941",
+      "statement": "After identify, Next advances to step 2 of the lead wizard",
+      "state": "proved",
+      "declaredAt": 1789827447391,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Step 2",
+            "visible": true
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/LeadCaptureModal.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827449330",
+        "grade": "presence",
+        "at": 1789827449330
+      }
+    },
+    "inline:lead-wizard-reached-step-3-notes-before-whatsapp-5e9e6552": {
+      "id": "inline:lead-wizard-reached-step-3-notes-before-whatsapp-5e9e6552",
+      "statement": "Lead wizard reached step 3 notes before WhatsApp submit",
+      "state": "proved",
+      "declaredAt": 1789827488300,
+      "binding": {
+        "kind": "text",
+        "contains": "Step 3 of 3",
+        "visible": true
+      },
+      "surface": {
+        "files": [
+          "components/LeadCaptureModal.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789827488308",
+        "grade": "presence",
+        "at": 1789827488308
+      }
+    },
+    "inline:send-on-whatsapp-completes-lead-checkout-with-co-509554aa": {
+      "id": "inline:send-on-whatsapp-completes-lead-checkout-with-co-509554aa",
+      "statement": "Send on WhatsApp completes lead checkout with confirmation and POST /api/leads",
+      "state": "proved",
+      "declaredAt": 1789827511503,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "status"
+            }
+          },
+          {
+            "kind": "net",
+            "method": "POST",
+            "urlContains": "/api/leads"
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/LeadCaptureModal.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827514005",
+        "grade": "net",
+        "at": 1789827514005
+      }
+    },
+    "inline:done-closes-lead-capture-confirmation-and-return-9ba37fa8": {
+      "id": "inline:done-closes-lead-capture-confirmation-and-return-9ba37fa8",
+      "statement": "Done closes lead capture confirmation and returns to the page",
+      "state": "proved",
+      "declaredAt": 1789827554236,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "dialog"
+            },
+            "absent": true
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/LeadCaptureConfirmation.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827554728",
+        "grade": "presence",
+        "at": 1789827554728
+      }
+    },
+    "inline:spaces-catalog-loads-listings-from-the-listings-86086152": {
+      "id": "inline:spaces-catalog-loads-listings-from-the-listings-86086152",
+      "statement": "Spaces catalog loads listings from the listings schema instead of showing empty state",
+      "state": "bound",
+      "declaredAt": 1789827780790,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "No spaces to show yet",
+            "absent": true
+          },
+          {
+            "kind": "console",
+            "level": "error",
+            "contains": "relation \"listings\" does not exist",
+            "absent": true
+          }
+        ]
+      }
+    },
+    "inline:like-on-a-listing-opens-property-scoped-lead-cap-46f413cd": {
+      "id": "inline:like-on-a-listing-opens-property-scoped-lead-cap-46f413cd",
+      "statement": "Like on a listing opens property-scoped lead capture dialog",
+      "state": "proved",
+      "declaredAt": 1789827791719,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "dialog"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "Message on WhatsApp",
+            "visible": true
+          }
+        ]
+      },
+      "surface": {
+        "route": "/spaces",
+        "files": [
+          "components/spaces/LikeSpaceButton.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789827792774",
+        "grade": "presence",
+        "at": 1789827792774
+      }
+    }
+  }
+}

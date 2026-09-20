@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-s0403b64a-f1df-4712-a1dc-6f1c17743870",
+  "createdAt": 1789827375658,
+  "durationMs": 12644,
+  "profile": "dev",
+  "project": {
+    "name": "gentle-space-web-5e6bf129",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "lriau6gk",
+    "locator": "http://127.0.0.1:3002/"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'All of Bangalore and the areas around it'; a console message)",
+      "status": "yes",
+      "evidence": {
+        "source": "components/FAQ.tsx:60"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

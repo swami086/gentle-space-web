@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789826885267-e14",
+  "createdAt": 1789826885267,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) '/' does not contain '/spaces'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "e14",
+        "source": {
+          "file": "components/SiteHeader.tsx",
+          "line": 82,
+          "column": 12
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

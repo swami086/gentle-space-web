@@ -1,82 +1,78 @@
-# Task 1 Report: Archive weak board
+# Task 1 Report — A-MCP: Dual surface registration
 
-**Status:** DONE  
-**Commits:** none (Figma-only)  
-**File:** `bZ7LkDipySdYsNGH0YBtGu`  
-**Page:** BrokerDesk Waitlist
+**Agent:** A-MCP · **Branch:** `feat/ads-agent-gate-integrity` · **Date:** 2026-09-18  
+**Status:** DONE
 
 ## Summary
 
-Renamed and moved the weak PSW product screens board (`116:2`) off the primary slot at ~x=4780, y=100. The board is still addressable under its original ID but now lives at the archive position (rightEdge + 400). The slot near x=4780, y=100 is clear for a fresh quality-rebuild board.
+Split `google-ads-mcp` tool registration into **read** (3 tools, default) and **write** (5 tools) surfaces controlled by `GOOGLE_ADS_MCP_SURFACE`, with Compose service `google-ads-mcp-write` on port 8769. Closes P0 wire-level gap: `:8766` no longer advertises mutate tools.
 
-## Step 1: Switch page, rename, move
+## Files changed
 
-**Script:** Exact brief script (with extra read-only fields for QA).
+| File | Change |
+|------|--------|
+| `ads-agent/mcp/google-ads-server/surface.ts` | **Created** — `GoogleAdsMcpSurface`, `resolveGoogleAdsMcpSurface`, `resolveGoogleAdsMcpPort` |
+| `ads-agent/mcp/google-ads-server/index.ts` | **Modified** — `registerReadTools` / `registerWriteTools`; `buildGoogleAdsMcpServer(surface)`; `startGoogleAdsMcpServer` binds surface + port from env |
+| `ads-agent/mcp/google-ads-server/index.test.ts` | **Modified** — surface split tests, port/surface resolver tests; handler tests target correct surface |
+| `ads-agent/scripts/run-google-ads-mcp.ts` | **Modified** — passes `resolveGoogleAdsMcpPort()` to `startGoogleAdsMcpServer` |
+| `ads-agent/docker-compose.yml` | **Modified** — added `google-ads-mcp-write` service (`8769:8769`, `GOOGLE_ADS_MCP_SURFACE=write`, `GOOGLE_ADS_MCP_PORT=8769`) |
 
-| Field | Value |
-|-------|-------|
-| `archivedBoardId` | `116:2` |
-| `name` | `Archive / PSW Product Screens v1 (weak)` |
-| `x` | **7980** |
-| `y` | **100** |
-| `originalX` | 4780 |
-| `originalY` | 100 |
-| `rightEdge` (before move) | 7580 |
-| `mutatedNodeIds` | `["116:2"]` |
+## Interfaces delivered
 
-Move formula: `board.x = rightEdge + 400` → 7580 + 400 = 7980. Confirmed.
+- `export type GoogleAdsMcpSurface = "read" | "write"`
+- `resolveGoogleAdsMcpSurface(env?)` — `"write"` only when env is exactly `"write"`; else `"read"`
+- `resolveGoogleAdsMcpPort(env?)` — default `8766`; invalid/unset falls back to `8766`
+- `buildGoogleAdsMcpServer(surface?)` — registers tools by surface
+- Re-exports of surface helpers from `index.ts` for script consumers
 
-Board dimensions unchanged: 2800 × 2200 (from prior scaffold task).
+### Tool sets (verified in tests)
 
-## Step 2: QA
+**Read:** `list_campaign_performance`, `search_terms_report`, `list_accessible_customers`  
+**Write:** `create_campaign`, `pause_campaign`, `update_campaign_budget`, `add_negative_keyword`, `propose_change`
 
-### Screenshot
+## TDD
 
-- Tool: `get_screenshot` on `116:2` (maxDimension 1024)
-- Result: PNG captured (2800×2200 node, scaled to 1024×805)
-- Visual: Dark archive board with 8 placeholder shimmer blocks (4 top, 1 large mid-left, 3 bottom) — consistent with pre-archive weak scaffold content
+1. Updated `index.test.ts` with failing surface expectations (replacing monolithic “8 tools” assertion).
+2. Implemented `surface.ts` + refactored `index.ts`.
+3. **Tests:** `npx vitest run mcp/google-ads-server/index.test.ts` — **14 passed**.
 
-### Slot clearance
+## Self-review
 
-Read-only verification on BrokerDesk Waitlist page:
+### Architect / API design
 
-| Check | Result |
-|-------|--------|
-| Frames within ±50px of (4780, 100) | **none** |
-| `slotCleared` | **true** |
-| Archived node still reachable | yes — id `116:2`, name and position as above |
+- **Safety default:** Unset or invalid `GOOGLE_ADS_MCP_SURFACE` → read-only registration (matches D1).
+- **Single binary, two processes:** Same image/command; env distinguishes surfaces — no duplicate server code paths beyond registration.
+- **Human gate unchanged:** `propose_change` remains on write surface only; read surface has zero mutate tools — external MCP clients on `:8766` cannot call Google mutate tools.
+- **Port resolution:** `GOOGLE_ADS_MCP_PORT` honored for write Compose mapping `8769:8769`.
 
-### Rename confirmation
+### Code quality
 
-Plugin API returned `name: "Archive / PSW Product Screens v1 (weak)"` after mutation. Screenshot metadata targets node `116:2` post-rename.
+- Registration logic split into `registerReadTools` / `registerWriteTools` — minimal diff, no new dependencies.
+- Tests use existing `InMemoryTransport` pattern; `registeredToolNames(surface)` helper for listTools assertions.
 
-## Self-review vs brief
+### Out of scope (follow-up waves)
 
-| Criterion | Pass? |
-|-----------|-------|
-| Load `figma-use` before `use_figma` | Yes |
-| `skillNames: "figma-use"` on `use_figma` | Yes |
-| `await figma.setCurrentPageAsync(...)` at script start | Yes |
-| No `figma.closePlugin()`, no async IIFE | Yes |
-| Return mutated node IDs | Yes (`116:2`) |
-| Rename `116:2` → `Archive / PSW Product Screens v1 (weak)` | Yes |
-| Move to `rightEdge + 400`, y=100 | Yes (7980, 100) |
-| `get_screenshot` on archived board | Yes |
-| Original slot free for new board ~4780,100 | Yes |
-| Git commit | None (as required) |
+- `lib/bifrost/google-ads-mcp-client` `callGoogleAdsTool(..., surface)` and `GOOGLE_ADS_MCP_WRITE_URL` (D1 remainder).
+- `live-smoke.test.ts` still asserts 8 tools on default read URL — will fail when live smoke runs against read-only server; update in a later task or split smoke by surface.
+- `.env.example` / README write URL documentation (not in file lock).
 
-**Verdict:** DONE. Slot cleared; archived board preserved and addressable.
+### File lock compliance
 
-## IDs for downstream tasks
+Only touched paths listed in task brief. No changes to bifrost, UI, draft-rules, connectors, preflight.
 
-```json
-{
-  "archivedBoardId": "116:2",
-  "archivedName": "Archive / PSW Product Screens v1 (weak)",
-  "archivedX": 7980,
-  "archivedY": 100,
-  "clearedSlot": { "x": 4780, "y": 100 },
-  "slotCleared": true,
-  "screenshotTaken": true
-}
+## Compose snippet (write service)
+
+```yaml
+google-ads-mcp-write:
+  environment:
+    GOOGLE_ADS_MCP_SURFACE: write
+    GOOGLE_ADS_MCP_PORT: "8769"
+    GOOGLE_ADS_MCP_BIND: "0.0.0.0"
+    GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp-write,host.docker.internal
+  ports:
+    - "8769:8769"
 ```
+
+## Git
+
+Changes left **uncommitted** per coordinator instruction.

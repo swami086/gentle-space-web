@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-sca465e0d-433c-47ac-9ff7-abd4ed358940",
+  "createdAt": 1789827966052,
+  "durationMs": 39028,
+  "profile": "dev",
+  "project": {
+    "name": "gentle-space-web-5e6bf129",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "48r1xzua",
+    "locator": "http://127.0.0.1:3002/spaces?_reticle_reload=1789827771529"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'No spaces to show yet'; a console message)",
+      "status": "unknown",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state",
+        "virtualized-unmounted",
+        "uninstrumented-frame"
+      ],
+      "reason": "outcome_unread",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (an element matching {\"role\":\"dialog\"}; text containing 'Message on WhatsApp')",
+      "status": "yes",
+      "evidence": {
+        "source": "components/spaces/LikeSpaceButton.tsx:61"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

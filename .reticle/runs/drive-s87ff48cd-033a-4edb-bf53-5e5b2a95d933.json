@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-s87ff48cd-033a-4edb-bf53-5e5b2a95d933",
+  "createdAt": 1789875363380,
+  "durationMs": 310706,
+  "profile": "dev",
+  "project": {
+    "name": "gentle-space-web-5e6bf129",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "desktop",
+    "instance": "xy1yuuj1",
+    "locator": "http://localhost:3002/spaces"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (an element matching {\"role\":\"dialog\"}; a console message)",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SiteHeader.tsx:94"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "the page to go idle",
+      "status": "unknown",
+      "evidence": {
+        "source": "components/LeadCaptureModal.tsx:308"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'Step 2'; a console message)",
+      "status": "yes",
+      "evidence": {
+        "source": "components/LeadCaptureModal.tsx:308"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c3"
+    },
+    {
+      "kind": "element",
+      "predicate": "text containing 'Step 3 of 3'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/LeadCaptureModal.tsx:159"
+      },
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unobserved-ipc",
+        "unwatched-state",
+        "virtualized-unmounted"
+      ],
+      "reason": "proved",
+      "checkId": "c4"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (an element matching {\"role\":\"status\"}; a request POST matching '/api/leads'; a console message)",
+      "status": "yes",
+      "evidence": {
+        "source": "components/LeadCaptureModal.tsx:308"
+      },
+      "declaredBeforeActing": true,
+      "grade": "net",
+      "checkId": "c5"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (an element matching {\"role\":\"dialog\"}; a console message)",
+      "status": "yes",
+      "evidence": {
+        "source": "components/LeadCaptureConfirmation.tsx:27"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c6"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}
