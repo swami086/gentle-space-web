@@ -6,6 +6,7 @@ vi.mock("next/server", async () => {
 });
 
 process.env.AUTH_SERVICE_URL = "http://localhost:3040";
+delete process.env.AUTH_BYPASS;
 
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
@@ -39,5 +40,14 @@ describe("middleware", () => {
     });
     const res = middleware(req);
     expect(res.status).toBe(200);
+  });
+
+  it("skips the login redirect when AUTH_BYPASS is enabled", () => {
+    process.env.AUTH_BYPASS = "1";
+    process.env.NODE_ENV = "test";
+    const req = new NextRequest("http://localhost:3030/campaigns");
+    const res = middleware(req);
+    expect(res.status).toBe(200);
+    delete process.env.AUTH_BYPASS;
   });
 });

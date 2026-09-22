@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-s7c7c58c6-fd30-4ab0-b1d9-bc3299a8417d",
+  "createdAt": 1790056733680,
+  "durationMs": 232374,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "yl3fpxo1",
+    "locator": "http://127.0.0.1:3030/"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "a route change containing '/campaigns'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:34"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "a route change containing '/crm'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:34"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
+    },
+    {
+      "kind": "element",
+      "predicate": "a route change containing '/settings'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:34"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c3"
+    },
+    {
+      "kind": "element",
+      "predicate": "signal 'reticle:hydration-complete'",
+      "status": "no",
+      "evidence": {
+        "source": "app/layout.tsx:15"
+      },
+      "declaredBeforeActing": true,
+      "grade": "signal",
+      "checkId": "c4"
+    },
+    {
+      "kind": "element",
+      "predicate": "a route change containing '/'",
+      "status": "no-fault",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:34"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c5"
+    },
+    {
+      "kind": "element",
+      "predicate": "a route change containing '/campaigns'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:34"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c6"
+    },
+    {
+      "kind": "element",
+      "predicate": "a console message",
+      "status": "yes",
+      "evidence": {
+        "source": "app/layout.tsx:15"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c7"
+    },
+    {
+      "kind": "element",
+      "predicate": "a console message",
+      "status": "yes",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "proved",
+      "checkId": "c8"
+    },
+    {
+      "kind": "element",
+      "predicate": "a console message",
+      "status": "yes",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "proved",
+      "checkId": "c9"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "partial",
+    "reasons": [
+      "check failed: signal 'reticle:hydration-complete'"
+    ],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

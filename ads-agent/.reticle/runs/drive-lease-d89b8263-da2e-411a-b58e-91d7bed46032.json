@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-lease-d89b8263-da2e-411a-b58e-91d7bed46032",
+  "createdAt": 1789944424755,
+  "durationMs": 53845,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "rt2r5l7g",
+    "locator": "http://127.0.0.1:3030/?__reticle_session=lease-d89b8263-da2e-411a-b58e-91d7bed46032"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (a request matching '/api/hermes/chat'; text containing 'I am confirming'; text containing 'I've identified'; text containing 'Outputting Simple'; text containing 'BANANA_42')",
+      "status": "yes",
+      "evidence": {
+        "source": "components/copilot/CopilotPanel.tsx:219"
+      },
+      "declaredBeforeActing": true,
+      "grade": "net",
+      "checkId": "c1"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

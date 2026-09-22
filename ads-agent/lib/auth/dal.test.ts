@@ -29,6 +29,7 @@ import {
 } from "./dal";
 
 beforeEach(() => {
+  delete process.env.AUTH_BYPASS;
   cookieStore.get.mockReset();
   jwtVerifyMock.mockReset();
   query.mockReset();
@@ -63,7 +64,21 @@ describe("role vocabulary", () => {
 });
 
 describe("getSession", () => {
+  it("returns a local admin session when AUTH_BYPASS is enabled", async () => {
+    process.env.AUTH_BYPASS = "1";
+    process.env.PLATFORM_ORG_ID = "00000000-0000-0000-0000-000000000001";
+    cookieStore.get.mockReturnValue(undefined);
+    await expect(getSession()).resolves.toEqual({
+      userId: "00000000-0000-4000-8000-0000000000de",
+      email: "dev@localhost",
+      orgId: "00000000-0000-0000-0000-000000000001",
+      role: "admin",
+    });
+    delete process.env.AUTH_BYPASS;
+  });
+
   it("returns null when there is no session cookie", async () => {
+    delete process.env.AUTH_BYPASS;
     cookieStore.get.mockReturnValue(undefined);
     await expect(getSession()).resolves.toBeNull();
   });
@@ -93,6 +108,12 @@ describe("getSession", () => {
     jwtVerifyMock.mockResolvedValue({
       payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" },
     });
+    // SELECT finds nothing → INSERT path
+    query
+      .mockResolvedValueOnce({ rows: [] }) // orgs insert
+      .mockResolvedValueOnce({ rows: [] }) // users select
+      .mockResolvedValueOnce({ rows: [] }) // users insert
+      .mockResolvedValueOnce({ rows: [] }); // cron settings
     const session = await getSession();
     expect(session).toEqual({ userId: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" });
     expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO orgs"), ["org-1"]);
@@ -100,6 +121,30 @@ describe("getSession", () => {
       expect.stringContaining("INSERT INTO users"),
       expect.arrayContaining(["u-1", "org-1", "a@x.com"]),
     );
+  });
+
+  it("reuses the existing users.id when email already owns a shadow row", async () => {
+    cookieStore.get.mockReturnValue({ value: "good-token" });
+    jwtVerifyMock.mockResolvedValue({
+      payload: { sub: "new-sub", email: "a@x.com", orgId: "org-1", role: "admin" },
+    });
+    query
+      .mockResolvedValueOnce({ rows: [] }) // orgs
+      .mockResolvedValueOnce({ rows: [{ id: "existing-id" }] }) // users select by id/email
+      .mockResolvedValueOnce({ rows: [] }) // users update
+      .mockResolvedValueOnce({ rows: [] }); // cron
+    await expect(getSession()).resolves.toEqual({
+      userId: "existing-id",
+      email: "a@x.com",
+      orgId: "org-1",
+      role: "admin",
+    });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("UPDATE users"), [
+      "existing-id",
+      "org-1",
+      "a@x.com",
+    ]);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO users"))).toBe(false);
   });
 
   it("still returns the session when shadow upsert fails", async () => {

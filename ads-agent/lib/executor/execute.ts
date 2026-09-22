@@ -14,6 +14,7 @@ import {
   updateGoogleCampaignBudget,
 } from "../connectors/google-ads";
 import { createMetaCampaign, pauseMetaCampaign, updateMetaCampaignBudget } from "../connectors/meta";
+import { executableProposalKind } from "../proposals/normalize-kind";
 import type { Platform } from "../types";
 
 type CreateCampaignPayload = {
@@ -98,7 +99,8 @@ export async function executeProposal(
   }
 
   try {
-    switch (proposal.kind) {
+    const kind = executableProposalKind(proposal.kind);
+    switch (kind) {
       case "create_campaign":
         await executeCreateCampaign(scope, proposal.payload as unknown as CreateCampaignPayload);
         break;

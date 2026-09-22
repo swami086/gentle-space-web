@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789928363395-e823",
+  "createdAt": 1789928363395,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "expected element to be absent but found 1",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "e823",
+        "source": {
+          "file": "app/layout.tsx",
+          "line": 15,
+          "column": 6
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

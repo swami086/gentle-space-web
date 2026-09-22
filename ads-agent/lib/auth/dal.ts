@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import { NextResponse } from "next/server";
 import { getPool } from "../db/client";
+import { bypassSession, isAuthBypassEnabled } from "./dev-bypass";
 
 // This literal MUST match the AUTH_ISSUER constant in auth-service/lib/jwt.ts exactly — there is no
 // shared package between the two services, so this is intentional duplication (see plan's Global
@@ -27,32 +28,57 @@ function getJwks() {
 }
 
 /**
- * ponytail: upserts the shadow orgs/users rows on every verified request rather than once per
- * session. Ceiling: one extra idempotent upsert per request. Upgrade path: skip it when a
- * short-lived in-memory "already provisioned this userId" set says it's redundant — not worth the
- * complexity at current admin-portal traffic levels.
+ * Upserts shadow orgs/users on every verified request (idempotent). Returns the users.id that
+ * owns this identity — may differ from session.userId when users.email already belongs to an
+ * older row (UNIQUE email wins).
  */
-async function ensureShadowRows(session: Session): Promise<void> {
-  if (!session.orgId) return; // pending users have no org yet, nothing to shadow
-  await getPool().query(
+async function ensureShadowRows(session: Session): Promise<string | null> {
+  if (!session.orgId) return null; // pending users have no org yet, nothing to shadow
+  const pool = getPool();
+  await pool.query(
     `INSERT INTO orgs (id, name, kind, slug) VALUES ($1, 'Gentle Space (internal)', 'internal', 'gentle-space')
      ON CONFLICT (id) DO UPDATE SET slug = COALESCE(orgs.slug, EXCLUDED.slug)`,
     [session.orgId],
   );
-  await getPool().query(
-    `INSERT INTO users (id, org_id, email, display_name, role)
-     VALUES ($1, $2, $3, $3, 'viewer')
-     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
-    [session.userId, session.orgId, session.email],
+  const existing = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1 OR email = $2 ORDER BY (id = $1) DESC LIMIT 1`,
+    [session.userId, session.email],
   );
-  await getPool().query(
+  let userId = session.userId;
+  if (existing.rows[0]) {
+    userId = existing.rows[0].id;
+    await pool.query(
+      `UPDATE users SET org_id = $2, display_name = COALESCE(display_name, $3)
+       WHERE id = $1`,
+      [userId, session.orgId, session.email],
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO users (id, org_id, email, display_name, role)
+       VALUES ($1, $2, $3, $3, 'viewer')`,
+      [session.userId, session.orgId, session.email],
+    );
+  }
+  await pool.query(
     `INSERT INTO adsagent.org_cron_settings (org_id) VALUES ($1)
      ON CONFLICT (org_id) DO NOTHING`,
     [session.orgId],
   );
+  return userId;
 }
 
 export async function getSession(): Promise<Session | null> {
+  if (isAuthBypassEnabled()) {
+    const session = bypassSession();
+    try {
+      const userId = await ensureShadowRows(session);
+      if (userId) session.userId = userId;
+    } catch (err) {
+      console.error("[auth/dal] ensureShadowRows failed (bypass):", err instanceof Error ? err.message : err);
+    }
+    return session;
+  }
+
   const token = (await cookies()).get("gs_session")?.value;
   if (!token) return null;
 
@@ -72,7 +98,8 @@ export async function getSession(): Promise<Session | null> {
 
   // Shadow upsert must not look like logout — JWT already proved the session.
   try {
-    await ensureShadowRows(session);
+    const userId = await ensureShadowRows(session);
+    if (userId) session.userId = userId;
   } catch (err) {
     console.error("[auth/dal] ensureShadowRows failed:", err instanceof Error ? err.message : err);
   }

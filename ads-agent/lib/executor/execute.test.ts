@@ -211,6 +211,20 @@ describe("executeProposal", () => {
     expect(result).toEqual({ status: "executed" });
   });
 
+  it("executes agent dotted campaign.pause like snake_case pause", async () => {
+    getProposalById.mockResolvedValue(
+      executingProposal({ kind: "campaign.pause" as never }),
+    );
+    getCampaignById.mockResolvedValue(googleCampaign());
+    pauseGoogleCampaign.mockResolvedValue(undefined);
+
+    const result = await executeProposal(ORG, "prop-1");
+
+    expect(pauseGoogleCampaign).toHaveBeenCalled();
+    expect(markProposalExecuted).toHaveBeenCalledWith(ORG, "prop-1");
+    expect(result).toEqual({ status: "executed" });
+  });
+
   it("marks an unrecognized proposal kind as failed instead of silently executing it", async () => {
     getProposalById.mockResolvedValue(executingProposal({ kind: "future_kind" as never }));
 

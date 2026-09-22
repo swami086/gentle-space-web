@@ -4,8 +4,10 @@ import { callMeteredStreamingChatCompletion } from "../metering/metered-stream-c
 import { InsufficientCreditsError, type MeteringContext } from "../metering/types";
 import { getSession } from "../auth/dal";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../metering/dev-context";
-import { hermesPromptLibrary } from "../openui/hermes-prompt-library";
 import { buildCampaignPromptOptions, campaignLibrary } from "../openui/campaign-library";
+import { hermesPromptLibrary } from "../openui/hermes-prompt-library";
+import { normalizeOpenUiResponse } from "../openui/normalize-openui-response";
+import { stripHermesStepNarration } from "../openui/hermes-strip";
 import { playbookContextFor } from "./playbook-context";
 import { STRATEGY } from "./strategy-config";
 
@@ -94,7 +96,7 @@ async function* runHermesModel(
     // models sometimes spent nearly all of it "thinking" and got cut off mid-answer (finish_
     // reason: length) right in the middle of the OpenUI-lang points array. 16000 leaves headroom
     // for both without needing to touch the shared reasoning_effort setting.
-    { messages, temperature: 0.4, maxTokens: 16000, timeoutMs: 60_000 },
+    { messages, temperature: 0.4, maxTokens: 16000, timeoutMs: 120_000 },
     streamHermesCompletion,
   )) {
     if (chunk.type === "delta") {
@@ -149,5 +151,9 @@ export async function* draftHermesReply(input: {
   }
 
   const trimmed = raw.trim();
-  yield { type: "done", reply: trimmed || "I didn't get a response — try asking again." };
+  yield {
+    type: "done",
+    reply:
+      normalizeOpenUiResponse(stripHermesStepNarration(trimmed)) || "I didn't get a response — try asking again.",
+  };
 }

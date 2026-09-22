@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-lease-4cf84d76-6c2c-41c7-8e66-ed42498355d5",
+  "createdAt": 1789933732457,
+  "durationMs": 36481,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "fcvjnv2n",
+    "locator": "http://127.0.0.1:3030/?__reticle_session=lease-4cf84d76-6c2c-41c7-8e66-ed42498355d5"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'Desk'; text containing 'Approvals first')",
+      "status": "yes",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "proved",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "a request POST matching '/api/proposals/'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/desk/DeskDetail.tsx:96"
+      },
+      "declaredBeforeActing": true,
+      "grade": "net",
+      "checkId": "c2"
+    },
+    {
+      "kind": "element",
+      "predicate": "any of (text containing 'Copilot'; an element matching {\"role\":\"textbox\"}; text containing 'Ask')",
+      "status": "no-fault",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:45"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c3"
+    },
+    {
+      "kind": "element",
+      "predicate": "text containing 'AI Copilot'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/ui/card.tsx:18"
+      },
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "proved",
+      "checkId": "c4"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

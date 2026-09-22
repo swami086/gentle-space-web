@@ -1,0 +1,479 @@
+{
+  "version": 1,
+  "intents": {
+    "inline:operator-can-open-marketing-automation-campaigns-af3bca5e": {
+      "id": "inline:operator-can-open-marketing-automation-campaigns-af3bca5e",
+      "statement": "Operator can open Marketing Automation (campaigns) from the Home sidebar",
+      "state": "proved",
+      "declaredAt": 1789927866211,
+      "binding": {
+        "kind": "route",
+        "contains": "/campaigns"
+      },
+      "surface": {
+        "route": "/campaigns",
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789927870171",
+        "grade": "presence",
+        "at": 1789927870172
+      }
+    },
+    "inline:operator-reaches-leads-crm-from-marketing-automa-4e442d87": {
+      "id": "inline:operator-reaches-leads-crm-from-marketing-automa-4e442d87",
+      "statement": "Operator reaches Leads & CRM from Marketing Automation",
+      "state": "proved",
+      "declaredAt": 1789927891908,
+      "binding": {
+        "kind": "route",
+        "contains": "/crm"
+      },
+      "surface": {
+        "route": "/crm",
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789927896357",
+        "grade": "presence",
+        "at": 1789927896357
+      }
+    },
+    "inline:operator-opens-settings-from-crm-b971b0da": {
+      "id": "inline:operator-opens-settings-from-crm-b971b0da",
+      "statement": "Operator opens Settings from CRM",
+      "state": "proved",
+      "declaredAt": 1789927921848,
+      "binding": {
+        "kind": "route",
+        "contains": "/settings"
+      },
+      "surface": {
+        "route": "/settings",
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789927925383",
+        "grade": "presence",
+        "at": 1789927925383
+      }
+    },
+    "inline:close-openui-devtools-overlay-so-operator-can-us-fd1d7e67": {
+      "id": "inline:close-openui-devtools-overlay-so-operator-can-us-fd1d7e67",
+      "statement": "Close OpenUI Devtools overlay so operator can use Settings",
+      "state": "bound",
+      "declaredAt": 1789927943981,
+      "binding": {
+        "kind": "signal",
+        "name": "reticle:hydration-complete"
+      }
+    },
+    "inline:navigate-home-after-bypass-uuid-fix-expect-no-en-7dcd4963": {
+      "id": "inline:navigate-home-after-bypass-uuid-fix-expect-no-en-7dcd4963",
+      "statement": "Navigate Home after bypass UUID fix; expect no ensureShadowRows console spam",
+      "state": "bound",
+      "declaredAt": 1789927976726,
+      "binding": {
+        "kind": "route",
+        "contains": "/"
+      }
+    },
+    "inline:after-uuid-fix-marketing-automation-loads-withou-f2c04515": {
+      "id": "inline:after-uuid-fix-marketing-automation-loads-withou-f2c04515",
+      "statement": "After UUID fix, Marketing Automation loads without ensureShadowRows console errors",
+      "state": "proved",
+      "declaredAt": 1789928029857,
+      "binding": {
+        "kind": "route",
+        "contains": "/campaigns"
+      },
+      "surface": {
+        "route": "/campaigns",
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789928030502",
+        "grade": "presence",
+        "at": 1789928030502
+      }
+    },
+    "inline:operator-can-dismiss-openui-devtools-drawer-afte-29332b16": {
+      "id": "inline:operator-can-dismiss-openui-devtools-drawer-afte-29332b16",
+      "statement": "Operator can dismiss OpenUI Devtools drawer after auth bypass console errors stop",
+      "state": "proved",
+      "declaredAt": 1789928066292,
+      "binding": {
+        "kind": "console",
+        "level": "error",
+        "absent": true
+      },
+      "surface": {
+        "route": "/campaigns/new",
+        "files": [
+          "app/layout.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789928066780",
+        "grade": "presence",
+        "at": 1789928066780
+      }
+    },
+    "inline:auth-bypass-shadow-upsert-uses-a-uuid-so-admin-r-fac4e4dc": {
+      "id": "inline:auth-bypass-shadow-upsert-uses-a-uuid-so-admin-r-fac4e4dc",
+      "statement": "AUTH_BYPASS shadow upsert uses a UUID so admin routes do not spam ensureShadowRows UUID errors",
+      "state": "proved",
+      "declaredAt": 1789928081450,
+      "binding": {
+        "kind": "console",
+        "level": "error",
+        "absent": true
+      },
+      "surface": {
+        "route": "/campaigns/drafts/c0e7a7dd-5adb-42d0-886e-1e076c8e72f9",
+        "files": [
+          "app/layout.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789928081455",
+        "grade": "presence",
+        "at": 1789928081455
+      }
+    },
+    "inline:home-dashboard-has-no-console-errors-after-twent-94ec14a3": {
+      "id": "inline:home-dashboard-has-no-console-errors-after-twent-94ec14a3",
+      "statement": "Home dashboard has no console errors after Twenty + shadow-row fixes",
+      "state": "proved",
+      "declaredAt": 1789928453635,
+      "binding": {
+        "kind": "console",
+        "level": "error",
+        "absent": true
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789928453637",
+        "grade": "presence",
+        "at": 1789928453637
+      }
+    },
+    "inline:default-route-is-agentic-desk-inbox-not-the-old-08008f72": {
+      "id": "inline:default-route-is-agentic-desk-inbox-not-the-old-08008f72",
+      "statement": "Default route is Agentic Desk inbox, not the old dashboard hero.",
+      "state": "proved",
+      "declaredAt": 1789929652339,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Desk"
+          },
+          {
+            "kind": "text",
+            "contains": "Approvals first"
+          },
+          {
+            "kind": "not",
+            "predicate": {
+              "kind": "text",
+              "contains": "Good morning"
+            }
+          },
+          {
+            "kind": "not",
+            "predicate": {
+              "kind": "text",
+              "contains": "Spend & CPL"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789929652363",
+        "grade": "presence",
+        "at": 1789929652363
+      }
+    },
+    "inline:desk-approve-posts-to-proposals-approve-api-2eed105f": {
+      "id": "inline:desk-approve-posts-to-proposals-approve-api-2eed105f",
+      "statement": "Desk Approve posts to proposals approve API",
+      "state": "proved",
+      "declaredAt": 1789932627556,
+      "binding": {
+        "kind": "net",
+        "method": "POST",
+        "urlContains": "/api/proposals/",
+        "status": 500
+      },
+      "surface": {
+        "files": [
+          "components/desk/DeskDetail.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789932627849",
+        "grade": "net",
+        "at": 1789932627849
+      }
+    },
+    "inline:desk-page-shows-mission-control-shell-e9c6a012": {
+      "id": "inline:desk-page-shows-mission-control-shell-e9c6a012",
+      "statement": "Desk page shows Mission Control shell",
+      "state": "bound",
+      "declaredAt": 1789932627567,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Desk"
+          },
+          {
+            "kind": "text",
+            "contains": "Approvals first"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Approve"
+            }
+          }
+        ]
+      }
+    },
+    "inline:desk-home-after-metering-fix-still-shows-desk-in-40ed5807": {
+      "id": "inline:desk-home-after-metering-fix-still-shows-desk-in-40ed5807",
+      "statement": "Desk home after metering fix still shows Desk inbox",
+      "state": "proved",
+      "declaredAt": 1789933388502,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Desk"
+          },
+          {
+            "kind": "text",
+            "contains": "Approvals first"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789933388512",
+        "grade": "presence",
+        "at": 1789933388512
+      }
+    },
+    "inline:desk-approve-schedules-proposal-successfully-aft-2fac2ff4": {
+      "id": "inline:desk-approve-schedules-proposal-successfully-aft-2fac2ff4",
+      "statement": "Desk Approve schedules proposal successfully after metering fix",
+      "state": "proved",
+      "declaredAt": 1789933395772,
+      "binding": {
+        "kind": "net",
+        "method": "POST",
+        "urlContains": "/api/proposals/",
+        "status": 200
+      },
+      "surface": {
+        "files": [
+          "components/desk/DeskDetail.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789933396253",
+        "grade": "net",
+        "at": 1789933396253
+      }
+    },
+    "inline:ask-opens-copilot-slide-over-panel-20f68ac5": {
+      "id": "inline:ask-opens-copilot-slide-over-panel-20f68ac5",
+      "statement": "Ask opens Copilot slide-over panel",
+      "state": "bound",
+      "declaredAt": 1789933409960,
+      "binding": {
+        "kind": "anyOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Copilot"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "textbox"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "Ask"
+          }
+        ]
+      }
+    },
+    "inline:ask-nav-opens-ai-copilot-panel-d332bff3": {
+      "id": "inline:ask-nav-opens-ai-copilot-panel-d332bff3",
+      "statement": "Ask nav opens AI Copilot panel",
+      "state": "proved",
+      "declaredAt": 1789933417464,
+      "binding": {
+        "kind": "text",
+        "contains": "AI Copilot"
+      },
+      "surface": {
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789933417471",
+        "grade": "presence",
+        "at": 1789933417471
+      }
+    },
+    "inline:operator-can-open-ask-copilot-from-desk-nav-2fff0d43": {
+      "id": "inline:operator-can-open-ask-copilot-from-desk-nav-2fff0d43",
+      "statement": "Operator can open Ask Copilot from Desk nav",
+      "state": "proved",
+      "declaredAt": 1789934893340,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "button",
+          "name": "Ask Hermes"
+        }
+      },
+      "surface": {
+        "files": [
+          "components/SidebarNav.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789934893826",
+        "grade": "presence",
+        "at": 1789934893826
+      }
+    },
+    "inline:operator-can-enable-hermes-mode-on-copilot-d0069369": {
+      "id": "inline:operator-can-enable-hermes-mode-on-copilot-d0069369",
+      "statement": "Operator can enable Hermes mode on Copilot",
+      "state": "proved",
+      "declaredAt": 1789934901680,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "button",
+          "name": "Hermes mode"
+        }
+      },
+      "surface": {
+        "files": [
+          "components/copilot/CopilotPanel.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789934902152",
+        "grade": "presence",
+        "at": 1789934902152
+      }
+    },
+    "inline:operator-can-send-a-hermes-copilot-message-and-g-f9463ebd": {
+      "id": "inline:operator-can-send-a-hermes-copilot-message-and-g-f9463ebd",
+      "statement": "Operator can send a Hermes Copilot message and get a reply",
+      "state": "bound",
+      "declaredAt": 1789934915537,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "placeholder": "Ask the Copilot…"
+        }
+      }
+    },
+    "inline:hermes-copilot-returns-a-reply-after-send-03ac1fde": {
+      "id": "inline:hermes-copilot-returns-a-reply-after-send-03ac1fde",
+      "statement": "Hermes Copilot returns a reply after send",
+      "state": "proved",
+      "declaredAt": 1789934929688,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "urlContains": "/api/hermes/chat",
+            "status": 200
+          },
+          {
+            "kind": "text",
+            "contains": "Hermes OK"
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/copilot/CopilotPanel.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789934934548",
+        "grade": "net",
+        "at": 1789934934548
+      }
+    },
+    "inline:hermes-copilot-completes-a-turn-without-leaking-2d9a009a": {
+      "id": "inline:hermes-copilot-completes-a-turn-without-leaking-2d9a009a",
+      "statement": "Hermes Copilot completes a turn without leaking thinking narration into the final bubble",
+      "state": "proved",
+      "declaredAt": 1789944085653,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "urlContains": "/api/hermes/chat",
+            "status": 200
+          },
+          {
+            "kind": "text",
+            "contains": "I am confirming",
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "I've identified",
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "Outputting Simple",
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "contains": "BANANA_42"
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "components/copilot/CopilotPanel.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789944102497",
+        "grade": "net",
+        "at": 1789944102497
+      }
+    }
+  }
+}

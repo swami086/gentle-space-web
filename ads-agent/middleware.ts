@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthBypassEnabled } from "@/lib/auth/dev-bypass";
 
 // UX convenience only — NOT the security boundary (see plan's Global Constraints re: CVE-2025-29927).
 // Every protected page/action/route still calls requireSession/requireRole/requireApiRole itself.
@@ -14,6 +15,7 @@ function publicOrigin(request: NextRequest): string {
 }
 
 export function middleware(request: NextRequest): NextResponse {
+  if (isAuthBypassEnabled()) return NextResponse.next();
   if (request.cookies.has("gs_session")) return NextResponse.next();
 
   const authServiceUrl = process.env.AUTH_SERVICE_URL ?? "http://localhost:3040";

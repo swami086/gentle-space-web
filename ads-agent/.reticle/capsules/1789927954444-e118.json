@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789927954444-e118",
+  "createdAt": 1789927954444,
+  "origin": "failed-assert",
+  "expected": "signal reticle:hydration-complete",
+  "observed": "signal \"reticle:hydration-complete\" never fired",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "e118",
+        "source": {
+          "file": "app/layout.tsx",
+          "line": 15,
+          "column": 6
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

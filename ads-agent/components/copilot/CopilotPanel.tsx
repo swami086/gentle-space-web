@@ -6,6 +6,7 @@ import { Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { looksLikeOpenUiLang } from "@/lib/openui/is-openui-lang";
+import { normalizeOpenUiResponse } from "@/lib/openui/normalize-openui-response";
 import { openUiRenderErrorMessage } from "@/lib/openui/renderer-errors";
 import { platformLibrary } from "@/lib/openui/platform-library";
 import { createHttpToolProvider } from "@/lib/openui/http-tool-provider";
@@ -38,6 +39,7 @@ export function CopilotPanel() {
   const [renderError, setRenderError] = useState<string | null>(null);
   const [hermesMode, setHermesMode] = useState(false);
   const [toolProgress, setToolProgress] = useState<string | null>(null);
+  const normalizedStreamingText = streamingText ? normalizeOpenUiResponse(streamingText) : "";
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
@@ -153,16 +155,17 @@ export function CopilotPanel() {
               Ask about campaigns, leads, or performance — I can pull up cards, charts, or lists to answer.
             </p>
           )}
-          {messages.map((message) =>
-            message.role === "user" ? (
+          {messages.map((message) => {
+            const response = normalizeOpenUiResponse(message.content);
+            const validForHermes = message.hermes ? looksValidOpenUiLang(response, hermesLibrary) : true;
+            return message.role === "user" ? (
               <div key={message.id} className="ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
                 {message.content}
               </div>
-            ) : looksLikeOpenUiLang(message.content) &&
-              (!message.hermes || looksValidOpenUiLang(message.content, hermesLibrary)) ? (
+            ) : looksLikeOpenUiLang(response) && validForHermes ? (
               <div key={message.id} className="max-w-[95%]">
                 <Renderer
-                  response={message.content}
+                  response={response}
                   library={message.hermes ? hermesLibrary : copilotLibrary}
                   toolProvider={message.hermes ? undefined : copilotToolProvider}
                   isStreaming={false}
@@ -178,12 +181,12 @@ export function CopilotPanel() {
               <div key={message.id} className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
                 {message.content}
               </div>
-            ),
-          )}
-          {sending && streamingText && looksLikeOpenUiLang(streamingText) && (
+            );
+          })}
+          {sending && streamingText && looksLikeOpenUiLang(normalizedStreamingText) && (
             <div className="max-w-[95%]">
               <Renderer
-                response={streamingText}
+                response={normalizedStreamingText}
                 library={hermesMode ? hermesLibrary : copilotLibrary}
                 toolProvider={hermesMode ? undefined : copilotToolProvider}
                 isStreaming
@@ -192,11 +195,13 @@ export function CopilotPanel() {
                   if (action.kind === "send") void sendMessage(action.text);
                   else if (action.kind === "open_url") window.open(action.url, "_blank", "noopener,noreferrer");
                 }}
-                onError={(errors) => setRenderError(openUiRenderErrorMessage(errors))}
+                onError={() => {
+                  /* Mid-stream OpenUI clears via onError([]); avoid flashing an error. */
+                }}
               />
             </div>
           )}
-          {sending && streamingText && !looksLikeOpenUiLang(streamingText) && (
+          {sending && streamingText && !looksLikeOpenUiLang(normalizedStreamingText) && (
             <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">{streamingText}</div>
           )}
           {sending && hermesMode && toolProgress ? (

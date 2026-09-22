@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { NAV_GROUPS, visibleNavGroups } from "./nav-config";
 
 describe("visibleNavGroups", () => {
-  it("shows only Home in Workspace, and no Admin group, for a viewer", () => {
+  it("shows only Desk in Workspace, and no Admin group, for a viewer", () => {
     const groups = visibleNavGroups("viewer");
     expect(groups).toHaveLength(1);
     expect(groups[0].key).toBe("workspace");
-    expect(groups[0].items.map((item) => item.label)).toEqual(["Home"]);
+    expect(groups[0].items.map((item) => item.label)).toEqual(["Desk"]);
   });
 
   it("shows all of Workspace but no Admin group for an operator", () => {
@@ -14,9 +14,10 @@ describe("visibleNavGroups", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].key).toBe("workspace");
     expect(groups[0].items.map((item) => item.label)).toEqual([
-      "Home",
-      "Marketing Automation",
-      "Leads & CRM",
+      "Desk",
+      "Ask",
+      "Campaigns",
+      "CRM",
       "Reports",
     ]);
   });
@@ -25,9 +26,10 @@ describe("visibleNavGroups", () => {
     const groups = visibleNavGroups("admin");
     expect(groups).toHaveLength(2);
     expect(groups[0].items.map((item) => item.label)).toEqual([
-      "Home",
-      "Marketing Automation",
-      "Leads & CRM",
+      "Desk",
+      "Ask",
+      "Campaigns",
+      "CRM",
       "Reports",
     ]);
     expect(groups[1].items.map((item) => item.label)).toEqual(["Users", "Settings"]);
@@ -41,6 +43,7 @@ describe("visibleNavGroups", () => {
     expect(NAV_GROUPS.map((g) => g.key)).toEqual(["workspace", "admin"]);
     expect(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href))).toEqual([
       "/",
+      "#ask",
       "/campaigns",
       "/crm",
       "/reports",

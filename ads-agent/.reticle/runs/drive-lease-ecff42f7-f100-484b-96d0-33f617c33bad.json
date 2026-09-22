@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-lease-ecff42f7-f100-484b-96d0-33f617c33bad",
+  "createdAt": 1789932952422,
+  "durationMs": 19244,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "dauc0baj",
+    "locator": "http://127.0.0.1:3030/?__reticle_session=lease-ecff42f7-f100-484b-96d0-33f617c33bad"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'Desk'; text containing 'Approvals first'; an element matching {\"role\":\"button\",\"name\":\"Approve\"})",
+      "status": "unknown",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "evidence_incomplete",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "a request POST matching '/api/proposals/'",
+      "status": "yes",
+      "evidence": {
+        "source": "components/desk/DeskDetail.tsx:96"
+      },
+      "declaredBeforeActing": true,
+      "grade": "net",
+      "checkId": "c2"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

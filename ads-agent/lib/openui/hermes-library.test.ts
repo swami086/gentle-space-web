@@ -88,6 +88,11 @@ describe("stripHermesStepNarration", () => {
     );
   });
 
+  it("keeps only the last short paragraph when narration is split across blank lines", () => {
+    const raw = "**Outputting Simple String**\n\nI've identified the best answer and am trimming the narration.\n\nHermes OK";
+    expect(stripHermesStepNarration(raw)).toBe("Hermes OK");
+  });
+
   it("converts a named kwarg call argument to positional so the strict parser accepts it", () => {
     const raw =
       'root = TrendChart("Ad Spend Trend — Last 7 Days", points=[{"label": "Aug 04", "value": 2704}])';

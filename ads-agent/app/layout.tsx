@@ -1,3 +1,4 @@
+import { ReticleDev } from './reticle-dev';
 import "./globals.css";
 import "@openuidev/react-ui/layered/styles/index.css";
 import type { ReactNode } from "react";
@@ -11,7 +12,7 @@ export const metadata = { title: "Ads Agent" };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">{process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}{children}</body>
     </html>
   );
 }

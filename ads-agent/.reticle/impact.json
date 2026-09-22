@@ -1,0 +1,78 @@
+{
+  "counts": {
+    "calls": 85,
+    "verdicts": 20,
+    "passed": 17,
+    "failed": 2,
+    "unknown": 1,
+    "refusals": 0,
+    "marks": 0,
+    "sessions": 9,
+    "tokensReturned": 38036,
+    "drivingMs": 143801
+  },
+  "days": [
+    {
+      "date": "2026-09-20",
+      "counts": {
+        "calls": 85,
+        "verdicts": 20,
+        "passed": 17,
+        "failed": 2,
+        "unknown": 1,
+        "refusals": 0,
+        "marks": 0,
+        "sessions": 7,
+        "tokensReturned": 38036,
+        "drivingMs": 143801
+      }
+    },
+    {
+      "date": "2026-09-22",
+      "counts": {
+        "calls": 0,
+        "verdicts": 0,
+        "passed": 0,
+        "failed": 0,
+        "unknown": 0,
+        "refusals": 0,
+        "marks": 0,
+        "sessions": 2,
+        "tokensReturned": 0,
+        "drivingMs": 0
+      }
+    }
+  ],
+  "records": {
+    "longestRunMs": 0,
+    "bestVerdictDay": 20,
+    "bestDefectDay": 2,
+    "streakDays": 1,
+    "bestStreakDays": 1
+  },
+  "savings": {
+    "tokens": {
+      "value": 0,
+      "basis": "vs an agent reading the app through screenshots"
+    },
+    "minutes": {
+      "value": 18,
+      "basis": "vs checking each consequence by hand, plus one re-prompt cycle per defect caught"
+    }
+  },
+  "since": 1789927759810,
+  "defects": [
+    {
+      "at": 1789928363402,
+      "title": "Close OpenUI devtools",
+      "detail": "expected element to be absent but found 1",
+      "source": "app/layout.tsx:15"
+    },
+    {
+      "at": 1789927954449,
+      "title": "Close OpenUI devtools",
+      "detail": "no signal matched {\"kind\":\"signal\",\"name\":\"reticle:hydration-complete\"}",
+      "source": "app/layout.tsx:15"
+    }
+  ]
+}

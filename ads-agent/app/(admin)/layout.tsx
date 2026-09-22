@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Clock } from "lucide-react";
 import { scopeFromSession } from "@/lib/auth/scope";
+import { orgScopeFromSession } from "@/lib/attribution/org-scope";
 import { getOrgSettings } from "@/lib/db/org-settings";
+import { getOverviewStats } from "@/lib/db/dashboard";
 import { cn } from "@/lib/utils";
 import { requireSession } from "@/lib/auth/dal";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -11,7 +13,7 @@ import { SidebarNav } from "@/components/SidebarNav";
 import { UserMenu } from "@/components/UserMenu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopilotProvider } from "@/components/copilot/CopilotProvider";
-import { CopilotFab } from "@/components/copilot/CopilotFab";
+import { AskHotkey } from "@/components/copilot/AskHotkey";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -43,7 +45,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     );
   }
 
-  const settings = await getOrgSettings(await scopeFromSession(session));
+  const scope = await scopeFromSession(session);
+  const settings = await getOrgSettings(scope);
+  const overview = await getOverviewStats(orgScopeFromSession(session));
   const canUseCopilot = session.role === "operator" || session.role === "admin";
 
   return (
@@ -51,7 +55,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <div className="mx-auto grid min-h-dvh max-w-[1400px] grid-cols-[220px_1fr]">
       <aside className="border-r border-border">
         <div className="px-4 py-4 text-sm font-semibold tracking-tight">ads-agent</div>
-        <SidebarNav role={session.role} />
+        <SidebarNav role={session.role} pendingCount={overview.pendingProposalCount} />
       </aside>
       <div className="flex flex-col">
         <header className="flex h-14 items-center justify-between border-b border-border px-6">
@@ -59,7 +63,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <div className="flex items-center gap-4">
             <span className="hidden items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground sm:flex">
               <kbd>⌘</kbd>
-              <kbd>K</kbd>
+              <kbd>J</kbd>
+              <span className="text-muted-foreground/60">Ask</span>
             </span>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span
@@ -83,7 +88,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <CommandPalette role={session.role} />
       {canUseCopilot && (
         <>
-          <CopilotFab />
+          <AskHotkey />
           <CopilotPanel />
         </>
       )}

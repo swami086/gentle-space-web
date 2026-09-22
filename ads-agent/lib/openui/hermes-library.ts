@@ -54,58 +54,11 @@ export function humanizeToolName(tool: string): string {
 }
 
 /**
- * Hermes' underlying model (Gemini 2.5 Pro via Vertex, `reasoning_effort: high`) already separates
- * true chain-of-thought into a distinct `reasoning`/`thought` channel that never reaches this app
- * (see hermes-agent's gemini_native_adapter.py: `part.get("thought") is True`). What lands in the
- * visible `content` string instead is the model's own step-by-step narration of its tool-use plan —
- * bolded headers like "**Finding Ad Spend Trends** I'm now going to..." — which is genuine answer
- * content from Hermes' point of view, not something any Hermes config setting removes: neither
- * `display.tool_progress: off` nor `display.interim_assistant_messages: false` touch it (verified
- * against Hermes' own docs/source — both gate separate progress-event and mid-turn-message channels,
- * not this one). Since the system-prompt instruction not to narrate is a soft constraint the model
- * doesn't reliably obey, strip it here: keep whatever text follows the LAST "**Bold Header**" marker,
- * since the model always narrates its plan before its actual conclusion, never after.
- *
- * Hermes doesn't always bother with bold headers, though — cheaper models (gemini-2.5-flash) often
- * narrate in plain prose instead ("I've successfully parsed the JSON string. Now I am transforming
- * ... root = TrendChart(...)"), which leaves `looksLikeOpenUiLang` failing (it requires the OpenUI
- * statement to be the very first thing in the string) and the whole reply falling back to a wall of
- * raw text. Apply the same "keep only what follows the LAST marker" logic a second time, using a
- * bare `root = Component(` as the marker instead of a bold header, chaining off whatever the header
- * pass already trimmed.
+ * Pure strip lives in hermes-strip.ts so API routes can import without pulling
+ * `@openuidev/react-lang` (createContext) into the RSC bundle. Re-export keeps
+ * existing client imports (`from hermes-library`) working.
  */
-/**
- * Hermes' prompt already says "never named kwargs, always positional args in Zod key order"
- * (buildHermesSystemPreamble in lib/decision-engine/hermes-chat.ts), matching the OpenUI Lang v0.5
- * spec's own rule ("Positional only: write `Stack([children], "row", "l")` NOT `Stack([children],
- * direction: "row", gap: "l")`" — openui.com/docs/openui-lang/specification-v05). Cheaper models
- * ignore that instruction in practice, emitting e.g. `TrendChart("title", points=[...])`. The
- * installed `@openuidev/lang-core` parser has no leniency flag for this — it's positional-only with
- * no fallback — so `looksValidOpenUiLang` correctly rejects the call and the whole reply falls back
- * to plain text. Since re-prompting doesn't reliably fix it (same class of problem as the narration
- * above), normalize syntactically instead: drop any `identifier=` that immediately follows a `(` or
- * `,` inside a call. This turns `Component(a, name=b)` into `Component(a, b)` without touching
- * top-level `$var = ...` / `var = Query(...)` assignments (never preceded by `(` or `,`) or
- * object-literal `"key": value` pairs (colon, not equals).
- */
-function stripNamedKwargs(text: string): string {
-  return text.replace(/([(,]\s*)[a-zA-Z_]\w*\s*=\s*(?!=)/g, "$1");
-}
-
-export function stripHermesStepNarration(text: string): string {
-  // Header spans are usually a short noun phrase ("**Finding Ad Spend Trends**") but Hermes
-  // sometimes writes a full sentence as the "header" instead — cap generously (200 chars) rather
-  // than assuming they're short, since an unmatched header leaves the whole wall of text intact.
-  const headers = [...text.matchAll(/\*\*[^*\n]{2,200}\*\*/g)];
-  const last = headers[headers.length - 1];
-  const afterHeader = last ? text.slice(last.index! + last[0].length).trim() : text;
-  const result = afterHeader || text.trim();
-
-  const rootStatements = [...result.matchAll(/root\s*=\s*[A-Z]\w*\s*\(/g)];
-  const lastRoot = rootStatements[rootStatements.length - 1];
-  const withoutLeadingProse = lastRoot && lastRoot.index! > 0 ? result.slice(lastRoot.index!).trim() : result;
-  return stripNamedKwargs(withoutLeadingProse);
-}
+export { stripHermesStepNarration } from "./hermes-strip";
 
 export type ResolvedOpenUiAction = { kind: "send"; text: string } | { kind: "open_url"; url: string } | { kind: "noop" };
 

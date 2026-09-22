@@ -1,3 +1,4 @@
+import { withReticle } from '@reticlehq/next';
 import type { NextConfig } from "next";
 import path from "path";
 
@@ -10,4 +11,4 @@ const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
 };
 
-export default nextConfig;
+export default withReticle(nextConfig);

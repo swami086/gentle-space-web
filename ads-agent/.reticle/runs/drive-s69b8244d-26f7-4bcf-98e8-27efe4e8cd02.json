@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-s69b8244d-26f7-4bcf-98e8-27efe4e8cd02",
+  "createdAt": 1789943803878,
+  "durationMs": 56422,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "3uxsl2jg",
+    "locator": "http://127.0.0.1:3030/"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "all of (text containing 'Desk'; text containing 'Approvals first'; the absence of text containing 'Good morning'; the absence of text containing 'Spend & CPL')",
+      "status": "yes",
+      "declaredBeforeActing": false,
+      "grade": "presence",
+      "couldNotSee": [
+        "unwatched-state"
+      ],
+      "reason": "proved",
+      "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "an element matching {\"role\":\"button\",\"name\":\"Ask Hermes\"}",
+      "status": "yes",
+      "evidence": {
+        "source": "components/SidebarNav.tsx:45"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
+    },
+    {
+      "kind": "element",
+      "predicate": "an element matching {\"role\":\"button\",\"name\":\"Hermes mode\"}",
+      "status": "yes",
+      "evidence": {
+        "source": "components/copilot/CopilotPanel.tsx:144"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c3"
+    },
+    {
+      "kind": "element",
+      "predicate": "an element matching {\"placeholder\":\"Ask the Copilot…\"}",
+      "status": "no-fault",
+      "evidence": {
+        "source": "components/copilot/CopilotPanel.tsx:220"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c4"
+    },
+    {
+      "kind": "element",
+      "predicate": "all of (a request matching '/api/hermes/chat'; text containing 'Hermes OK')",
+      "status": "yes",
+      "evidence": {
+        "source": "components/copilot/CopilotPanel.tsx:219"
+      },
+      "declaredBeforeActing": true,
+      "grade": "net",
+      "checkId": "c5"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

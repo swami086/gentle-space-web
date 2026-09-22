@@ -3,10 +3,22 @@ import { Pool } from "pg";
 let pool: Pool | null = null;
 const roleChecks = new WeakMap<Pool, Promise<void>>();
 
+/**
+ * Consolidated DB keeps ads-agent tables in schema `adsagent`. Metering SQL is
+ * unqualified (`FROM org_balances`). Local `.env` often uses owner role `gentle`,
+ * which defaults to `"$user", public` and misses `adsagent.*` — same class of bug
+ * as listings' search_path pin. Prefer adsagent_rw's path; fall through to public
+ * for older single-schema local Docker DBs.
+ */
+export const ADSAGENT_SEARCH_PATH = "ag_catalog,adsagent,public";
+
 export function getPool(): Pool {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
   if (!pool) {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      options: `-c search_path=${ADSAGENT_SEARCH_PATH}`,
+    });
     // Idle clients drop (Docker/macOS) as 'error' on Client; unhandled = process exit.
     pool.on("error", (err) => {
       console.error("pg pool idle client error", err.message);
