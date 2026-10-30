@@ -1,0 +1,7 @@
+Title,Description,Priority,Status,Estimate,Labels
+[Epic] Phase A — Meta Marketing API sandbox dogfood,"Enable Meta create_campaign against a Marketing API Sandbox Ad Account: credentials → Settings green → Desk Approve → external campaign id. No real spend. Client provisions sandbox token/account; agency implements and verifies.
+
+Baseline: main @ b06aba4. Spec anchors: ads-agent/README.md (Meta section), lib/connectors/meta.ts, lib/executor/execute.ts.",Urgent,Backlog,,"ads-agent, phase-a, meta, epic"
+[Epic] Phase B — Google Ads test-account dogfood,"Unblock live Google create path: refresh OAuth (invalid_grant), dual MCP surfaces healthy, Campaigns→New→Approve→test customer campaign. Spec: docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md. Shipped gate integrity: commit 9e1af94 lineage.",High,Backlog,,"ads-agent, phase-b, google-ads, epic"
+[Epic] Phase C — Desk + Hermes Copilot reliability,"Harden Agentic Desk (Alt C) and Hermes Copilot: Reticle coverage, narration/OpenUI edge cases, MCP health, UX polish. Spec: docs/superpowers/specs/2026-09-20-ads-agent-agentic-desk-design.md. Shipped: daafcef.",High,Backlog,,"ads-agent, phase-c, desk, hermes, epic"
+[Epic] Phase D — Broader ads-agent backlog,"Non-blocking product debt: Meta full funnel / MCP target, CRM empty states, UI polish, agent/ops follow-ups. Prioritize after A–C dogfood.",Medium,Backlog,,"ads-agent, phase-d, backlog, epic"

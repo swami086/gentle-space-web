@@ -1,0 +1,458 @@
+Title,Description,Priority,Status,Estimate,Labels
+[AA-001] Client: provision Meta Marketing API Sandbox Ad Account + token,"As the client operator,
+I want a Meta Marketing API Sandbox Ad Account and long-lived access token,
+So that the agency can dogfood create_campaign without real ad spend.
+
+## Context
+Agency access model: client keeps production secrets and provisions sandbox credentials into a shared secure channel (not git). App Dashboard → Marketing API → Tools → Sandbox Ad Account (one per app). Link a Page you admin. Generate token with ads_management, ads_read, business_management (+ pages scopes per Meta use-case docs). Sandbox: no payment method; ads do not deliver; Insights often empty.
+
+## Deliver to agency (names only in git)
+- META_APP_ID
+- META_APP_SECRET (nice-to-have)
+- META_ACCESS_TOKEN (long-lived / sandbox)
+- META_AD_ACCOUNT_ID (digits only, no act_ prefix)
+- Account currency (USD/INR/…)
+- Confirmation: sandbox=yes
+
+## Acceptance criteria
+1. Given a Meta developer app with Marketing API, when sandbox ad account is created, then Ad Account ID is available without act_ prefix
+2. Given token generation, when scopes include ads_management and ads_read, then Graph Explorer can call act_{id}
+3. Given handoff, when agency receives credentials out-of-band, then no secrets appear in git commits
+
+## Spec / code links
+- ads-agent/README.md#meta-marketing-api
+- https://developers.facebook.com/documentation/development/create-an-app/marketing-api-use-cases
+
+Blocked by: —
+
+Epic: EPIC-A
+Issue ID: AA-001
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Urgent,Backlog,2,"ads-agent, phase-a, meta, ops, blocked-on-client"
+[AA-002] Configure Meta env + Settings reports Marketing API connected,"As an ads-agent operator,
+I want META_* set in .env.local and Settings to show Meta connected,
+So that create_campaign(platform=meta) can call the Graph API.
+
+## Context
+env-status: meta requires META_ACCESS_TOKEN + META_AD_ACCOUNT_ID. Restart next after env change. Never commit .env.local.
+
+## Acceptance criteria
+1. Given META_ACCESS_TOKEN and META_AD_ACCOUNT_ID set, when Settings loads, then Meta Marketing API shows configured
+2. Given missing token, when Settings loads, then Meta shows disconnected
+3. Given .env.local changes, when git status is clean of secrets, then only .env.example docs may change
+
+## Spec / code links
+- ads-agent/lib/env-status.ts
+- ads-agent/app/(admin)/settings/page.tsx
+- ads-agent/.env.example
+
+Blocked by: AA-001
+
+Epic: EPIC-A
+Issue ID: AA-002
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Urgent,Backlog,2,"ads-agent, phase-a, meta"
+[AA-003] Smoke createMetaCampaign against sandbox account,"As an engineer,
+I want a scripted or REPL smoke of createMetaCampaign,
+So that Graph API auth/currency/objective errors surface before Desk UI dogfood.
+
+## Context
+createMetaCampaign({ name, dailyBudgetInr }) creates ACTIVE LINK_CLICKS campaign; daily_budget = round(dailyBudgetInr * 100). If sandbox currency ≠ INR semantics, fix conversion or rename field. Campaign shell only — no Ad Set/Ad.
+
+## Acceptance criteria
+1. Given configured Meta env, when createMetaCampaign runs, then a campaign id string is returned
+2. Given API error (permissions/currency), when smoke fails, then error message is actionable (not empty)
+3. Given success, when Ads API is queried, then campaign exists on sandbox account (Ads Manager may not show sandbox objects)
+
+## Spec / code links
+- ads-agent/lib/connectors/meta.ts
+- ads-agent/lib/connectors/meta.test.ts
+
+Blocked by: AA-002
+
+Epic: EPIC-A
+Issue ID: AA-003
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Urgent,Backlog,3,"ads-agent, phase-a, meta"
+[AA-004] Desk Approve create_campaign (platform=meta) end-to-end,"As an operator on Desk,
+I want to Approve a create_campaign proposal with platform meta,
+So that the executor creates a Meta campaign and marks the local campaign active with externalId.
+
+## Context
+Path: approve → scheduled/executing → worker:proposals / executeCreateCampaign → createMetaCampaign. Conversational Campaigns→New is Google-shaped; Meta dogfood may use seeded proposal or minimal UI path. Ensure AUTH_BYPASS or session works locally. DB search_path must include adsagent (lib/db/client.ts).
+
+## Acceptance criteria
+1. Given a pending create_campaign proposal with platform meta and dailyBudgetInr, when operator Approves and undo window completes, then proposal status is executed (or failed with visible error)
+2. Given success, when campaigns table is read, then externalId matches Meta campaign id
+3. Given Reticle or manual check, when flow completes, then no 500 from metering/search_path
+
+## Spec / code links
+- ads-agent/lib/executor/execute.ts
+- ads-agent/components/desk/DeskPage.tsx
+- docs/superpowers/specs/2026-09-20-ads-agent-agentic-desk-design.md
+
+Blocked by: AA-003
+
+Epic: EPIC-A
+Issue ID: AA-004
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Urgent,Backlog,5,"ads-agent, phase-a, meta, desk, executor"
+[AA-005] Fix Meta budget currency units for sandbox account,"As an engineer,
+I want daily budget mapping correct for the sandbox account currency,
+So that Meta accepts create/update budget without silent wrong amounts.
+
+## Context
+Field is named dailyBudgetInr but Meta expects minor units in account currency. Document or implement currency-aware conversion; add unit tests.
+
+## Acceptance criteria
+1. Given sandbox currency documented, when createMetaCampaign sets daily_budget, then value matches Meta minor-unit rules for that currency
+2. Given unit tests, when budget helper runs, then INR and non-INR cases are covered or explicitly unsupported with clear error
+
+## Spec / code links
+- ads-agent/lib/connectors/meta.ts
+
+Blocked by: AA-003
+
+Epic: EPIC-A
+Issue ID: AA-005
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,3,"ads-agent, phase-a, meta"
+[AA-006] Write Meta sandbox dogfood runbook for agency,"As an agency engineer,
+I want a short runbook for Meta dogfood,
+So that onboarding does not depend on tribal knowledge.
+
+## Context
+Mirror Google dogfood checklist in README. Note sandbox Insights limitations (fetchMetaPerformance may be empty).
+
+## Acceptance criteria
+1. Given README or docs/agency-handoff, when engineer follows steps 1–N, then they reach executed Meta create without undocumented steps
+2. Given Insights limitation, when runbook is read, then empty performance is called out as expected for sandbox
+
+## Spec / code links
+- ads-agent/README.md
+
+Blocked by: AA-004
+
+Epic: EPIC-A
+Issue ID: AA-006
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,2,"ads-agent, phase-a, meta, docs"
+[AA-010] Client: regenerate GOOGLE_ADS_REFRESH_TOKEN (fix invalid_grant),"As the client operator,
+I want a valid Google Ads OAuth refresh token for the test customer,
+So that MCP read/write surfaces can authenticate.
+
+## Context
+OpenMemory/prior work: live dogfood blocked on invalid_grant. Manual OAuth playground / google-ads-api helper. Deliver GOOGLE_ADS_REFRESH_TOKEN (+ confirm CUSTOMER_ID / LOGIN_CUSTOMER_ID) out-of-band.
+
+## Acceptance criteria
+1. Given new refresh token in .env.local, when smoke:google-ads-surfaces runs, then authenticated probe succeeds
+2. Given invalid_grant previously, when token rotated, then error no longer appears in MCP logs
+
+## Spec / code links
+- ads-agent/README.md#google-ads-api
+- docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md
+
+Blocked by: —
+
+Epic: EPIC-B
+Issue ID: AA-010
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,2,"ads-agent, phase-b, google-ads, ops, blocked-on-client"
+[AA-011] Verify Google Ads dual MCP surfaces (read :8766 / write :8769),"As an engineer,
+I want read and write Google Ads MCP containers healthy,
+So that chat cannot mutate and executor can.
+
+## Context
+docker compose up -d bifrost google-ads-mcp google-ads-mcp-write; npm run smoke:google-ads-surfaces. Write tools must not appear on read surface.
+
+## Acceptance criteria
+1. Given compose up, when smoke:google-ads-surfaces runs, then both surfaces pass
+2. Given read surface tool list, when inspected, then mutate tools are absent
+3. Given write URL, when executor path is configured, then GOOGLE_ADS_MCP_WRITE_URL points at :8769
+
+## Spec / code links
+- ads-agent/README.md#google-ads-mcp-server
+- docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md
+
+Blocked by: AA-010
+
+Epic: EPIC-B
+Issue ID: AA-011
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,3,"ads-agent, phase-b, google-ads, mcp"
+[AA-012] Google Ads dogfood: New Campaign → Proposal → Approve → test customer,"As an operator,
+I want the documented Google dogfood checklist to succeed on a test customer,
+So that gate integrity is proven beyond unit tests.
+
+## Context
+Campaigns → New Campaign → draft ready (finalUrl required) → Create Proposal → Approve → worker:proposals after undo → campaign in Google Ads UI or failed with visible error. Run npm run worker:proposals.
+
+## Acceptance criteria
+1. Given ready draft with https finalUrl, when Create Proposal + Approve completes, then proposal reaches executed or failed with visible error
+2. Given executed, when Google Ads test account is checked, then Search campaign exists
+3. Given isDraftReady gate, when finalUrl empty, then draft cannot be proposed as ready
+
+## Spec / code links
+- ads-agent/README.md
+- docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md
+- docs/superpowers/plans/2026-09-18-ads-agent-gate-integrity-dogfood.md
+
+Blocked by: AA-011
+
+Epic: EPIC-B
+Issue ID: AA-012
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,8,"ads-agent, phase-b, google-ads, dogfood"
+[AA-013] Verify Hermes campaign origin persists SetupCard draft fields,"As an operator using Hermes mode on campaign chat,
+I want SetupCard replies to update campaign_drafts,
+So that Hermes parity with Bifrost draft persistence holds (D5).
+
+## Context
+POST /api/hermes/chat origin=campaign requires draftId. persistCampaignDraftFromHermesReply parses SetupCard.
+
+## Acceptance criteria
+1. Given Hermes campaign chat with draftId, when SetupCard streams complete, then draft fields persist and isDraftReady can become true
+2. Given missing draftId, when origin=campaign, then API returns 400
+
+## Spec / code links
+- ads-agent/lib/hermes/persist-campaign-draft.ts
+- ads-agent/lib/decision-engine/hermes-chat.ts
+- docs/superpowers/specs/2026-09-18-ads-agent-gate-integrity-dogfood-design.md
+
+Blocked by: AA-011
+
+Epic: EPIC-B
+Issue ID: AA-013
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,5,"ads-agent, phase-b, hermes, google-ads"
+[AA-020] Reticle: save Desk Approve/Reject flows with intent,"As an engineer,
+I want Reticle saved flows for Desk Approve and Reject,
+So that regressions are caught with act_and_wait verdicts (not screenshots alone).
+
+## Context
+Prior Hermes Ask→send proved BANANA_42. Desk Approve needs net-grade until clauses. Prefer reticle_act_and_wait with until net/route/text.
+
+## Acceptance criteria
+1. Given Desk with pending proposal, when Approve is driven with until, then verified is yes (not no-fault/unknown)
+2. Given Reject flow, when driven, then proposal status updates and verdict passes
+3. Given intent on saved flow, when gate runs after related file changes, then flow is listed
+
+## Spec / code links
+- ads-agent/.reticle.json
+- RETICLE.md
+- docs/superpowers/specs/2026-09-20-ads-agent-agentic-desk-design.md
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-020
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,5,"ads-agent, phase-c, desk, reticle"
+[AA-021] Reticle: register store so state channel is watched,"As an engineer verifying Copilot/Desk,
+I want a registered Reticle store,
+So that stateDiffs are real (not stateUnwatched).
+
+## Context
+Prior sessions reported no-store-registered. Complete src/reticle-dev or app/reticle-dev registration for CopilotProvider/desk-relevant state.
+
+## Acceptance criteria
+1. Given reticle_look action=state, when session connected, then named store keys appear
+2. Given Copilot open/send, when act_and_wait uses state until, then verdict can depend on store
+
+## Spec / code links
+- ads-agent/app/reticle-dev.tsx
+- ads-agent/components/copilot/CopilotProvider.tsx
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-021
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,3,"ads-agent, phase-c, reticle"
+[AA-022] Ensure app-data-mcp is documented as required for Hermes,"As an agency engineer,
+I want compose/docs to make app-data-mcp :8767 mandatory for Hermes,
+So that MCP parking does not recur as a silent failure.
+
+## Context
+Hermes config points app_data at host.docker.internal:8767. Without container, tools park. Fix: docker compose up -d app-data-mcp; restart hermes.
+
+## Acceptance criteria
+1. Given README local setup, when Hermes section is followed, then app-data-mcp start is explicit
+2. Given compose, when app-data-mcp is up, then :8767 answers MCP HTTP
+
+## Spec / code links
+- ads-agent/docker-compose.yml
+- ads-agent/README.md
+- ads-agent/lib/openui/hermes-strip.ts
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-022
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,2,"ads-agent, phase-c, hermes, mcp, docs"
+[AA-023] Hermes mid-stream narration UX polish,"As an operator in Hermes mode,
+I want less thinking prose during stream (or clearer tool progress only),
+So that the chat does not flash walls of narration before the final strip.
+
+## Context
+Done path strips via hermes-strip + normalizeOpenUiResponse. Mid-stream still shows deltas. Options: stronger client strip on deltas; suppress until root=/short final; keep tool_progress only.
+
+## Acceptance criteria
+1. Given Hermes simple prompt, when streaming, then UI does not permanently leave thinking prose as the final bubble
+2. Given OpenUI root= reply, when stream completes, then Renderer shows valid component when looksValidOpenUiLang passes
+3. Given unit tests, when stripHermesStepNarration cases run, then existing + new cases pass
+
+## Spec / code links
+- ads-agent/lib/openui/hermes-strip.ts
+- ads-agent/components/copilot/CopilotPanel.tsx
+- ads-agent/lib/decision-engine/hermes-chat.ts
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-023
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,5,"ads-agent, phase-c, hermes, openui"
+[AA-024] Quiet OpenUI auto-mount / empty CRM activity Desk polish,"As an operator,
+I want fewer noisy empty/dev overlays on Desk,
+So that Mission Control reads as production-ready.
+
+## Context
+OpenMemory residual: OpenUI auto-mount in dev, empty CRM/AI activity, Cost/Enquiry em-dash. Prefer minimal diffs; do not redesign Desk IA (Alt C locked).
+
+## Acceptance criteria
+1. Given production NODE_ENV, when Desk loads, then OpenUI auto-mount does not block primary Approve CTA
+2. Given empty CRM activity, when Desk glance renders, then empty state is intentional copy (not broken layout)
+
+## Spec / code links
+- docs/superpowers/specs/2026-09-20-ads-agent-agentic-desk-design.md
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-024
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Low,Backlog,3,"ads-agent, phase-c, desk, ux"
+[AA-025] Regression: adsagent search_path + metering Approve path,"As an engineer,
+I want CI/local tests to lock search_path pin,
+So that Approve/Copilot do not regress to 500/unavailable on consolidated DB.
+
+## Context
+Pool pins ag_catalog,adsagent,public. Without adsagent, org_balances metering fails.
+
+## Acceptance criteria
+1. Given client.search-path.test, when vitest runs, then adsagent is asserted in search_path
+2. Given Approve on local Desk with AUTH_BYPASS, when metering runs, then no relation org_balances does not exist
+
+## Spec / code links
+- ads-agent/lib/db/client.ts
+- ads-agent/lib/db/client.search-path.test.ts
+
+Blocked by: —
+
+Epic: EPIC-C
+Issue ID: AA-025
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",High,Backlog,2,"ads-agent, phase-c, metering, db"
+[AA-030] Spike: Meta Ads hosted MCP (mcp.facebook.com/ads),"As an architect,
+I want a spike note on Meta hosted MCP vs facebook-nodejs-business-sdk,
+So that we can choose the long-term Meta integration shape.
+
+## Context
+README targets StreamableHTTPClientTransport + OAuth like Twenty; not implemented. Keep createMetaCampaign working meanwhile.
+
+## Acceptance criteria
+1. Given spike doc in docs/ or agency-handoff, when reviewed, then it lists auth model, tool count, and migrate/no-migrate recommendation
+2. Given spike, when complete, then no production cutover without separate story
+
+## Spec / code links
+- ads-agent/README.md
+
+Blocked by: AA-004
+
+Epic: EPIC-D
+Issue ID: AA-030
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Low,Backlog,5,"ads-agent, phase-d, meta, mcp, spike"
+[AA-031] Expand Meta connector beyond campaign shell (Ad Set / Ad),"As an operator,
+I want Meta create_campaign to produce a runnable structure (or honest PAUSED ad set),
+So that sandbox dogfood resembles Ads Manager campaigns.
+
+## Context
+Current API creates Campaign only. Needs Page, creative, targeting — product decision required. Prefer PAUSED children in sandbox.
+
+## Acceptance criteria
+1. Given product decision recorded, when create path runs, then either full structure is created or UI labels campaign-only honestly
+2. Given tests, when Meta connector expands, then unit tests cover new calls without live network by default
+
+## Spec / code links
+- ads-agent/lib/connectors/meta.ts
+- docs/superpowers/specs/2026-08-03-ads-automation-agent-design.md
+
+Blocked by: AA-004, AA-005
+
+Epic: EPIC-D
+Issue ID: AA-031
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,13,"ads-agent, phase-d, meta"
+[AA-032] Meta-aware campaign draft chat (parity with Google SetupCard),"As an operator,
+I want conversational draft for Meta objectives,
+So that Meta is not Desk-seed-only.
+
+## Context
+Current Campaigns→New is Google Search/SetupCard shaped. Large feature; after dogfood.
+
+## Acceptance criteria
+1. Given Meta platform selected, when chat drafts, then fields match Meta connector requirements
+2. Given proposal created, when Approve runs, then executor Meta path is used
+
+## Spec / code links
+- docs/superpowers/specs/2026-08-03-ads-agent-campaign-creation-design.md
+
+Blocked by: AA-031
+
+Epic: EPIC-D
+Issue ID: AA-032
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Low,Backlog,13,"ads-agent, phase-d, meta, openui"
+[AA-033] Fix Cost/Enquiry em-dash and related Settings/Reports UI nits,"As an operator,
+I want numeric/empty metrics to render cleanly,
+So that Reports/Settings do not show broken em-dashes.
+
+## Context
+OpenMemory residual UI issue.
+
+## Acceptance criteria
+1. Given missing Cost/Enquiry data, when UI renders, then empty state is intentional (em dash or N/A), not layout break
+2. Given Reticle or screenshot check, when compared to before, then nit is resolved
+
+## Spec / code links
+- —
+
+Blocked by: —
+
+Epic: EPIC-D
+Issue ID: AA-033
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Low,Backlog,2,"ads-agent, phase-d, ux"
+[AA-034] Document Hermes profiles / agent wake ops for agency (S10–S14),"As an agency engineer,
+I want a pointer index to Hermes agent profiles and wake scripts,
+So that advanced automation is optional, not mysterious.
+
+## Context
+Leads/Kanban/performance agents exist in repo/docs; out of Phase A–C critical path. Index + danger notes (HERMES_WAKE, no unsupervised execute).
+
+## Acceptance criteria
+1. Given agency-handoff README or DOCX appendix, when read, then links to S10/S12/S14 runbooks exist
+2. Given policy, when documented, then approval gate / no unsupervised execute is restated
+
+## Spec / code links
+- docs/superpowers/specs/2026-08-13-s10-leads-agent-runbook.md
+- docs/superpowers/plans/2026-08-13-s10-leads-agent.md
+
+Blocked by: —
+
+Epic: EPIC-D
+Issue ID: AA-034
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Low,Backlog,3,"ads-agent, phase-d, hermes, docs"
+[AA-035] AUTH_BYPASS hardening note + production guard verification,"As a security-conscious operator,
+I want AUTH_BYPASS verified inert in production,
+So that local convenience cannot leak to prod.
+
+## Context
+isAuthBypassEnabled requires NODE_ENV !== production. Agency uses AUTH_BYPASS locally only.
+
+## Acceptance criteria
+1. Given NODE_ENV=production and AUTH_BYPASS=1, when isAuthBypassEnabled runs, then false
+2. Given unit tests in dal/middleware, when vitest runs, then production guard cases pass
+
+## Spec / code links
+- ads-agent/lib/auth/dev-bypass.ts
+- ads-agent/middleware.ts
+
+Blocked by: —
+
+Epic: EPIC-D
+Issue ID: AA-035
+Baseline: b06aba4 (b06aba4f97786c7c28729e508e265a998d3af0d6)",Medium,Backlog,2,"ads-agent, phase-d, auth, security"
