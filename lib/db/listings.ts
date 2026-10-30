@@ -454,7 +454,7 @@ export async function listRecentlyAcceptedEnrichmentIds(
 
   const { rows } = await getPool().query<{ listing_id: string; created_at: Date }>(
     `SELECT DISTINCT ON (listing_id) listing_id, created_at
-     FROM public.listing_enrichment_log
+     FROM listings.listing_enrichment_log
      WHERE accepted = true
        AND created_at >= now() - ($1 * interval '1 day')
      ORDER BY listing_id, created_at DESC`,
@@ -516,7 +516,7 @@ export async function insertEnrichmentLog(row: {
   payload: unknown;
 }): Promise<void> {
   await getPool().query(
-    `INSERT INTO public.listing_enrichment_log (listing_id, pass, accepted, payload)
+    `INSERT INTO listings.listing_enrichment_log (listing_id, pass, accepted, payload)
      VALUES ($1, $2, $3, $4::jsonb)`,
     [row.listingId, row.pass, row.accepted, JSON.stringify(row.payload ?? {})],
   );

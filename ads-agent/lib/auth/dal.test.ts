@@ -54,6 +54,10 @@ describe("role vocabulary", () => {
     jwtVerifyMock.mockResolvedValue({
       payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" },
     });
+    query.mockImplementation(async (sql: string) => {
+      if (String(sql).includes("FROM orgs WHERE id")) return { rows: [{ id: "org-1" }] };
+      return { rows: [] };
+    });
     await getSession();
     const usersInsert = query.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO users"));
     expect(usersInsert, "expected a users upsert").toBeDefined();
@@ -103,14 +107,27 @@ describe("getSession", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("JIT-provisions shadow orgs/users rows for an active member", async () => {
+  it("does not mint an internal org for an unprovisioned JWT org", async () => {
     cookieStore.get.mockReturnValue({ value: "good-token" });
     jwtVerifyMock.mockResolvedValue({
       payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" },
     });
-    // SELECT finds nothing → INSERT path
+    query.mockResolvedValueOnce({ rows: [] });
+    const session = await getSession();
+    expect(session).toEqual({ userId: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" });
+    expect(query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO orgs"))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO users"))).toBe(false);
+  });
+
+  it("JIT-provisions the platform org and its user when that org row is missing", async () => {
+    process.env.PLATFORM_ORG_ID = "org-1";
+    cookieStore.get.mockReturnValue({ value: "good-token" });
+    jwtVerifyMock.mockResolvedValue({
+      payload: { sub: "u-1", email: "a@x.com", orgId: "org-1", role: "operator" },
+    });
     query
-      .mockResolvedValueOnce({ rows: [] }) // orgs insert
+      .mockResolvedValueOnce({ rows: [] }) // org select
+      .mockResolvedValueOnce({ rows: [] }) // org insert
       .mockResolvedValueOnce({ rows: [] }) // users select
       .mockResolvedValueOnce({ rows: [] }) // users insert
       .mockResolvedValueOnce({ rows: [] }); // cron settings
@@ -121,6 +138,7 @@ describe("getSession", () => {
       expect.stringContaining("INSERT INTO users"),
       expect.arrayContaining(["u-1", "org-1", "a@x.com"]),
     );
+    delete process.env.PLATFORM_ORG_ID;
   });
 
   it("reuses the existing users.id when email already owns a shadow row", async () => {
@@ -129,7 +147,7 @@ describe("getSession", () => {
       payload: { sub: "new-sub", email: "a@x.com", orgId: "org-1", role: "admin" },
     });
     query
-      .mockResolvedValueOnce({ rows: [] }) // orgs
+      .mockResolvedValueOnce({ rows: [{ id: "org-1" }] }) // org already provisioned
       .mockResolvedValueOnce({ rows: [{ id: "existing-id" }] }) // users select by id/email
       .mockResolvedValueOnce({ rows: [] }) // users update
       .mockResolvedValueOnce({ rows: [] }); // cron

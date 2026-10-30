@@ -251,15 +251,22 @@ export async function scoreListingsAgainstQuery(
 
   try {
     await ensureAgeSession(client);
+    // AGE 1.8 throws "graph with oid … does not exist" on type(r) and label(r).
+    // Typed patterns with a literal relationship name do not.
+    const ids = cypherStringList(uniqueListingIds);
+    const branches = (Object.keys(EDGE_TO_BUCKET) as Array<keyof typeof EDGE_TO_BUCKET>).map(
+      (rel) =>
+        `MATCH (l:Listing)-[:${rel}]->(e)
+        WHERE l.id IN ${ids}
+        RETURN l.id AS listing_id, '${rel}' AS rel, e.name AS name`,
+    );
     const result = await client.query<{
       listing_id: unknown;
       rel: unknown;
       name: unknown;
     }>(
-      `SELECT * FROM cypher('gentle_space', $$ 
-        MATCH (l:Listing)-[r]->(e)
-        WHERE l.id IN ${cypherStringList(uniqueListingIds)}
-        RETURN l.id AS listing_id, type(r) AS rel, e.name AS name
+      `SELECT * FROM cypher('gentle_space', $$
+        ${branches.join("\n        UNION ALL\n        ")}
       $$) AS (listing_id agtype, rel agtype, name agtype)`,
     );
 

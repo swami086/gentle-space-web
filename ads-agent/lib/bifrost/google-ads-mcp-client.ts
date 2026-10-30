@@ -18,7 +18,12 @@ function urlFor(name: string, surface?: "read" | "write"): string {
 
 async function withClient<T>(mcpUrl: string, fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ name: "ads-agent", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
+  const token = process.env.GOOGLE_ADS_MCP_TOKEN?.trim();
+  const headers: Record<string, string> = {};
+  if (token && mcpUrl === GOOGLE_ADS_MCP_WRITE_URL) headers.Authorization = `Bearer ${token}`;
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(mcpUrl), { requestInit: { headers } }),
+  );
   try {
     return await fn(client);
   } finally {

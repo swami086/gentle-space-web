@@ -193,9 +193,10 @@ describe("scoreListingsAgainstQuery", () => {
         budgetSignals: ["under_15k"],
       },
     });
-    expect(query).toHaveBeenLastCalledWith(
-      expect.stringContaining(`l.id IN ['listing-1', 'listing-2']`),
-    );
+    const sql = String(query.mock.calls.at(-1)?.[0]);
+    expect(sql).toContain(`l.id IN ['listing-1', 'listing-2']`);
+    expect(sql).toContain("[:IN_AREA]");
+    expect(sql).not.toContain("type(r)");
   });
 
   it("returns an empty map for an empty query", async () => {

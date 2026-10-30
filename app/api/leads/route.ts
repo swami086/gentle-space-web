@@ -87,21 +87,27 @@ export async function POST(request: Request) {
     tier: qualification.tier,
   });
 
-  const posthog = getPostHogClient();
-  if (posthog) {
-    const { distinctId, sessionId } = readPostHogRequestContext(request);
-    posthog.capture({
-      distinctId: distinctId ?? captured.enquiryId,
-      event: "lead_created",
-      properties: {
-        need: payload.need,
-        qualification_tier: qualification.tier,
-        has_property_context: Boolean(payload.propertyUrl),
-        answered_detail_count: Object.keys(payload.step2Answers ?? {}).length,
-        ...(sessionId ? { $session_id: sessionId } : {}),
-      },
-    });
-    await posthog.flush();
+  // The enquiry row is already committed. A missing PostHog key throws in
+  // non-production; that must not turn a saved lead into a 500.
+  try {
+    const posthog = getPostHogClient();
+    if (posthog) {
+      const { distinctId, sessionId } = readPostHogRequestContext(request);
+      posthog.capture({
+        distinctId: distinctId ?? captured.enquiryId,
+        event: "lead_created",
+        properties: {
+          need: payload.need,
+          qualification_tier: qualification.tier,
+          has_property_context: Boolean(payload.propertyUrl),
+          answered_detail_count: Object.keys(payload.step2Answers ?? {}).length,
+          ...(sessionId ? { $session_id: sessionId } : {}),
+        },
+      });
+      await posthog.flush();
+    }
+  } catch (err) {
+    console.error("[leads] posthog capture skipped:", err instanceof Error ? err.message : err);
   }
 
   // `crm: "pending"` keeps the existing response shape the form already reads,

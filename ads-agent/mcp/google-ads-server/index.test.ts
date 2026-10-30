@@ -14,7 +14,7 @@ const toolsMock = vi.hoisted(() => ({
 }));
 vi.mock("./tools", () => toolsMock);
 
-import { buildGoogleAdsMcpServer } from "./index";
+import { buildGoogleAdsMcpServer, googleAdsWriteAuthorized } from "./index";
 import { resolveGoogleAdsMcpPort, resolveGoogleAdsMcpSurface } from "./surface";
 
 beforeEach(() => {
@@ -182,5 +182,23 @@ describe("resolveGoogleAdsMcpBind", () => {
     process.env.GOOGLE_ADS_MCP_BIND = " 0.0.0.0 ";
     const { resolveGoogleAdsMcpBind } = await import("./index");
     expect(resolveGoogleAdsMcpBind()).toBe("0.0.0.0");
+  });
+});
+
+describe("googleAdsWriteAuthorized", () => {
+  const original = process.env.GOOGLE_ADS_MCP_TOKEN;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.GOOGLE_ADS_MCP_TOKEN;
+    else process.env.GOOGLE_ADS_MCP_TOKEN = original;
+  });
+
+  it("rejects when the token is unset or the bearer does not match", () => {
+    delete process.env.GOOGLE_ADS_MCP_TOKEN;
+    expect(googleAdsWriteAuthorized("Bearer secret")).toBe(false);
+    process.env.GOOGLE_ADS_MCP_TOKEN = "secret";
+    expect(googleAdsWriteAuthorized(undefined)).toBe(false);
+    expect(googleAdsWriteAuthorized("Bearer other")).toBe(false);
+    expect(googleAdsWriteAuthorized("Bearer secret")).toBe(true);
   });
 });

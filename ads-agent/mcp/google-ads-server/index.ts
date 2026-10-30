@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import {
@@ -54,6 +55,17 @@ export function resolveGoogleAdsMcpAllowedHosts(): string[] {
 export function resolveGoogleAdsMcpBind(): string {
   const raw = process.env.GOOGLE_ADS_MCP_BIND?.trim();
   return raw && raw.length > 0 ? raw : "localhost";
+}
+
+/** Write surface refuses every request unless GOOGLE_ADS_MCP_TOKEN matches Authorization: Bearer. */
+export function googleAdsWriteAuthorized(authorization: string | undefined): boolean {
+  const expected = process.env.GOOGLE_ADS_MCP_TOKEN?.trim() ?? "";
+  if (!expected) return false;
+  const presented = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 function registerReadTools(server: McpServer): void {
@@ -185,6 +197,11 @@ export async function startGoogleAdsMcpServer(port = resolveGoogleAdsMcpPort()):
 
   createServer((req, res) => {
     if (!validateHost(req, res) || !validateOrigin(req, res)) return;
+    if (surface === "write" && !googleAdsWriteAuthorized(req.headers.authorization)) {
+      const missing = !process.env.GOOGLE_ADS_MCP_TOKEN?.trim();
+      res.writeHead(missing ? 503 : 401).end(missing ? "GOOGLE_ADS_MCP_TOKEN is not set" : "unauthorized");
+      return;
+    }
     if (req.url !== "/mcp" && !req.url?.startsWith("/mcp?")) {
       res.writeHead(404).end();
       return;

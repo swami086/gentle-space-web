@@ -35,11 +35,19 @@ function getJwks() {
 async function ensureShadowRows(session: Session): Promise<string | null> {
   if (!session.orgId) return null; // pending users have no org yet, nothing to shadow
   const pool = getPool();
-  await pool.query(
-    `INSERT INTO orgs (id, name, kind, slug) VALUES ($1, 'Gentle Space (internal)', 'internal', 'gentle-space')
-     ON CONFLICT (id) DO UPDATE SET slug = COALESCE(orgs.slug, EXCLUDED.slug)`,
-    [session.orgId],
-  );
+  const platformOrgId = process.env.PLATFORM_ORG_ID?.trim() ?? "";
+  const existingOrg = await pool.query<{ id: string }>(`SELECT id FROM orgs WHERE id = $1`, [
+    session.orgId,
+  ]);
+  if (!existingOrg.rows[0]) {
+    // Staff provision external orgs. A JWT must not mint a new internal org.
+    if (!platformOrgId || session.orgId !== platformOrgId) return null;
+    await pool.query(
+      `INSERT INTO orgs (id, name, kind, slug) VALUES ($1, 'Gentle Space (internal)', 'internal', 'gentle-space')
+       ON CONFLICT (id) DO UPDATE SET slug = COALESCE(orgs.slug, EXCLUDED.slug)`,
+      [session.orgId],
+    );
+  }
   const existing = await pool.query<{ id: string }>(
     `SELECT id FROM users WHERE id = $1 OR email = $2 ORDER BY (id = $1) DESC LIMIT 1`,
     [session.userId, session.email],

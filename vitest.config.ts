@@ -13,6 +13,6 @@ export default defineConfig({
     // .worktrees/ holds full nested checkouts used for isolated parallel task
     // execution; without this exclude, running tests from the main checkout
     // while one is open picks up its test files too, as if they were ours.
-    exclude: [...configDefaults.exclude, ".worktrees/**"],
+    exclude: [...configDefaults.exclude, ".worktrees/**", "ads-agent/**", "auth-service/**"],
   },
 });

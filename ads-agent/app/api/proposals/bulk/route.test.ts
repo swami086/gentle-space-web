@@ -12,6 +12,10 @@ const {
   scheduleProposal,
   decideProposal,
   getOrgSettings,
+  getCampaignById,
+  getOrgBalance,
+  getConnectorStatus,
+  probeGoogleAdsReadMcp,
   guard,
   randomUUID,
 } = vi.hoisted(() => ({
@@ -19,13 +23,21 @@ const {
   scheduleProposal: vi.fn(),
   decideProposal: vi.fn(),
   getOrgSettings: vi.fn(),
+  getCampaignById: vi.fn(),
+  getOrgBalance: vi.fn(),
+  getConnectorStatus: vi.fn(),
+  probeGoogleAdsReadMcp: vi.fn(),
   guard: vi.fn(),
   randomUUID: vi.fn(() => BATCH_ID),
 }));
 
 vi.mock("node:crypto", () => ({ randomUUID }));
 vi.mock("@/lib/db/proposals", () => ({ getProposalById, scheduleProposal, decideProposal }));
+vi.mock("@/lib/db/campaigns", () => ({ getCampaignById }));
 vi.mock("@/lib/db/org-settings", () => ({ getOrgSettings }));
+vi.mock("@/lib/metering/ledger", () => ({ getOrgBalance }));
+vi.mock("@/lib/env-status", () => ({ getConnectorStatus }));
+vi.mock("@/lib/connectors/google-ads-health", () => ({ probeGoogleAdsReadMcp }));
 vi.mock("@/lib/auth/guard", () => ({ guard }));
 
 import { POST } from "./route";
@@ -72,6 +84,10 @@ beforeEach(() => {
     undoWindowSeconds: 120,
     approvalThresholdInr: null,
   });
+  getCampaignById.mockResolvedValue(null);
+  getOrgBalance.mockResolvedValue(100);
+  getConnectorStatus.mockReturnValue({ googleAds: true, meta: true });
+  probeGoogleAdsReadMcp.mockResolvedValue({ configured: true, reachable: true });
 });
 
 describe("POST /api/proposals/bulk", () => {

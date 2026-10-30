@@ -104,7 +104,7 @@ describe("applyListingEnrichment", () => {
 });
 
 describe("insertEnrichmentLog", () => {
-  it("inserts into public.listing_enrichment_log", async () => {
+  it("inserts into listings.listing_enrichment_log", async () => {
     process.env.DATABASE_URL = "postgres://local/test";
     query.mockResolvedValueOnce({ rowCount: 1 });
 
@@ -116,7 +116,7 @@ describe("insertEnrichmentLog", () => {
     });
 
     const sql = String(query.mock.calls[0][0]);
-    expect(sql).toContain("public.listing_enrichment_log");
+    expect(sql).toContain("listings.listing_enrichment_log");
     expect(query.mock.calls[0][1][0]).toBe("abc");
     expect(query.mock.calls[0][1][3]).toBe(JSON.stringify({ locality: "HSR Layout" }));
   });

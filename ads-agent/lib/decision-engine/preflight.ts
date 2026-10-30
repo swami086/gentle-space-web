@@ -1,3 +1,5 @@
+import { executableProposalKind } from "@/lib/proposals/normalize-kind";
+
 export type PreflightCheckId =
   | "budget_cap"
   | "connector_health"
@@ -207,11 +209,13 @@ function checkKeywordOverlap(input: PreflightInput): PreflightCheck | null {
 }
 
 export function runPreflight(input: PreflightInput): PreflightResult {
+  // Agent rows use dotted kinds (`campaign.budget_change`). Checks compare snake_case.
+  const normalized = { ...input, kind: executableProposalKind(input.kind) };
   const checks = [
-    checkBudgetCap(input),
-    checkConnectorHealth(input),
-    checkCreditBalance(input),
-    checkKeywordOverlap(input),
+    checkBudgetCap(normalized),
+    checkConnectorHealth(normalized),
+    checkCreditBalance(normalized),
+    checkKeywordOverlap(normalized),
   ].filter((check): check is PreflightCheck => check !== null);
 
   const ok = checks.every((check) => check.ok || check.severity !== "block");

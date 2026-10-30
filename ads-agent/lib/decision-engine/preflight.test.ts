@@ -27,6 +27,18 @@ describe("runPreflight", () => {
       expect(result.ok).toBe(false);
     });
 
+    it("blocks dotted agent kinds the same way as snake_case", () => {
+      const result = runPreflight(
+        base({
+          kind: "campaign.budget_change",
+          payload: { campaignId: "c1", platform: "google", newDailyBudgetInr: 1500 },
+          orgDailyBudgetCapInr: 1000,
+        }),
+      );
+      expect(result.checks.find((c) => c.id === "budget_cap")).toMatchObject({ ok: false, severity: "block" });
+      expect(result.ok).toBe(false);
+    });
+
     it("passes budget_change when proposed daily budget is within cap", () => {
       const result = runPreflight(
         base({

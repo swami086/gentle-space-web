@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { guard } from "@/lib/auth/guard";
+import { probeGoogleAdsReadMcp } from "@/lib/connectors/google-ads-health";
 import { partitionBulkIds, type BulkItemResult } from "@/lib/decision-engine/bulk-decide";
+import { runPreflight } from "@/lib/decision-engine/preflight";
+import { getCampaignById } from "@/lib/db/campaigns";
 import { getOrgSettings } from "@/lib/db/org-settings";
 import { decideProposal, getProposalById, scheduleProposal } from "@/lib/db/proposals";
+import { getConnectorStatus } from "@/lib/env-status";
+import { getOrgBalance } from "@/lib/metering/ledger";
 
 type BulkBody = { action?: unknown; ids?: unknown };
 
@@ -43,8 +48,21 @@ export async function POST(req: Request) {
   const batchId = body.action === "approve" ? randomUUID() : null;
 
   let undoWindowSeconds = 0;
+  let approvalThresholdInr: number | null = null;
+  let creditBalance = 0;
+  let connectors = { googleAds: false, meta: false };
+  let googleAdsReachable = false;
   if (body.action === "approve") {
-    undoWindowSeconds = (await getOrgSettings(scope)).undoWindowSeconds;
+    const [settings, balance, health] = await Promise.all([
+      getOrgSettings(scope),
+      getOrgBalance(scope.orgId),
+      probeGoogleAdsReadMcp({ timeoutMs: 2000 }),
+    ]);
+    undoWindowSeconds = settings.undoWindowSeconds;
+    approvalThresholdInr = settings.approvalThresholdInr;
+    creditBalance = balance;
+    connectors = getConnectorStatus();
+    googleAdsReachable = health.configured && health.reachable;
   }
 
   for (const id of partitioned.ok) {
@@ -60,6 +78,26 @@ export async function POST(req: Request) {
       }
 
       if (body.action === "approve") {
+        const campaign = proposal.campaignId ? await getCampaignById(scope, proposal.campaignId) : null;
+        const payload =
+          proposal.payload.platform == null && campaign?.platform
+            ? { ...proposal.payload, platform: campaign.platform }
+            : proposal.payload;
+        const preflight = runPreflight({
+          kind: proposal.kind,
+          payload,
+          orgDailyBudgetCapInr: approvalThresholdInr,
+          creditBalance,
+          connectors: {
+            googleAds: connectors.googleAds,
+            googleAdsReachable,
+            meta: connectors.meta,
+          },
+        });
+        if (!preflight.ok) {
+          results.push({ id, ok: false, error: "preflight_failed" });
+          continue;
+        }
         const scheduled = await scheduleProposal(scope, id, {
           decidedBy: userId,
           decidedVia: "bulk",

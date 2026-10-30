@@ -96,6 +96,8 @@ services:
       GOOGLE_ADS_MCP_PORT: "8769"
       GOOGLE_ADS_MCP_ALLOWED_HOSTS: localhost,127.0.0.1,google-ads-mcp-write,host.docker.internal
       GOOGLE_ADS_MCP_BIND: "0.0.0.0"
+      # Required. Write tools 503 until this is set (same value the ads-agent caller sends).
+      GOOGLE_ADS_MCP_TOKEN: ${GOOGLE_ADS_MCP_TOKEN:-}
     ports:
       - "8769:8769"
     restart: unless-stopped
