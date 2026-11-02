@@ -6,7 +6,23 @@ export type InboundRouteResult =
   | { action: "opt_out" }
   | { action: "block_new_proposals" }
   | { action: "allow_proposals" }
+  | {
+      action: "create_listing";
+      dailyMajor: number;
+      sector: "residential" | "commercial_office";
+      goal: string;
+    }
   | { action: "ignore" };
+
+/** Unset or different from the webhook's business phone number id → renter enquiry path. */
+export function isConsultantServiceNumber(
+  phoneNumberId: string | null,
+  configured: string | undefined,
+): boolean {
+  const expected = configured?.trim();
+  if (!expected || !phoneNumberId) return false;
+  return phoneNumberId === expected;
+}
 
 export function routeInbound(input: { orgId: string; text: string }): InboundRouteResult {
   void input.orgId;
@@ -23,6 +39,13 @@ export function routeInbound(input: { orgId: string; text: string }): InboundRou
       return { action: "block_new_proposals" };
     case "resume":
       return { action: "allow_proposals" };
+    case "create":
+      return {
+        action: "create_listing",
+        dailyMajor: parsed.dailyMajor,
+        sector: parsed.sector,
+        goal: parsed.goal,
+      };
     default:
       return { action: "ignore" };
   }

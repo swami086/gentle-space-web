@@ -38,5 +38,21 @@ describe("parseInboundText", () => {
   it("returns unknown for other text", () => {
     expect(parseInboundText("hello")).toEqual({ type: "unknown" });
     expect(parseInboundText("")).toEqual({ type: "unknown" });
+    expect(parseInboundText("500")).toEqual({ type: "unknown" });
+  });
+
+  it("parses a daily spend and a goal as Create", () => {
+    expect(parseInboundText("500 Lease the Whitefield flat")).toEqual({
+      type: "create",
+      dailyMajor: 500,
+      sector: "residential",
+      goal: "Lease the Whitefield flat",
+    });
+    expect(parseInboundText("800 office Lease the Whitefield office")).toEqual({
+      type: "create",
+      dailyMajor: 800,
+      sector: "commercial_office",
+      goal: "Lease the Whitefield office",
+    });
   });
 });

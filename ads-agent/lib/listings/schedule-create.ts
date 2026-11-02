@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { bypassSession, isAuthBypassEnabled } from "../auth/dev-bypass";
 import { getOrgSettings } from "../db/org-settings";
 import { buildListingCreateProposal, createProposal, scheduleProposal } from "../db/proposals";
 import type { Scope } from "../db/scope-sql";
@@ -21,6 +22,14 @@ export function splitDailyMinor(totalMinor: number, platforms: Platform[]): { pl
     if (remainder > 0) remainder -= 1;
     return { platform, minor: base + extra };
   });
+}
+
+/** `decided_by` is a public.users id. A phone is not a user row. */
+export function listingCreateDecidedBy(): string | null {
+  const configured = process.env.LISTING_CREATE_USER_ID?.trim();
+  if (configured) return configured;
+  if (isAuthBypassEnabled()) return bypassSession().userId;
+  return null;
 }
 
 export async function scheduleListingCreate(

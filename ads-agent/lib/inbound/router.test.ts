@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { noteWrongCode, routeInbound } from "./router";
+import { isConsultantServiceNumber, noteWrongCode, routeInbound } from "./router";
 
 const orgId = "org-platform-1";
 
@@ -30,6 +30,28 @@ describe("routeInbound", () => {
 
   it("routes unknown text to ignore", () => {
     expect(routeInbound({ orgId, text: "hello" })).toEqual({ action: "ignore" });
+  });
+
+  it("routes a spend limit and a goal to create_listing", () => {
+    expect(routeInbound({ orgId, text: "500 Lease the flat" })).toEqual({
+      action: "create_listing",
+      dailyMajor: 500,
+      sector: "residential",
+      goal: "Lease the flat",
+    });
+  });
+});
+
+describe("isConsultantServiceNumber", () => {
+  it("is false when the consultant line is unset or different", () => {
+    expect(isConsultantServiceNumber("111", undefined)).toBe(false);
+    expect(isConsultantServiceNumber("111", "   ")).toBe(false);
+    expect(isConsultantServiceNumber(null, "111")).toBe(false);
+    expect(isConsultantServiceNumber("222", "111")).toBe(false);
+  });
+
+  it("matches the configured phone number id", () => {
+    expect(isConsultantServiceNumber("111", "111")).toBe(true);
   });
 });
 
