@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-s8b26b065-4daa-4de3-9fde-22747d8f2d20",
+  "createdAt": 1793573961244,
+  "durationMs": 103997,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "go9ximd4",
+    "locator": "http://localhost:3030/l/eyJsaXN0aW5nSWQiOiJwcmV2aWV3LWxpc3RpbmciLCJwaG9uZSI6Iis5MTk4MDAwMDAwMDAiLCJleHAiOjE3OTM1MDQ3NTF9.ce63840b4d4dd02bdc5cc6f72bd0c2be76f49241fb41c403bbad3283079bccf8?preview=1&rent=45000&description=Commercial+office%2C+Whitefield%2C+fixed+rent.&photoName=undefined"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "text containing 'Preview (not saved)'",
+      "status": "yes",
+      "evidence": {
+        "source": "app/l/[token]/page.tsx:163"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

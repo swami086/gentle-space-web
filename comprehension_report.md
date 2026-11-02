@@ -1,46 +1,67 @@
-# Comprehension Test — Phase 1 listing campaign service
+# Comprehension report
 
-**Target:** `docs/designs/phase-1-listing-campaign-service.md`
-**Stage:** 6. Reviewer: [comprehension](5d6fd844-94a5-4d9e-bb8a-61200d117097).
+Target: `docs/designs/phase-1-listing-campaign-service.md`  
+Feature range: lines 1–298 (through Alternatives Considered).  
+Detailed range: line 299 through end (`## Detailed Implementation Plan`).  
+Brief anchor: Amendment 2026-11-02 in `concepts_brief.md` (Create is the approval for the first campaign; brief wins on conflict).  
+Torbit: queried at `project_id` 1672773718350201492, commit `ad63d64316a50852503cd8a408350391d4ddfd2c` (matches git HEAD). Uncommitted local edits are not a new commit; existence claims below are from the graph at HEAD unless noted.
 
-**What this proposes**
+## What this proposes
 
-A new workflow service that does a real-estate lease consultant's paid-ads job for them: the consultant sends listing facts by text or a web page, the service drafts a Meta (and, for commercial offices, Google) ad campaign, shows a preview, and only builds it on the platforms after the consultant replies with an approval code that sets a single spending ceiling. Once live, the service is allowed to shift budget between that listing's own ads — but never above the approved ceiling, never extending dates, and never changing copy or audience — without asking again, and it texts the consultant after each such move; any other change (raising the ceiling, ending early, new copy, etc.) still needs a fresh code, and a stop command needs no code at all. The Detailed Implementation Plan half translates this into concrete database migrations, connector changes, an executor rewrite, and a list of specific files, grouped into ordered "waves" of parallel automated coding work.
+Phase 1 is a listing-scoped paid-ads workflow for lease consultants in India and Australia. The consultant supplies listing facts (text and photos on a signed listing page), sets a daily spend limit and a goal, then presses **Create** on the web app—or sends the same limit and goal by WhatsApp (India) or SMS (Australia). Per the **2026-11-02 brief amendment** (which overrides any older “code before first build” wording), that act **is** the approval for the first campaign: the agent writes ad copy from listing facts, then the service builds through **Unified.to** only (not direct Meta/Google APIs for this phase). There is no second step that shows a finished ad and waits for a code before the first build. On a live connection the campaign is switched on when `can_activate` is true; in Stage 0 / sandbox, `can_activate` stays false so campaigns stay paused. Each listing gets **three equal “shares” per platform**—each share is **one Unified campaign** (not an ad set or ad group). The approved **ceiling** is the sum of those campaign budgets. After go-live, the monitor may **move unspent budget between shares inside that ceiling** without a new approval and texts afterward; raising the ceiling, end-date changes, copy/audience changes, and pausing an ad still need a **later Approve/Reject card** and a **text code**. **Stop** needs no code. Gentle Space runs first on the owner’s laptop (Stage 0 synthetic Unified data, then Stage 1 two weeks on real accounts); pilots attach their own Unified connections so spend cannot cross onto Gentle Space’s account.
 
-**How the existing system works, per this document**
+## How the existing system works, per this document
 
-Per the document, the company already has a working codebase ("ads-agent") that drafts and runs ad campaigns, but only for the owner's own business (Gentle Space), using one shared login per platform — so a second customer's spend would currently land on Gentle Space's account. It already has an approval/proposal mechanism (a proposal store, a 15-second polling worker, a fixed set of allowed write actions, a 60-second undo window, tracing, and a WhatsApp inbound route), and campaigns are currently created as one active campaign with a single daily budget rather than today's planned "paused → read back → switch on" sequence split across several budget "shares." This phase's job is to add a per-customer connections layer, a kill switch, the share-splitting logic, a budget-reallocation job, and the inbound/outbound text and listing-page surfaces, while reusing the existing proposal/executor machinery rather than building a second approval system.
+The `ads-agent` package already serves **one organisation** (Gentle Space) using **shared environment-variable platform logins**, so a second customer would spend on Gentle Space’s account until replaced. The document reuses a **proposal engine**: proposals schedule, pass a **60-second undo window** on `org_cron_settings`, then a **`worker:proposals`** process runs **`executeProposal`** (Torbit: `ads-agent/lib/executor/execute.ts`). **`claimDueScheduledProposals`** lives in `ads-agent/lib/db/proposals.ts`. There is an existing **Desk** admin site at localhost:3030, a **WhatsApp inbound route**, a **daily cycle** in `ads-agent/lib/decision-engine/cycle.ts` (the “daily check” that can text **findings**), and **Desk chat** in `campaign-chat.ts` that drafts **one Google Search setup card** but is explicitly **not** Create. Corridor campaigns are legacy Gentle Space automation, not listing shares. This phase adds per-customer **connections** (Unified connection id, no platform token in `credentials_sealed`; **`putConnection`** does not call **`sealSecret`** in `envelope.ts`), **listing shares** in the database, inbound routing/parser, outbound templates, a listing page, India/Australia **rule packs**, and retargets listing execution to **Unified HTTP** while **not** calling existing direct **`createMetaCampaign`** / Google share helpers on the listing path. A org-level **`writes_enabled`** kill switch (migration 115 in the plan) blocks writes except stop. Three terminals on the laptop: `dev`, `worker:proposals`, and `worker` only after **`cron_enabled`** is turned on for the daily move.
+
+---
 
 ## Findings
 
-**Severity:** Major
-**Affected Scope:** The term "finding" — used in the architecture diagram and "Moves inside the ceiling" paragraph (Feature range) and in Detailed Implementation Plan's move-rule description and §9 "Finding rules" (Detailed range)
-**Discrepancy Description & Rationale:** "Finding" is used repeatedly as a load-bearing term (findings "recommend pause, end early, lower ceiling, raise ceiling and extend end date," and "still need a code") but it is never defined inline anywhere in this document. The only path to a definition is inferring it from the one-time citation of `concepts_brief.md` §6 much earlier in the document. A reader who hasn't read that external brief cannot tell what produces a finding, how a finding differs from the "move" the ceiling-change exception creates, or how a finding becomes something the consultant can approve by code.
+### 1. Major — Order § “Generated images last” (lines 446–448)
 
-**Severity:** Major
-**Affected Scope:** "No-spend test" / "two-week live test" (Goals, Feature range) vs. "Stage 0" / "Stage 1" (Technical Plan "Accounts" paragraph and Verification Plan, Feature and Detailed range)
-**Discrepancy Description & Rationale:** The Goals section promises an owner-run "no-spend test" followed by a "two-week live test," while the Technical Plan and Verification Plan describe "Stage 0" (new, never-activated accounts) and "Stage 1" (Gentle Space's existing accounts, two weeks). The details line up well enough to guess these are the same two milestones under different names, but the document never states that equivalence. A reader could reasonably conclude there are three phases before a pilot (no-spend test, Stage 0, Stage 1) instead of two.
+**Affected scope:** Detailed Implementation Plan → Order, item 3.
 
-**Severity:** Major
-**Affected Scope:** "Parallel implementation" section (Detailed range) — "skill picker," "router," "subagents," and named skills like `senior-backend`, `nextjs-developer`, `saas-scaffolder`
-**Discrepancy Description & Rationale:** This section describes the entire mechanism by which the code gets written — automated "subagents" each loading one "skill" via a "router" picked by "the skill picker," organized into numbered "waves" — but none of these terms are defined anywhere in the document. A reader cannot tell what a "skill" is in this context, what the skill picker actually does, or why tools like `php-pro` or `laravel-specialist` would ever have been candidates for a Next.js/TypeScript repo. This section assumes the reader already works inside the same AI-agent tooling the author used to draft it.
+**Discrepancy:** Items 1–2 describe Create, Unified listing builds, WhatsApp/SMS, and explicitly defer image generation elsewhere in the doc (Overview, Non-Goals: no generated property photos this phase). Item 3 introduces a full “generated images” rollout (model, ledger, proposal) as if it were part of the same ordered Phase 1 sequence. A reader can believe Phase 1 ends with shipping an image generator, contradicting the feature half’s scope.
 
-**Severity:** Nit
-**Affected Scope:** "The Desk" — first appears in the Technical Plan's laptop setup paragraph (Feature range), recurs in Detailed Implementation Plan #12 (Detailed range)
-**Discrepancy Description & Rationale:** Capitalized as a proper noun ("serves the Desk at `http://localhost:3030`," "Desk approval remains for Gentle Space only") but never explicitly described as the internal manual-approval web UI, as distinct from the text/SMS approval flow. A first-time reader has to guess what it is from context.
+---
 
-**Severity:** Nit
-**Affected Scope:** "Ryze" — Overview section (Feature range)
-**Discrepancy Description & Rationale:** Introduced only by negation ("not Ryze's whole product," "Ryze is not built around one lease listing") and backed by a link to `ryze_capability_map.md`. The link technically satisfies the definition requirement, but the main document never states even in one clause what Ryze actually is (a competing product? an internal reference system?), so it doesn't stand on its own.
+### 2. Major — Alternatives Considered, Ryze MCP rejection (line 192)
 
-**Severity:** Nit
-**Affected Scope:** "Mumbai" reference — Technical Plan, laptop-build paragraph (Feature range)
-**Discrepancy Description & Rationale:** "Not in Mumbai. Mumbai is for a later hosted pilot." This is the only mention of hosting geography in the entire document; nothing earlier establishes why Mumbai specifically matters (team location, data residency, etc.).
+**Affected scope:** Alternatives Considered → “Vendor the GitHub repo…”
 
-**Severity:** Nit
-**Affected Scope:** "Instant Form" (Detailed Implementation Plan #4) and "responsive search ad" (Detailed Implementation Plan #5) — Detailed range
-**Discrepancy Description & Rationale:** These are specific Meta/Google ad-product names used with no gloss. A reader unfamiliar with those ad platforms can't tell that an Instant Form is a native in-ad lead form or that a responsive search ad is Google's auto-assembled text-ad format.
+**Discrepancy:** That bullet states the service **already writes through `google-ads-api` and `facebook-nodejs-business-sdk`** from the proposal executor. The rest of the design (Overview, Accounts, Detailed Plan, executor items 4–6) insists listing Phase 1 uses **Unified.to only** and must **not** call Meta Marketing API or Google Ads API on the listing path. A reader cannot tell whether legacy direct API writes remain live for listings or only for corridor/Gentle Space paths without re-reading the entire architecture section.
 
-**Severity:** Nit
-**Affected Scope:** "Rex Software's Australian lead-price figure" — Alternatives Considered (Feature range)
-**Discrepancy Description & Rationale:** Named once to justify rejecting an alternative ("Rex's figure is for sellers asking for an appraisal, not for renters") with no indication of what Rex Software is or why its figure was ever a candidate input.
+---
+
+### 3. Major — Remainder helper name (lines 301, 309, 438)
+
+**Affected scope:** Detailed Implementation Plan (ceiling split and verification).
+
+**Discrepancy:** The plan repeatedly names a function **`distribute`** in `ads-agent/lib/monitor/reallocate.ts`. At Torbit HEAD, `reallocateListing` and **`distributeByLeads`** exist in that file; no symbol named **`distribute`**. Someone implementing from the detailed section alone may search for the wrong export or assume the helper is not yet written.
+
+---
+
+### 4. Major — “Reuse” baseline date (line 108)
+
+**Affected scope:** Technical Plan → “What is new, and what is reused.”
+
+**Discrepancy:** The section says it was “Checked against the local code index on 2026-10-30, commit `3f22c76`” and that **`writes_enabled` is not in the code yet**. Torbit at HEAD `ad63d643` already lists migrations **`113_connections` through `116_executing_until`**, **`ads-agent/lib/connections/store.ts`**, **`reallocate.ts`**, **`executeShareMove`** in `execute.ts`, and related paths. A reader treating that paragraph as current inventory will misjudge what is proposed versus already landed at HEAD (graph at HEAD; dirty working tree may differ).
+
+---
+
+### 5. Nit — Brief vs design on first-build deliverables
+
+**Affected scope:** Overview (lines 12–13, 21–22) vs `concepts_brief.md` §2 Overview (lines 33–38).
+
+**Discrepancy:** The **brief** still describes drafting lead forms, photo-based Meta variants, radius, and keywords as part of the service narrative. **This design** states Unified campaign create in Phase 1 **cannot** send photos, lead forms, keywords, headlines, location, ad sets, or ad groups—they stay on the proposal/listing side only. **Brief wins** on approval mechanics (2026-11-02 amendment: Create, not a pre-build code); for **what actually hits the platform in Phase 1**, the design is narrower. A reader who reads only the brief overview may overestimate live ad richness relative to this document.
+
+---
+
+### 6. Nit — Finding vs share move (lines 83–84, 130–133)
+
+**Affected scope:** Technical Plan (Architecture) and “Moves inside the ceiling.”
+
+**Discrepancy:** The doc defines both terms, but both are “things the daily check / monitor does” and both involve budgets. The explicit rule “a share move is **not** a finding” helps; still easy to merge “daily cycle texts me about money” into one approval model unless the reader remembers: **findings → code; in-ceiling share moves → no code, text after**.
+
+---

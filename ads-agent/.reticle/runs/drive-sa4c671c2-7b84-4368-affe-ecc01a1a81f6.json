@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 3,
+  "runId": "drive-sa4c671c2-7b84-4368-affe-ecc01a1a81f6",
+  "createdAt": 1793587260720,
+  "durationMs": 121938,
+  "profile": "dev",
+  "project": {
+    "name": "ads-agent-c06478e9",
+    "framework": "other"
+  },
+  "agent": {
+    "id": "reticle-mcp",
+    "kind": "coding-agent"
+  },
+  "trigger": {
+    "kind": "edit",
+    "note": "driven live through the Reticle tools"
+  },
+  "subject": {
+    "surface": "web",
+    "instance": "3uybi1ib",
+    "locator": "http://localhost:3030/"
+  },
+  "changedFiles": [],
+  "flows": [],
+  "checks": [
+    {
+      "kind": "element",
+      "predicate": "text containing 'Create is scheduled'",
+      "status": "yes",
+      "evidence": {
+        "source": "app/(admin)/listings/new/ListingCreateForm.tsx:57"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c1"
+    }
+  ],
+  "risks": [],
+  "evidence": {
+    "consoleErrors": [],
+    "networkAnomalies": [],
+    "stateAssertions": [],
+    "timeline": []
+  },
+  "verdict": {
+    "status": "pass",
+    "reasons": [],
+    "confidence": "high",
+    "blockingRisks": 0
+  }
+}

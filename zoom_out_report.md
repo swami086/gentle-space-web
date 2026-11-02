@@ -1,57 +1,81 @@
-# Zoom-Out Review — Phase 1 Listing Campaign Service Design (Stage 5 re-audit)
+# Goldfish Review Report — Stage 5 (Initial Zoom Out)
 
-**This is the one allowed re-audit of Stage 5.** It replaces the first-pass report. Scope: the zoom-out standard applied to the Feature Range, lines 1-255 (Overview through Alternatives Considered, including "Deferred, not rejected"). The Detailed Implementation Plan, line 256 to end, was read for context and to check claims made in the Feature Range, not held to the "no code-level detail" bar.
+**Target:** `docs/designs/phase-1-listing-campaign-service.md` (full file; FeatureRange lines 1-298, DetailedRange lines 299-end)
+**Mode:** REVIEW · Lens: Zoom-Out (Skeptical Architect)
+**Date:** 2026-11-02
 
-**Verified against:** `concepts_brief.md`, `framework_brainstorm.md`, and the `ads-agent` codebase at commit `3f22c76` (confirmed as current `HEAD`).
+> This report replaces the earlier `zoom_out_report.md` that was written without the code graph. Torbit was queried this time.
 
-## Status of the first pass's findings
+## Code graph (Torbit)
 
-### 1. Major — concepts_brief.md still forbade unattended budget moves; Stage 2 said zero unapproved writes
+- **Queried:** yes. project_id `1672773718350201492`, branch `main`, manifest commit `ad63d64316a50852503cd8a408350391d4ddfd2c` (= git HEAD).
+- Schema confirmed via `get_graph_schema`. Note: `gl_edge` has no `project_id` column, so edge joins filter on the joined definitions' `project_id` (`s.project_id` / `t.project_id`).
+- The graph includes dirty working-tree files; disk may differ from the manifest commit. Findings that depend on uncommitted files say so.
+- Queries that supported the findings are named inline under each finding.
 
-**Closed.** `concepts_brief.md` §3.2 now reads "Any change, other than a stop or a share move inside an already approved ceiling, made without a recorded approval" as the non-goal, instead of a blanket ban. §7.1 now says the same rejection is narrowed: "A shift inside a ceiling the consultant already approved is allowed." §9.2's Stage 1 and Stage 2 exit tests both now read "zero writes that lack a code, other than a stop and a share move inside the approved ceiling," not "zero unapproved writes." The glossary's Kill switch entry also matches the design doc's "not built, migration 115" language. The brief and the design document now say the same thing. No open contradiction found.
+## Reviewer Status
 
-### 2. Major — the in-ceiling move forces 3-5 Google Search campaigns per listing and fragments lead signal
+| Reviewer | Status |
+| --- | --- |
+| `zoom-out` (egm-zoom-out, cursor-grok-4.6-high-fast) | completed |
 
-**Not re-raised as a defect.** Per instruction, the owner's kept choice to split budget into per-ad shares (including the Google campaign-per-share consequence) is not treated as still open. The design document still implements it exactly as before: "Each share is a separate Search campaign with its own campaign total budget" (Technical Plan, and again in Detailed Implementation Plan's mechanics).
+Severity breakdown: 0 Blocker · 4 Major · 2 Nit.
 
-**But the cost is still not stated anywhere.** I searched both documents for any mention of the trade-off the first pass raised — fragmented/thinner lead signal across smaller campaigns, the effect on Meta's/Google's learning phase, or a revised capacity estimate for the extra Google campaign objects. None of "fragment," "thinner," "dilute," "learning phase" (outside the one generic mention in `concepts_brief.md` §6.8 about cost-per-lead reliability, which is not connected to the share-split decision), or a multiplied capacity estimate appear anywhere in either document. `concepts_brief.md` §8.1's risk register, which is where an accepted trade-off like this would normally be recorded, has no entry for it either.
+**Context sufficiency:** Pass. A fresh reader can state the objective (one lease listing; Create is the first approval; Unified is the only platform write path; in-ceiling share moves texted after the fact; later changes still coded; the shared Gentle Space login removed before a second customer). The design solves the root problem rather than patching a symptom. Create-as-approval, sandbox/`can_activate` false, executor-only writes, and the rejections of the Ryze GitHub repo and the read-only `google-ads-mcp` match the brief and the supplied design facts — these are not YAGNI misses.
 
-One partial mitigant: `concepts_brief.md` §6.8 says Google status monitoring is "one query per customer covering every campaign's review and policy status," so the 15-minute polling load is batched per customer, not per campaign — the campaign-count multiplier does not obviously blow up that recurring cost the way the first pass worried. But the fragmented-lead-signal point itself, which is what the monitor's own reallocation logic depends on, is still undocumented.
+## Prioritized Findings (Blockers → Major → Nits)
 
-**Downgraded from Major to Minor.** The architectural choice itself is now out of scope to re-litigate. What remains is a transparency gap: a reader of this document has no way to learn that splitting one listing's Google spend into 3-5 campaigns was a deliberate trade against lead-signal strength, because the document never says so.
+### Stale reuse inventory marks existing modules as "Create" — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Target Files items 1-3, 7, 13-15, 17; Technical Plan "What is new, and what is reused" (~line 107).
+* **Discrepancy Description:** Line 107 still cites commit `3f22c76` (2026-10-30) and calls the kill switch, inbound router, listing page, outbound texts, and monitor "new" / "not in the code yet." The Target Files list still marks migrations 113-115, `connections/store.ts`, `monitor/reallocate.ts`, `inbound/router.ts`, `inbound/parser.ts`, `outbound/sender.ts`, `app/l/[token]/page.tsx`, and `lib/rules/india.ts` / `australia.ts` as **Create**. Torbit shows these already exist on disk: `putConnection` (`lib/connections/store.ts:84`), `reallocateListing` (`lib/monitor/reallocate.ts:65`), `renderOutbound` (`lib/outbound/sender.ts:76`), `setWritesEnabled` (`lib/db/org-settings.ts:65`), `executeShareMove` (`lib/executor/execute.ts:459`), `routeInbound` / `parseInboundText` in the inbound modules, plus the `app/l/[token]/page.tsx` file and the migration files. `runDecisionCycle` already calls `reallocateListing`. The graph is at commit `ad63d643`; git status confirms these paths are untracked/modified, so disk is dirty and already contains this design's modules.
+* **Supporting queries:** `SELECT fqn, file_path, definition_type, start_line FROM gl_definition WHERE project_id = 1672773718350201492 AND name IN ('putConnection','reallocateListing','executeShareMove','setWritesEnabled','routeInbound','parseInboundText','renderOutbound')`; `SELECT path FROM gl_file WHERE project_id = 1672773718350201492 AND (path ILIKE '%113_connections%' OR path ILIKE '%app/l/%' OR path ILIKE '%rules/india%')`.
+* **Rationale & Recommendation:** An implementer who follows "Create" / "not in the code yet" will rewrite working code. Relabel those items **Modify**, refresh the commit reference, and scope the remaining work to wiring (`applyMove` → `executeShareMove`, phone-to-org before parse, Create-from-text), not greenfield files.
 
-### 3. Major — writes_enabled / kill switch described as existing when the code doesn't have it
+### Generated images on the build ladder contradict the brief and the doc's own Non-Goals — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Order item 3 (line 448); conflicts with Non-Goals (line 57) and Target Files item 16 (line 407).
+* **Discrepancy Description:** Order item 3 ("Generated images last. One pinned model, a cap, a provenance flag, and a ledger row.") schedules a feature the brief forbids. `concepts_brief.md` §3.2 lists "generated property images" as out, and its creative rules state "There is no generated imagery." This document's own Non-Goals (line 57, "invented photos of the property") and item 16 ("No image generator") say the same.
+* **Rationale & Recommendation:** Speculative scope, not a deferred note. Remove item 3 from the build ladder. The brief wins on conflict, and here the doc already agrees with it everywhere except this line.
 
-**Closed, and verified against the codebase.** The design document now states plainly: "The kill switch is not in the code. `org_cron_settings` has `cron_enabled`, `last_run_at`, `undo_window_seconds`, and `approval_threshold_inr` only. `writes_enabled` is a new column." Target File #2b adds `ads-agent/lib/db/migrations/115_writes_enabled.up.sql` / `.down.sql`, explicitly noting "There is no such column in migration 008 or in `org-settings.ts` today." Target File #11 (`org-settings.ts`) repeats "It does not exist today."
+### Three Meta campaigns per listing overrides the brief's one-campaign rule silently — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** The ceiling / Starting shares (lines 126-128, 301-307).
+* **Discrepancy Description:** The plan starts every listing with 3 Meta Unified campaigns (plus 3 Google shares for a commercial office). `concepts_brief.md` §3.1 and §10 decision 5 say "One live Meta campaign per listing. Google may be one Search campaign per share." Three Meta campaigns is a workaround for Unified having no ad-set object, not a brief rule, and it triples the live Meta objects. The document's own header says the brief wins on conflict, yet this is an unflagged divergence.
+* **Rationale & Recommendation:** Either conform to the brief (one Meta campaign this phase; defer Meta share-moves until an ad-set shape exists; Google can still be one Search campaign per share) or state explicitly that the owner amended the brief to allow 3 Meta campaigns. As written it neither matches the brief nor records the exception.
 
-I checked this against the actual repo at `3f22c76`:
-* `ads-agent/lib/db/org-settings.ts` reads and writes exactly `cron_enabled`, `last_run_at`, `undo_window_seconds`, `approval_threshold_inr` — matches the doc's claim precisely.
-* `grep -rn "writes_enabled|kill_switch|killSwitch" ads-agent/` returns nothing. The flag genuinely does not exist yet.
-* The migrations directory's highest numbered migration is `112_inbound_expansion`, so `113`, `114`, `115` are correctly the next free numbers.
+### Wave 6 edits private MCP files that item 20 says not to touch — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Target Files item 20 (lines 425-428) vs Parallel implementation Wave 6 (line 471).
+* **Discrepancy Description:** Item 20 says "No change" to `mcp/google-ads-server/tools.ts` and the app-data MCP server, and that the listing executor does not use that server for platform writes. Wave 6 says the last agent edits "the private MCP tool files." Torbit shows `registerWriteTools` in `mcp/google-ads-server/index.ts` calls `createFullGoogleCampaign`, `createGoogleShareCampaign`, `enableGoogleShareCampaign`, and `updateGoogleShareBudget` — the direct platform writers the design explicitly keeps off the listing path. Editing those files in Wave 6 is forbidden work and risks introducing a second writer.
+* **Supporting query:** `SELECT s.fqn, s.file_path, t.fqn, e.relationship_kind FROM gl_edge e JOIN gl_definition s ON e.source_id = s.id JOIN gl_definition t ON e.target_id = t.id WHERE s.project_id = 1672773718350201492 AND t.project_id = 1672773718350201492 AND t.name IN ('createFullGoogleCampaign','createGoogleShareCampaign','enableGoogleShareCampaign','updateGoogleShareBudget')`.
+* **Rationale & Recommendation:** Make Wave 6 stop after `cycle.ts` / the cycle route. Drop "then the private MCP tool files" so the plan and item 20 agree and the single-writer invariant holds.
 
-The reuse-vs-new accounting for this piece is now accurate.
+### `distribute` helper name does not exist; two equivalents already do — Severity: Nit
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Lines 301 and 309 (references to `distribute` in `reallocate.ts`).
+* **Discrepancy Description:** No symbol named `distribute` exists. The floor-then-largest-fraction remainder rule is `distributeByLeads` (`lib/monitor/reallocate.ts:31`, called by `reallocateListing`) and is also copied as `distributeEqualMinor` (`lib/executor/execute.ts:292`, called by `executeListingBudgetChange`).
+* **Supporting query:** `SELECT fqn, file_path, definition_type, start_line FROM gl_definition WHERE project_id = 1672773718350201492 AND name ILIKE '%distribute%'`.
+* **Rationale & Recommendation:** Name the existing function(s) precisely. Do not add a third helper; if anything, note the existing duplication rather than inventing a new name.
 
-### 4. Nit — parallel subagent wave plan inside the architecture doc
+### Agent-runbook process details are altitude weeds in a design doc — Severity: Nit
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Parallel implementation (lines 452-473).
+* **Discrepancy Description:** Composer 2.5 slugs, skill-picker routers, and the `saas-scaffolder` / `payload` / `php-pro` / `laravel-specialist` exclusions do not affect architecture, data flow, or reuse.
+* **Rationale & Recommendation:** Move these to an agent runbook. Keep the design at the architecture/interface altitude.
 
-**Still present, now outside the audited range.** The "Parallel implementation" section is unchanged and sits inside the Detailed Implementation Plan (past line 255), which this re-audit does not hold to the zoom-out altitude bar. The organizational oddity (execution/model-assignment content inside a document otherwise about system design) is unchanged, but it's no longer in scope for this standard at its current location. Not re-raised.
+## Reuse the design got right (graph-backed — do not "fix" these)
 
-## New laptop section — checked
+- `executeProposal` (`execute.ts:566`) and `claimDueScheduledProposals` (`proposals.ts:380`) exist; `runProposalUndoTick` calls `executeProposal`. Keeping the existing proposal engine is correct.
+- `execute.ts` imports `createPausedUnifiedCampaign`, `pauseUnifiedCampaign`, `updateUnifiedCampaignBudget` from `unified-sandbox` and does **not** import the Meta/Google share writers (`createMetaListingShares`, `updateMetaAdSetLifetimeBudget`, `createGoogleShareCampaign`, `updateGoogleShareBudget`, `enableGoogleShareCampaign`, `createFullGoogleCampaign`). Items 4-6 "do not call" are already true on disk.
+- `putConnection` does not import `sealSecret`; `sealSecret` is only called from `provisionSnapshotStorage` (`snapshot-iam.ts`). The envelope claim in the design holds.
+- `otlpSpanSink` exists (`otlp-sink.ts:69`); wiring the proposal trace id into it is reuse, not a new sink.
+- `campaign-chat.ts` and `CampaignDraftChat.tsx` exist; leaving them unchanged is correct.
+- `enquiries.ts` already has `listing_id`; item 18 reuses that column.
+- `grounding-pack.ts` and `citation-gate.ts` exist; using them on the listing path is reuse.
+- New `inbound/parser.ts` (consultant commands: 6-digit code, PAUSE/STOP) is not a clone of `inbound/process.ts` (`parseInboundPayload` / `processInboundEvent`, which turn WhatsApp payloads into renter enquiries). Two layers, not a missed reuse.
+- No older outbound send helper beyond `renderOutbound`; no older consultant listing page (`lib/listings/*` is Gentle Space public listings, a different product). The new sender and `app/l/[token]/page.tsx` are justified.
 
-The "first build runs on the owner's laptop" paragraph (Technical Plan) was checked claim-by-claim against the repo at `3f22c76`:
+---
 
-* `npm run dev` on port 3030 — confirmed (`ads-agent/package.json`: `"dev": "next dev -p 3030"`).
-* Postgres via the repo-root `docker-compose.listings.yml` on port 5433, database `gentle_space_listings` — confirmed, and the file does map `5433:5432` to that database.
-* The warning not to use the ads-agent compose Postgres on port 5434 — confirmed; `ads-agent/docker-compose.yml` is a separate compose file using 5434.
-* `AUTH_BYPASS=1` gated by `NODE_ENV !== "production"` — confirmed against `ads-agent/lib/auth/dev-bypass.ts`'s own comment: "Requires AUTH_BYPASS=1|true AND NODE_ENV !== production. Never enable in prod."
-* `npm run worker:proposals` — confirmed script exists (`tsx ... scripts/run-proposal-undo-worker.ts`).
-* `cron_enabled` default false — confirmed in `org-settings.ts`'s `DEFAULTS` object.
-
-Every factual claim in this paragraph checks out. On altitude: this is operational/deployment detail (ports, env flags, process list) rather than code-level architecture detail (no pseudocode, no helper functions, no loop variables), and it's safety-relevant — it's what lets a reader trust that the no-spend test genuinely cannot spend money and that WhatsApp approval during Stage 0 is a logged stand-in, not a live text, until a tunnel exists. This passes the standard; it is not flagged as premature detail.
-
-## What still holds up
-
-The Alternatives Considered section remains disciplined, and the fixes made since the first pass are real, not cosmetic: the brief and design document now agree on the in-ceiling move, and the kill switch's non-existence is now stated three separate times in three different places in the design document, backed by an accurate migration plan. The one remaining gap (Finding 2, downgraded) is a documentation gap, not a design defect — the owner's decision stands, it just isn't accompanied by an honest statement of what it costs.
-
-## Cap
-
-A second "update the doc" request arrived after this re-audit. Stage 5 allows one re-audit. The residual is accepted and written into the ceiling paragraph of the design: three to five Google Search campaigns per listing split the clicks and leads, and that cost is kept. Stage 5 advances to Stage 6.
+*Synthesized with EGM*

@@ -41,4 +41,4 @@ Six reviewers, 2026-10-30. They agree the chat must not launch. They do not agre
 * The four Phase 1 exit tests are reached by text and the listing page. The Desk chat is how the owner drafts on the laptop. It is not required for a pilot. If it ships, copy from the chat goes through the same rule pack as a text draft. The chat's own prompt is not that check.
 * Wave 5 names the two files and does not list the fields. That list is still missing.
 
-The design's Chat draft section is unchanged until those three are decided: the form's fields, no finding from chat, and whether the laptop chat is in Phase 1 or after the first pilot.
+Decided 2026-11-01. The design now says the listing chat waits until after the first pilot, chat does not draft a finding, and this phase does not edit `campaign-chat.ts` or `CampaignDraftChat.tsx`. The form's fields stay undecided until that later chat is built.

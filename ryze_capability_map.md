@@ -5,7 +5,7 @@
 * **Date:** 2026-10-30
 * **Scope:** Ryze's paid-ads product and its MCP connector. Ryze's SEO, AI-visibility and Shopify conversion products are out of scope.
 * **Goal:** Build the same capabilities in this repo with no runtime dependency on Ryze.
-* **Sources:** [Ryze pricing](https://www.get-ryze.ai/pricing), [developers page](https://www.get-ryze.ai/developers), [changelog](https://www.get-ryze.ai/changelog) (147 entries, Oct 2025 to Oct 2026), help centre `llms-full.txt` (137 pages), [open-source MCP repo](https://github.com/irinabuht12-oss/google-ads-meta-ads-mcp) (MIT licence, 6.3k stars), Ryze's public OAuth discovery documents, and an REA capture of its connector page. All fetched 2026-10-30.
+* **Sources:** [Ryze pricing](https://www.get-ryze.ai/pricing), [developers page](https://www.get-ryze.ai/developers), [changelog](https://www.get-ryze.ai/changelog) (147 entries, Oct 2025 to Oct 2026), help centre `llms-full.txt` (137 pages), [irinabuht12-oss/google-ads-meta-ads-mcp](https://github.com/irinabuht12-oss/google-ads-meta-ads-mcp) (MIT, Ryze's install guide; checked again 2026-11-02: `server.json` points at `https://connector.get-ryze.ai/mcp` and the platform folders are READMEs, not a server), Ryze's public OAuth discovery documents, and an REA capture of its connector page. All fetched 2026-10-30 except the 2026-11-02 repo check.
 
 ## What Ryze sells
 

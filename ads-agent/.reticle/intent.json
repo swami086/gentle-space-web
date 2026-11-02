@@ -495,6 +495,48 @@
         "grade": "presence",
         "at": 1793501444498
       }
+    },
+    "inline:pressing-create-with-a-daily-spend-limit-and-a-g-a208975d": {
+      "id": "inline:pressing-create-with-a-daily-spend-limit-and-a-g-a208975d",
+      "statement": "Pressing Create with a daily spend limit and a goal schedules the listing campaign.",
+      "state": "proved",
+      "declaredAt": 1793585646423,
+      "binding": {
+        "kind": "text",
+        "contains": "Create is scheduled"
+      },
+      "surface": {
+        "route": "/listings/new",
+        "files": [
+          "app/(admin)/listings/new/ListingCreateForm.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1793585649795",
+        "grade": "presence",
+        "at": 1793585649795
+      }
+    },
+    "inline:a-commercial-office-create-schedules-one-paused-649595ac": {
+      "id": "inline:a-commercial-office-create-schedules-one-paused-649595ac",
+      "statement": "A commercial office Create schedules one paused Meta campaign and one paused Google campaign",
+      "state": "proved",
+      "declaredAt": 1793587107187,
+      "binding": {
+        "kind": "text",
+        "contains": "Create is scheduled"
+      },
+      "surface": {
+        "route": "/listings/new",
+        "files": [
+          "app/(admin)/listings/new/ListingCreateForm.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1793587108983",
+        "grade": "presence",
+        "at": 1793587108983
+      }
     }
   }
 }

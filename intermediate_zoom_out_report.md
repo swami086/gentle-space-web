@@ -1,84 +1,109 @@
-# Stage 8: Intermediate Zoom Out
+# Goldfish Review Report — Stage 8 (Intermediate Zoom Out)
 
-This review covers all of `concepts_brief.md` against the zoom-out standard. The reviewer was a fresh `egm-zoom-out` Goldfish, given the Stage 5 report as context and asked to focus on what Stages 6 and 7 added. It found 0 Blockers, 9 Majors and 4 Nits.
+**Target:** `docs/designs/phase-1-listing-campaign-service.md` (full file; FeatureRange lines 1-298, DetailedRange lines 299-end)
+**Mode:** REVIEW · Lens: Zoom-Out (Skeptical Architect) · Second zoom-out pass
+**Date:** 2026-11-02
 
-**Overall verdict:** the brief still serves the original goal: an in-house, Ryze-like listing campaign service for India and Australia, with approval by text and a staged rollout. Several safety additions from Stages 6 and 7 are heavier than Phase 1 needs, and a few contradict each other.
+> This is the SECOND zoom-out. It reads `zoom_out_report.md`, `comprehension_report.md`, and `critic_report.md` and reports a prior finding only where the design **still** carries it **and** it still makes the build bigger than "Create on the existing executor." New findings target what the design added or failed to shrink.
 
-## Fact-check of the reviewer's external claims (Firecrawl)
+## Code graph (Torbit)
 
-| # | Claim | Verdict | Source |
-| --- | --- | --- | --- |
-| E1 | WhatsApp templates belong to the messaging (business) account, not the app. Templates approved for the test number's account do not carry over to the service number. | **True.** "Templates are Messaging account assets." | [Meta template fundamentals](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview) |
-| E2 | A Google `Search` request counts as an operation against the daily limit. | **True.** "A `Search` or `SearchStream` request counts as one operation." Basic is 15,000 a day against test and production accounts. | [Google Ads API quotas](https://developers.google.com/google-ads/api/docs/best-practices/quotas) |
-| E3 | ChatGPT and Claude custom connectors both accept a pre-registered client id and secret, so dynamic client registration can be dropped. | **Partly true.** Claude offers "Use Claude's published identity (Recommended)", "Register automatically" or "Use your own OAuth client". ChatGPT uses Client ID Metadata Documents (CIMD), where "there is no client registration step", or dynamic registration. It does not take a manual id and secret. **Corrected conclusion:** support CIMD; dynamic registration is not needed. | [Claude Help Center](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp), [OpenAI plugin auth](https://developers.openai.com/plugins/build/auth) |
-| E4 | Meta access tiers require the app to be in Live mode. | **True for approved access.** "Once approved, you will need to switch to Live Mode." A developer-mode app gets only test webhooks (verification log, item 3). | [Meta 2018 tier post](https://developers.facebook.com/ads/blog/post/v2/2018/07/02/marketing-api-tier-simplification/) |
-| E5 | Google Cloud Monitoring can notify the owner by SMS and email. | **True.** Notification channels include Email and SMS, and uptime checks can trigger alerts. | [Cloud Monitoring channels](https://docs.cloud.google.com/monitoring/support/notification-options) |
-| E6 | Significant edits restart Meta's learning phase. | **True, with detail.** "Any change to ad creative" is significant. Budget changes may or may not be, depending on size. Pausing an ad set for 7 days or longer is significant. | [Meta Business Help](https://www.facebook.com/business/help/316478108955072) |
-| E7 | Paused Meta objects do not deliver or spend, and Instant Forms can be archived but not deleted. | **True.** Paused objects do not deliver. Forms are already verified in the log. | Verification log, item 20 |
-| E8 | WhatsApp one-time codes use the "authentication" template category. | **Not checked.** It is moot if the resolution below is accepted: phones are verified by an inbound join code, which needs no template. | — |
+- **Queried:** yes. Namespace `user-torbit`, `project_id = 1672773718350201492`, branch `main`, manifest `commit_sha` **`ad63d64316a50852503cd8a408350391d4ddfd2c`** (present in `_orbit_manifest`, equals git HEAD).
+- Every query filtered on `project_id = 1672773718350201492`. `gl_edge` has no `project_id`, so edge joins filter on the joined definitions (`s.project_id` / `t.project_id`).
+- The graph includes dirty working-tree files; disk may differ from the manifest commit. `execute.ts`, `proposals.ts`, and the listing page were corroborated against the reviewer's on-disk Read.
 
-## Findings and recommended resolutions
+## Reviewer Status
 
-| # | Severity | Finding | Recommendation |
-| --- | --- | --- | --- |
-| 1 | 🟡 | The brief carries design-document mechanics: timings, headers, error codes, deploy order, parser order, the thresholds table. | **Accept, partly.** Keep the rules in §6. Move the mechanics into a new **§11, "Carried into the design document"**, so `/egm-draft` gets them and nothing is lost. |
-| 2 | 🟡 | Crash recovery has three overlapping layers (claim renewal and fencing, resume, name lookup). They exist only because of resume, yet a crashed build has only paused objects. | **Accept** (E7). An expired claim makes the reconciler check build-steps. If activation was sent, it reads back and marks the proposal executed. Otherwise it marks it `failed`, pauses or archives the objects carrying the proposal id, and asks for re-approval. Delete resume, renewal, fencing and per-create name lookup. Keep the status-guarded claim, the header for in-run retries, and build-steps. |
-| 3 | 🟡 | The separate Stage 0 Meta app adds a third app and contradicts the Full-access plan. | **Accept** (E1, E4). Use the service app, in Live mode, from Stage 0, with test-environment connections that lack "can activate". Stage 0 calls then count toward the 500. Submit templates on the **service number's** WhatsApp account, because templates do not carry over from the test number. Delete the Stage 0 app, its webhook path and the polling exception. §8.4's open risk shrinks. |
-| 4 | 🟡 | Google Basic access gates steps that don't use Google, and throttling per organisation is premature. | **Accept** (E2). Gate Basic only on Google steps (1 and 4), when projected use passes half of Explorer's limit. Delete throttling. Keep metering, plus a major alert at 50% of the daily limit. |
-| 5 | 🟡 | Two approvers per listing, and approvers shared across organisations, are speculative. | **Accept.** Phase 1: one approver per listing, covering all its platforms, and one organisation per phone, enforced at onboarding. Keep "approver per ad account" in the data model. Delete the split approvals, "lead approver", the cross-organisation stop clause and that isolation test. |
-| 6 | 🟡 | One-time codes and owner paging need WhatsApp templates not in the set, and paging runs on two paths. | **Accept** (E5). Delete the listing-page one-time code; a signed, phone-tied, 7-day link is enough because the page never approves. Verify phones inbound: the person texts a join code to the service number. Send paging only through Cloud Monitoring (SMS and email). The service raises alerts as log-based metrics or incidents, and the heartbeat uses the same channel. |
-| 7 | 🟡 | The binding Stage 0 exit test needs active campaigns, which Stage 0 cannot produce. | **Accept.** Mark those items "on fixtures", or move them to Stage 1. |
-| 8 | 🟡 | Replacing a running campaign leaves the ceiling unclear, and every copy fix rebuilds. | **Accept** (E6). The replacement's ceiling is the approved total minus spend so far. Budget and end-date changes go through the in-place finding actions. Rebuild only for creative or audience changes, which restart learning anyway. |
-| 9 | 🟡 | The chat connector and a repeated Stage 1 sit on every step's critical path, and the dynamic-registration claim was wrong. | **Accept, with E3 corrected.** Connector checks gate switching the connector on, not any step's exit. Steps 2 to 4 repeat only the market-specific Stage 1 items, alongside the first pilot. The authorisation server supports CIMD instead of dynamic registration. |
-| 10 | 🟢 | The listed proposal states don't match the repo, and `withdrawn` is unnecessary. | **Accept.** List the real states: pending, approved, scheduled, executing, executed, failed, rejected. Withdrawal becomes `rejected` with a reason, so no new state or CHECK change is needed. |
-| 11 | 🟢 | The `LIVE <code>` prefix duplicates other safeguards. | **Accept.** Delete it. The approval message already states maximum spend, and Stage 0 messages say "TEST". |
-| 12 | 🟢 | The `data_region` column is YAGNI. | **Accept.** Delete it until a second region exists. The market record already holds the data region. |
-| 13 | 🟢 | The risk register repeats mitigations from the sections. | **Accept, partly.** The standard requires a risks section. Keep the register, but trim it to leftover and accepted risks with section pointers. |
+| Reviewer | Status |
+| --- | --- |
+| `zoom-out` (egm-zoom-out, cursor-grok-4.6-high-fast) — Intermediate Zoom-out Reviewer | completed |
 
-## Net effect if accepted
+Severity breakdown: 0 Blocker · 7 Major · 2 Nit.
 
-The brief gets shorter. Removed:
-* one Meta app;
-* the resume path, claim renewal and fencing;
-* the listing-page one-time code;
-* two-approver flows;
-* the LIVE prefix;
-* per-organisation throttling;
-* the `data_region` column;
-* the `withdrawn` state;
-* dynamic client registration.
-
-Added:
-* §11, the carry-over list for the design document;
-* the Cloud Monitoring paging path;
-* the replacement-ceiling rule.
-
-Corrected:
-* the WhatsApp template location (the service number's account).
-
-No safety rule is lost. Each deletion is either covered by an existing rule (paused builds, platform caps, a code on every change) or deferred to Stage 3.
+**The one-line answer to this pass's question.** The listing **Create executor path already exists and is already wired**: `executeProposal → executeListingCreateCampaign` (`execute.ts:237`) → `createPausedUnifiedCampaign`. The genuinely remaining work is thin — a web Create surface that calls the already-built `buildListingCreateProposal` (`proposals.ts:104`, **no production caller**), persist the returned Unified ids onto `listing_shares`, and call `activateUnifiedCampaign` (`unified-sandbox.ts:191`, **no production caller**) only when `can_activate` is true (false for Stage 0 / sandbox). Everything the design still frames as greenfield enlarges the build past that.
 
 ---
 
-## Resolution (applied 2026-10-30)
+## Prioritized Findings (Blockers → Major → Nits)
 
-The owner chose to apply the recommended resolutions and conclude the review. All 13 findings were applied to `concepts_brief.md`, with matching changes to `dual_market_rollout.md` and `verification_log.md` (new items 30 and 31).
+### M1 — The whole 21-item / 6-wave build plan rebuilds code that already exists and is tested — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Target Files items 1-21 (lines 313-432); Parallel implementation Waves 1-6 (lines 452-473); "What is new, and what is reused" (line 107, still pinned to commit `3f22c76`).
+* **Discrepancy Description:** The first zoom-out said "relabel Create → Modify." After the comprehension and critic passes that is no longer enough: the modules are not just present, the **listing Create path is dispatched end to end at HEAD**. Torbit shows every module the plan calls "Create"/"new" already exists with tests: migrations 113-116; `putConnection` (`connections/store.ts:84`); `reallocateListing` / `distributeByLeads` (`monitor/reallocate.ts:65,31`); `executeShareMove` (`execute.ts:459`), `executeListingCreateCampaign` (`execute.ts:237`), `executeListingOnUnifiedSandbox` (`execute.ts:187`), `executeListingBudgetChange` (`execute.ts:329`), `distributeEqualMinor` (`execute.ts:292`); `buildListingCreateProposal` (`proposals.ts:104`); `activateUnifiedCampaign` (`unified-sandbox.ts:191`); `routeInbound` (`router.ts:11`) + `parseInboundText` (`parser.ts:9`); `renderOutbound` (`sender.ts:76`); `setWritesEnabled` (`org-settings.ts:65`); `runDecisionCycle` (`cycle.ts:48`); `app/l/[token]/page.tsx`; `rules/india.ts` + `australia.ts`. Edges confirm wiring: `executeProposal → executeListingCreateCampaign`; WhatsApp `POST → routeInbound → parseInboundText`; `executeShareMove → reallocateListing`; `runDecisionCycle → reallocateListing`. `execute.ts` imports only the Unified helpers (not the Meta/Google share writers).
+* **Supporting queries:** `SELECT name, file_path, start_line FROM gl_definition WHERE project_id = 1672773718350201492 AND name IN ('putConnection','reallocateListing','executeShareMove','executeListingCreateCampaign','executeListingOnUnifiedSandbox','buildListingCreateProposal','activateUnifiedCampaign','setWritesEnabled','routeInbound','parseInboundText','renderOutbound','runDecisionCycle')`; `SELECT DISTINCT s.name, s.file_path, t.name FROM gl_edge e JOIN gl_definition s ON e.source_id=s.id JOIN gl_definition t ON e.target_id=t.id WHERE s.project_id=1672773718350201492 AND t.project_id=1672773718350201492 AND t.name IN ('executeListingCreateCampaign','buildListingCreateProposal','activateUnifiedCampaign','executeShareMove')`.
+* **Rationale & Recommendation:** An implementer who follows 21 Target Files and 6 waves will rewrite working, tested code. **Collapse the remaining work to web Create on the existing executor.** Leave items 1-3, 7, 11, 13-15, 17, 19-20 as *already built / no-change*. Defer items 8-9, 12, 18, 21 and Order item 2 (WhatsApp/SMS Create) until after the first web build. Refresh the `3f22c76` inventory or drop it.
 
-* **Altitude:** a new §11, "Carried into the design document", holds the thresholds, code mechanics, parse order, build and claim mechanics, interface rollout sequences and onboarding API details. §6 keeps the rules.
-* **Crash recovery:** a crashed build is marked `failed`, its objects are archived, and the approver re-approves. Resume, claim renewal, fencing tokens and per-create name lookup are removed.
-* **Meta app:** one service app in Live mode from Stage 0. The Stage 0 app, its webhook path and the polling exception are removed. Templates go on the service number's account.
-* **Google:** Basic is gated only for steps 1 and 4, by projected use. Throttling is removed; metering and a 50% alert stay.
-* **Approvers:** one approver per listing and one organisation per phone. The data model keeps an approver per ad account.
-* **Verification and paging:** phones are verified by an inbound join code (`JOIN`). The listing-page one-time code is removed. Paging goes through Cloud Monitoring SMS and email.
-* **Stage 0 exit test:** items that need active objects are marked "on fixtures".
-* **Replacement campaigns:** the ceiling is the approved total minus spend so far. Budget and end-date changes go in place. Creative and audience changes rebuild.
-* **Connector:** its checks gate switching it on, not any step. Steps 2 to 4 repeat only market-specific Stage 1 items. CIMD replaces dynamic registration.
-* **Nits:**
-  * the real proposal states, with withdrawal as `rejected` plus a reason;
-  * the `LIVE` prefix removed;
-  * the `data_region` column removed;
-  * the risk register trimmed to accepted risks, with pointers.
+### M2 — `readListingBuildConfig` forces unsent creatives, blocking reuse of the existing Create builder — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** `readListingBuildConfig` (`execute.ts:112`, called by `executeListingCreateCampaign` at `execute.ts:237`); One listing's path step 2 (line 121); Target Files item 6; Verification "drafter's copy."
+* **Discrepancy Description:** `ListingCreatePayload` / `assertListingCreatePayload` on disk are `traceId + ceilings + shares` only, and `executeListingOnUnifiedSandbox` sends name/budget/period/channel/goal only. But `readListingBuildConfig` still requires `endTimeIso`, `pageId`, a Google creative template (keywords, headlines, geo, language, ad group) and Meta `imageHash/message/link` — then discards them; tests pad the slim payload to satisfy it. The design's step 2 ("Keywords, headlines, location, and radius are written onto the proposal") feeds this dead field set.
+* **Supporting query:** `SELECT s.name, t.name FROM gl_edge e JOIN gl_definition s ON e.source_id=s.id JOIN gl_definition t ON e.target_id=t.id WHERE s.project_id=1672773718350201492 AND t.project_id=1672773718350201492 AND t.name='readListingBuildConfig'` → only caller is `executeListingCreateCampaign`.
+* **Rationale & Recommendation:** Create-on-the-existing-executor cannot cleanly use the built Create path while this helper demands fields Unified never sends. **Cut `readListingBuildConfig` and the "write keywords/headlines/location onto the proposal" sentence.** Do not invent a richer Create shape to feed it.
 
-Each removal is listed under §7.1 "Rejected", with its reason.
+### M3 — Putting the drafter + citation gate + rule packs on the Create path is work with no platform effect — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** One listing's path step 2 (lines 120-121); Target Files items 16-17 (lines 405-413); Verification "drafter's copy is checked by the rule packs."
+* **Discrepancy Description:** The first zoom-out treated grounding/citation/rule packs as correct reuse. At the altitude of *what still needs building*, wiring them onto listing Create now enlarges the slice: copy is never sent to Unified in this phase, so a drafter + citation gate + "rules must pass before the build" gate has no platform consequence. Torbit: `buildGroundingPack` / `assertCitationsAllowed` are called only from `lib/generative/call-prep.ts` (lead-call prep, a later phase); `checkIndiaCopy` / `checkAustraliaCopy` have no production callers; `createPausedUnifiedCampaign` body is name/status/budget/goal only.
+* **Supporting query:** `SELECT s.name, s.file_path, t.name FROM gl_edge e JOIN gl_definition s ON e.source_id=s.id JOIN gl_definition t ON e.target_id=t.id WHERE s.project_id=1672773718350201492 AND t.project_id=1672773718350201492 AND t.name IN ('checkIndiaCopy','checkAustraliaCopy','assertCitationsAllowed','buildGroundingPack') AND s.file_path NOT LIKE '%test%'`.
+* **Rationale & Recommendation:** Leave `india.ts` / `australia.ts` / `grounding-pack` / `citation-gate` as *already built*, but do not place them on the Create build path until Unified accepts copy. Remove the pre-build copy-gate from the remaining Create work.
 
-**Review concluded.** The next step is `/egm-draft` to write the formal design document from this brief.
+### M4 — Three Meta campaigns per listing still overrides the brief and the built 1+1 fixture — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Overview (line 21), The ceiling / Starting shares (lines 126-128, 301-307).
+* **Discrepancy Description:** Caught in both prior zoom-out and critic (N3) and still present. `executeListingOnUnifiedSandbox` loops `listing.shares` with no hardcoded 3; the on-disk `execute.test.ts` fixture is **1 Meta share + 1 Google share**. The brief (§3.1, §10 decision 5) says "One live Meta campaign per listing." The doc still starts every listing with 3 Meta campaigns, tripling live Meta objects as a workaround for Unified having no ad-set object.
+* **Rationale & Recommendation:** Cut "every listing starts with 3 Meta shares." One Meta Unified campaign this phase; Google stays one Search campaign per share. Do not build a 3-way Meta split to stand in for missing ad sets. (Repeat finding — retained because it still enlarges the build.)
+
+### M5 — Generated images (Order item 3) remain on the Phase 1 ladder against the brief and the doc's own Non-Goals — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Order item 3 (line 448); conflicts with Non-Goals (line 57) and item 16 ("No image generator").
+* **Discrepancy Description:** Caught by prior zoom-out and comprehension; still on the build ladder. Brief §3.2 lists generated property images as out; its creative rules state "There is no generated imagery." Not a code-existence claim.
+* **Rationale & Recommendation:** Cut Order item 3. Generated images are not deferred Create work and must not sit in the Phase 1 sequence. (Repeat finding — retained because it still enlarges the build.)
+
+### M6 — Wave 6 edits the private MCP files item 20 says not to touch, risking a second writer — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Target Files item 20 (lines 425-428) vs Wave 6 (line 471).
+* **Discrepancy Description:** Caught by prior zoom-out; still present. `mcp/google-ads-server/index.ts` imports and calls the direct Google writers `createFullGoogleCampaign`, `createGoogleShareCampaign`, `enableGoogleShareCampaign`, `updateGoogleShareBudget`. Item 20 says "No change" to those files; Wave 6 says the last agent edits "the private MCP tool files."
+* **Supporting query:** `SELECT s.fqn, t.fqn FROM gl_edge e JOIN gl_definition s ON e.source_id=s.id JOIN gl_definition t ON e.target_id=t.id WHERE s.project_id=1672773718350201492 AND t.project_id=1672773718350201492 AND t.name IN ('createFullGoogleCampaign','createGoogleShareCampaign','enableGoogleShareCampaign','updateGoogleShareBudget')`.
+* **Rationale & Recommendation:** Cut "then the private MCP tool files" from Wave 6. If Wave 6 survives at all, it stops at `cycle.ts`. (Repeat finding — retained because it still enlarges the build and endangers the single-writer invariant.)
+
+### M7 — Corridor Unified rewrite pulls a second product into the Create slice — Severity: Major
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Accounts (line 140) — corridor Unified create, and the pause / budget-change / negative-keyword shapes.
+* **Discrepancy Description:** The Accounts section specifies corridor create plus pause, budget change, and `targeting.content.excluded_keywords` behaviour as if new. Torbit shows corridor already writes through Unified: `executeCreateCampaign` (`execute.ts:261`) calls `createPausedUnifiedCampaign` for corridor payloads; `addUnifiedNegativeKeyword` (`unified-sandbox.ts:146`) already exists and is imported by `execute.ts`. Listing create is a separate branch (`isListingCreatePayload`).
+* **Supporting query:** `SELECT name, file_path, start_line FROM gl_definition WHERE project_id=1672773718350201492 AND name IN ('executeCreateCampaign','addUnifiedNegativeKeyword')`.
+* **Rationale & Recommendation:** Leave `executeCreateCampaign` as-is. Cut corridor payload/keyword/negative-keyword rules from the remaining listing Create work — they belong to a product that already ships, not to Create-on-the-executor.
+
+### N1 — `distribute` helper name does not exist; two equivalents already do — Severity: Nit
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Lines 301, 309, 438 (references to `distribute` in `reallocate.ts`).
+* **Discrepancy Description:** Prior nit, still present. No symbol `distribute` exists. The remainder rule is `distributeByLeads` (`reallocate.ts:31`) and is duplicated as `distributeEqualMinor` (`execute.ts:292`).
+* **Supporting query:** `SELECT name, file_path, start_line FROM gl_definition WHERE project_id=1672773718350201492 AND name ILIKE '%distribute%'`.
+* **Rationale & Recommendation:** Name `distributeByLeads` precisely. Do not add a third helper.
+
+### N2 — Agent-runbook process details are altitude weeds — Severity: Nit
+* **Reviewer Lens:** `zoom-out`
+* **Affected Scope:** Parallel implementation (lines 452-473); laptop ops (lines 144-150).
+* **Discrepancy Description:** Prior nit, still present. Composer 2.5 slugs, skill-picker routers, `saas-scaffolder` / `payload` / `php-pro` / `laravel-specialist` exclusions, three-terminal setup, `AUTH_BYPASS`, and compose ports do not affect architecture, data flow, or reuse.
+* **Rationale & Recommendation:** Move to an agent runbook. Keep the design at the architecture/interface altitude.
+
+---
+
+## Leave as already built — do not schedule as remaining work (graph-backed)
+
+- Migrations 113-116 (all present on disk).
+- `putConnection`, the `can_activate` flag, and the allowlist row (`connections/store.ts`).
+- `writes_enabled` kill switch (`setWritesEnabled`, `org-settings.ts:65`; enforced in `execute.ts`).
+- Listing page `app/l/[token]/page.tsx` (preview only, no Create button — confirmed on disk).
+- Inbound parser (`parseInboundText`: code/pause/stop only; no spend+goal Create type) and `routeInbound`, already wired to the WhatsApp route.
+- Outbound templates (`renderOutbound`).
+- Rule packs `india.ts` / `australia.ts` (built; just not on the Create path — see M3).
+- `reallocateListing` / `distributeByLeads` and `executeShareMove` (built; wiring them is later than Create — see below).
+- Listing health read and Desk chat (`campaign-chat.ts` / `CampaignDraftChat`) — unchanged.
+
+## Do not add, even where the critic asked (later than Create)
+
+- A crash-reconciliation sweeper (critic M3), a new auto-approved proposal kind for share moves (critic M4), and the `applyMove → executeShareMove` wiring (design item 8). `executeShareMove` and `reallocateListing` already exist; `executeShareMove` has **no production caller** today, but wrapping it now is later than Create. Build Create first; wire the move after a paused build reads back.
+
+---
+
+*Synthesized with EGM*

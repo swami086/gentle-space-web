@@ -16,12 +16,13 @@
   * [ryze_capability_map.md](ryze_capability_map.md), [campaign_drafting_tracking_research.md](campaign_drafting_tracking_research.md) and [au_market_competition.md](au_market_competition.md): research inputs.
   * [concepts_brief_full_service.md](concepts_brief_full_service.md): the end-to-end service, of which this is Phase 1.
   * Where any of these documents disagrees with this brief, this brief wins.
+  * **Amendment 2026-11-02.** The owner confirmed that Create is the approval for the first campaign. The consultant sets a daily spend limit and a goal, then presses Create on the web app. A WhatsApp or SMS message that states the same limit and goal is the same act. That act authorizes the agent to write the ads from the listing facts and start the campaign. There is no second step that shows the finished ad and waits for a code. On a live ad account the campaign is started. In the sandbox the connection cannot activate, so the campaign stays paused. The activation guard is not weakened to make a sandbox campaign go live. A later change, including a raise of the spend limit, is still an Approve or Reject card, and a text code remains the way to approve that card from WhatsApp or SMS. A stop still needs no code. One share move inside the already approved spend limit is still texted after it happens and still cannot raise the limit. Nothing is created on the platform before Create. Sentences below that still say the first build waits for a text code are superseded by this amendment. Later-change codes, stops, and the in-ceiling share move are not.
 
 ## 1. Problem statement
 
 **The agent's problem.** The owner's working premise, not yet measured: most real estate agents in India and Australia lease listings without a media buyer. Running a Meta or Google campaign for one listing means choosing a budget, audience, copy, images and lead form, then watching delivery and spend for two weeks. So listings get no paid ads, or ads whose budget, audience and form are not tuned.
 
-**What exists.** AI ads tools such as [Ryze AI](https://www.get-ryze.ai/) build and tune campaigns from a chat. None of the tools reviewed in [ryze_capability_map.md](ryze_capability_map.md) is built around one property listing, local lease rules, or approval by text, and Ryze's monitor changes budgets without asking.
+**What exists.** AI ads tools such as [Ryze AI](https://www.get-ryze.ai/) build and tune campaigns from a chat. None of the tools reviewed in [ryze_capability_map.md](ryze_capability_map.md) is built around one property listing or local lease rules. Ryze's monitor changes budgets without asking. This service asks before any change after Create, except a stop and one share move inside the spend limit.
 
 **The owner's problem.** The owner already runs ads for **Gentle Space**, their commercial office space business in Bangalore, with code in this repo's `ads-agent` package. That code serves one organisation. Its platform connectors read one set of credentials from environment variables, so a second customer's approved campaign would spend on Gentle Space's ad account (§5.1).
 
@@ -36,9 +37,9 @@ From the listing facts, the service drafts the campaign a media buyer would buil
 * copy that states only facts from the listing;
 * a lead form that asks the renter the segment's questions.
 
-The approver, usually the agent, sees a preview and approves by WhatsApp in India or SMS in Australia. Only then does the service build the campaign and switch it on.
+The consultant sets a daily spend limit and a goal, then presses Create. That press is the approval. The agent writes the ads from the listing facts and starts the campaign. There is no second step that shows the finished ad and waits for a code. On a live ad account the campaign is started. In the sandbox it stays paused.
 
-While it runs, the service checks delivery, pacing, ad status and lead flow. It texts each finding to the approver with a recommended action, and changes nothing until they reply with a code. A **stop** is the exception: it needs no code (§6.6).
+While it runs, the service checks delivery, pacing, ad status and lead flow. It texts each finding to the approver with a recommended action, and changes nothing until they approve that later card. A **stop** is the exception: it needs no code (§6.6). A share move inside the spend limit is the other exception: it is texted after it happens and cannot raise the limit.
 
 This rebuilds the core of Ryze's paid-ads product in-house, with no dependency on Ryze. **Phase 2**, the lead chain in the full-service brief (voice qualification, handoff and booking), comes later and builds on this.
 
@@ -50,8 +51,8 @@ The owner's decisions are listed in §10.
 
 * Connections per organisation, with encrypted credentials, capabilities, an account allowlist and health checks. Gentle Space is migrated first, and the environment-variable fallback is removed.
 * Listing schemas and drafts for both segments, using only listing facts, from a deterministic planner and versioned rule packs.
-* One build flow on Meta and on Google (Google for commercial office leases only): approve, build paused, read back, activate. Retry-safe, reconciled, capped on the platform. One live Meta campaign per listing. Google may be one Search campaign per share. The shares sum to the approved ceiling.
-* Text approval with codes, approvers per ad account, re-prompts for anything ambiguous, and STOP reserved for opting out. WhatsApp in India, two-way SMS in Australia.
+* One build flow on Meta and on Google (Google for commercial office leases only): Create, build paused, read back, activate on a live account. A sandbox connection cannot activate. Retry-safe, reconciled, capped on the platform. One live Meta campaign per listing. Google may be one Search campaign per share. The shares sum to the spend limit set at Create.
+* Create on the web app, or the same spend limit and goal sent by WhatsApp or SMS, as the approval for the first campaign. Text codes for later changes, approvers per ad account, re-prompts for anything ambiguous, and STOP reserved for opting out. WhatsApp in India, two-way SMS in Australia.
 * The listing page for intake, editing and preview.
 * The stop rule: any stop runs at once at the narrowest identifiable scope, then confirms.
 * Monitoring on two cadences against the campaign's own plan, with a closed set of finding actions.
@@ -137,8 +138,8 @@ The design document must use these terms exactly as defined here. Entries define
 * **Proposal.** A request to change something on an ad platform, handled by the proposal engine. States, as in the repo: pending, approved, scheduled, executing, executed, failed and rejected. A withdrawn proposal is `rejected` with a reason, such as "superseded" or "cancelled".
 * **Handle.** A readable name, unique across the service. A listing's is the approver's surname plus a running number (`SMITH14`). A finding's adds its sequence on that listing (`SMITH14-3`). Not secret.
 * **Approval code.** A single-use secret that authorises one set of proposals. §6.4.
-* **Approval.** The recorded authorisation of a proposal, by text code or, for Gentle Space only, on the Desk. Every proposal needs one except a stop. §6.4.
-* **Build.** Creating a campaign's objects on the platform, paused, after approval. §6.3.
+* **Approval.** For the first campaign, the Create press: a daily spend limit and a goal. For a later change, a text code or, for Gentle Space only, the Desk. A stop needs none. §6.4 and the 2026-11-02 amendment.
+* **Build.** Creating a campaign's objects on the platform, paused, after that approval, then activating when the connection can activate. §6.3.
 * **Activation.** Switching a built campaign on, in the same run, after a successful read-back. §6.3.
 * **Finding.** A monitoring result with one recommended action from a closed list. **Urgent** findings are sent at once; **routine** ones wait for the digest. §6.8.
 * **Drift.** A difference between the platform's current state and the service's last read-back, usually from an edit in Ads Manager. §6.8.
@@ -157,7 +158,7 @@ The design document must use these terms exactly as defined here. Entries define
 
 ### Text commands
 
-The full list of words and buttons the reply parser accepts. §6.4 sets the order they are checked in.
+The full list of words and buttons the reply parser accepts. §6.4 sets the order they are checked in. Create is not one of these codes. A message that states a daily spend limit and a goal is the first campaign's approval. A code alone still approves a later card.
 
 | Command | Effect | Needs a code |
 | --- | --- | --- |
@@ -254,14 +255,13 @@ None of these can be diagnosed today: a launch without approval, a draft stuck o
 * **Chat connector** (Stage 2). A thin public server over the same proposal engine.
 
 **Data flow for one listing:**
-1. The agent texts `New listing` to the service number. The inbound router hands it to intake, which asks for missing facts and sends a listing-page link.
-2. The planner, drafter and rule-pack checker turn the facts and photos into a revision.
-3. The revision is sent for approval as one proposal per platform. The outbound sender texts each approver a code.
-4. The approver replies with the code. The reply parser matches it, and the proposal engine schedules the proposal after the undo window.
-5. The worker hands the proposal to the executor, which runs preflight, claims it, builds paused through the connection, reads back, activates, and fills the build-steps record.
-6. The monitor checks status every 15 minutes and insights daily. Findings go out through the outbound sender, and replies come back through step 4.
-7. Leads reach lead intake and the enquiry tables, and the agent is alerted.
-8. The reconciler and alert router watch steps 5 to 7. Every record carries one trace id per journey (§6.13).
+1. The consultant sets a daily spend limit and a goal and presses Create, on the web app or by sending that limit and goal on WhatsApp or SMS. Intake asks for any missing listing facts. A missing fact stops on the campaign page and asks. Nothing is built until the facts and the Create are both present.
+2. The planner, drafter and rule-pack checker turn the facts and photos into the ads. Create already authorized this. There is no second preview and no text code before the first build.
+3. The proposal engine records one proposal per platform as approved by that Create, and schedules it after the undo window.
+4. The worker hands the proposal to the executor, which runs preflight, claims it, builds paused through the connection, reads back, and activates when the connection can activate. A sandbox connection cannot activate, so the campaign stays paused. The build-steps record is filled either way.
+5. The monitor checks status every 15 minutes and insights daily. A finding is a later card. It goes out through the outbound sender and changes nothing until the approver approves that card, by a text code or on the Desk.
+6. Leads reach lead intake and the enquiry tables, and the agent is alerted.
+7. The reconciler and alert router watch steps 4 to 6. Every record carries one trace id per journey (§6.13).
 
 ### 6.2 Connections, organisations and isolation
 
@@ -309,7 +309,7 @@ There is no separate launch proposal and no launch mode per organisation. A test
 * The replacement's ceiling is the approved total minus spend so far, and its approval message shows both.
 * A Stage 0 test, on built-paused fixtures, proves a listing never has two active campaigns on one platform.
 
-1. A proposal is approved (§6.4). Nothing exists on the platform for that revision before this.
+1. The first campaign's Create has been pressed, or a later card has been approved (§6.4). Nothing exists on the platform for that revision before this. A sandbox connection has no "can activate", so step 7 stops after the paused build.
 2. After the undo window, the worker hands it to the executor. The per-account queue wait happens here, before any claim.
 3. **Preflight,** for every proposal, including after a kill-switch release:
    * the approval is under 24 hours old;
@@ -344,9 +344,11 @@ There is no separate launch proposal and no launch mode per organisation. A test
 
 Gentle Space's new campaigns, approved on the Desk, follow the same flow and still go live in the same run, as today.
 
-### 6.4 Approval by text
+### 6.4 Approval
 
-**Two approval routes into the same lifecycle:**
+**The first campaign is Create.** The consultant sets a daily spend limit and a goal and presses Create on the web app, or sends that same limit and goal by WhatsApp or SMS. That act is the recorded approval. The agent writes the ads from the listing facts and the executor starts the campaign on a live account. There is no preview code before that build. The code rules below apply to later changes: a raise of the spend limit, a finding's recommended action, a creative or audience replacement, and RESUME.
+
+**Two routes for a later change, into the same lifecycle:**
 * **Text with a code** (`decided_via = text`), for every organisation, Gentle Space included.
 * **The Desk** (`ui` or `bulk`), by a signed-in admin, for the platform organisation only. The executor refuses a Desk approval on any other organisation's proposal.
 * Hermes, the chat connector and the listing page create proposals but never approve them. Claude does not support purchases through third-party interactive connectors (verification log, item 28).
@@ -414,7 +416,7 @@ If Meta pauses a template, its messages go by email with a signed listing-page l
 
 ### 6.5 Intake, editing and preview
 
-There is no agent web app in Phase 1. Agents work by text, plus the listing page.
+The web app is where the consultant presses Create. WhatsApp and SMS are other ways to send the same request, and they carry the text codes for later cards. The listing page is for photos, edits and previews. It never approves.
 
 * **Starting a listing.** The agent texts `New listing`. The service asks for at most three missing fields per message, and sends a listing-page link.
   * **India:** facts by WhatsApp text; photos and brochures as WhatsApp media, downloaded through the WhatsApp Cloud API; or the listing page.
@@ -707,7 +709,7 @@ Stages 0 and 1 do not need it. In Phase 1 it is a beta custom connector for Stag
 * **(§6.12) Defer the chat connector to Stage 3.** The product is meant to plug into ChatGPT and Claude, so pilots should test that front door before self-serve. The OAuth server is needed by Stage 3 anyway, and building it against one to three pilots per step is lower risk than at launch. The cost is new auth surface in Phase 1, covered in §8.1.
 * **(§3.2) Competitor ads for similar listings.** Not available through official APIs in either market.
 * **(§6.9) Generated images of the property.** Cost, and the risk of misrepresenting the property.
-* **(§6.3) Build paused before approval, so the agent can inspect the campaign in Ads Manager, as Ryze and Adspirer (another AI ads tool) do.** It puts objects on the platform before approval and needs a reaper. `generatepreviews` gives a real preview without creating anything.
+* **(§6.3) Build on the platform before Create, so the agent can inspect the campaign in Ads Manager, as Ryze and Adspirer (another AI ads tool) do.** Create is the approval, and objects are still not put on the platform before that press. Building first would need a reaper. `generatepreviews` gives a real preview without creating anything.
 * **(§6.3) A separate launch proposal and a launch mode per organisation.** With build, read-back and activation in one run, Gentle Space keeps its behaviour without a special mode.
 * **(§6.3) Update creative or audience in place for a new revision.** It needs a diff-and-patch path per object type, and any creative change restarts Meta's learning phase anyway. Budget and end-date changes do go in place, through finding actions.
 * **(§6.3) Resume crashed builds.** A crashed build has only paused objects, so failing it and asking for re-approval costs one text. Resume would need claim renewal, fencing tokens and name lookup before each create.
@@ -913,9 +915,9 @@ All confirmed by the owner on 2026-10-30, or derived from verified facts:
 1. **Scope.** Residential and commercial office leases in India and Australia, rentals only, in §9.1's order. India commercial office leases go first. Phase 1 ends when all four market steps pass Stage 2.
 2. **Build.** In-house, with as few third-party services as possible, and no dependency on Ryze.
 3. **Money.** Ads run in the customer's ad account, never the service's. Ad spend comes from the payer and is never part of the subscription.
-4. **Front door.** Text messages plus the listing page, with the Desk as the owner's back office. The chat connector is a beta for Stage 2 pilots.
-5. **Build timing.** Approve, then build paused, read back and activate in one run. A crashed build fails and is re-approved, never resumed. One live Meta campaign per listing. Google may be one Search campaign per share. Creative or audience changes replace the listing's campaigns, while budget and end-date changes go in place.
-6. **Approval.** Text codes for everyone; the Desk for Gentle Space only. One approver per listing. Every change except a stop needs an approval.
+4. **Front door.** The web app is where Create lives. WhatsApp and SMS send the same prompts and carry later approval codes. The listing page holds photos and previews and never approves. The Desk is the owner's back office. The chat connector is a beta for Stage 2 pilots.
+5. **Build timing.** Create, then build paused, read back, and activate when the connection can activate. A sandbox connection cannot activate. A crashed build fails and is re-approved, never resumed. One live Meta campaign per listing. Google may be one Search campaign per share. Creative or audience changes replace the listing's campaigns, while budget and end-date changes go in place.
+6. **Approval.** Confirmed again on 2026-11-02. Create, with a daily spend limit and a goal, approves the first campaign. There is no second preview code before that build. Later changes use a text code, or the Desk for Gentle Space. One approver per listing. A stop needs no approval. One share move inside the spend limit is texted after it happens.
 7. **Channels.** WhatsApp in India and two-way SMS in Australia. Email for notices only. No SMS in India.
 8. **Google.** Commercial office leases only: Search campaigns with a lead form asset and a total budget, or Meta only if Google refuses the total budget. Explorer access before Stage 1, and Basic before a Google step's Stage 2 if use requires it. Pilots link to the owner's manager account.
 9. **Meta app.** One new service app, in Live mode from Stage 0, which earns Full access before Stage 2.
