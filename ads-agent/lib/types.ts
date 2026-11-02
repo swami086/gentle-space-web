@@ -78,11 +78,16 @@ export type CampaignStrategyPayload = {
   recommendations: CampaignStrategyRecommendation[];
 };
 
-/** Payload for a listing-scoped create_campaign proposal (budget shares must sum to per-platform ceilings). */
+/** Payload for a listing-scoped create_campaign proposal (one share per platform; share budgets match that platform's ceiling). */
 export type ListingCreatePayload = {
   traceId: string;
   ceilings: { platform: Platform; ceilingMinor: number }[];
   shares: { platform: Platform; budgetMinor: number }[];
+  listingId?: string;
+  market?: "IN" | "AU";
+  sector?: "residential" | "commercial_office";
+  approverPhone?: string;
+  goal?: string;
 };
 
 export type ProposalStatus =

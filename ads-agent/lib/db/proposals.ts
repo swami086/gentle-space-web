@@ -78,8 +78,13 @@ export function assertListingCreatePayload(payload: unknown): ListingCreatePaylo
   }
 
   const shareSumByPlatform = new Map<Platform, number>();
+  const seenPlatform = new Set<Platform>();
   for (const { platform, amount } of shares) {
-    shareSumByPlatform.set(platform, (shareSumByPlatform.get(platform) ?? 0) + amount);
+    if (seenPlatform.has(platform)) {
+      throw new Error(`listing create payload has more than one ${platform} share`);
+    }
+    seenPlatform.add(platform);
+    shareSumByPlatform.set(platform, amount);
   }
 
   for (const [platform, shareTotal] of shareSumByPlatform) {
@@ -94,10 +99,31 @@ export function assertListingCreatePayload(payload: unknown): ListingCreatePaylo
     }
   }
 
+  const market = raw.market === "IN" || raw.market === "AU" ? raw.market : undefined;
+  if (raw.market != null && !market) {
+    throw new Error("listing create payload market must be IN or AU");
+  }
+  const sector =
+    raw.sector === "residential" || raw.sector === "commercial_office" ? raw.sector : undefined;
+  if (raw.sector != null && !sector) {
+    throw new Error("listing create payload sector must be residential or commercial_office");
+  }
+  if (sector === "residential" && seenPlatform.has("google")) {
+    throw new Error("listing create payload residential listings are Meta only");
+  }
+  const approverPhone = typeof raw.approverPhone === "string" ? raw.approverPhone.trim() : "";
+  const goal = typeof raw.goal === "string" ? raw.goal.trim() : "";
+  const listingId = typeof raw.listingId === "string" ? raw.listingId.trim() : "";
+
   return {
     traceId: raw.traceId,
     ceilings: ceilings.map(({ platform, amount }) => ({ platform, ceilingMinor: amount })),
     shares: shares.map(({ platform, amount }) => ({ platform, budgetMinor: amount })),
+    ...(listingId ? { listingId } : {}),
+    ...(market ? { market } : {}),
+    ...(sector ? { sector } : {}),
+    ...(approverPhone ? { approverPhone } : {}),
+    ...(goal ? { goal } : {}),
   };
 }
 
@@ -107,11 +133,21 @@ export function buildListingCreateProposal(input: {
   traceId: string;
   triggeredRule: string;
   rationale?: string | null;
+  listingId?: string;
+  market?: ListingCreatePayload["market"];
+  sector?: ListingCreatePayload["sector"];
+  approverPhone?: string;
+  goal?: string;
 }): NewProposal {
   const payload = assertListingCreatePayload({
     traceId: input.traceId,
     ceilings: input.ceilings,
     shares: input.shares,
+    listingId: input.listingId,
+    market: input.market,
+    sector: input.sector,
+    approverPhone: input.approverPhone,
+    goal: input.goal,
   });
   return {
     kind: "create_campaign",

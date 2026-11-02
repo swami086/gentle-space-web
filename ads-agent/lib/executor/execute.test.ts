@@ -170,6 +170,9 @@ const ORG = { kind: "org" as const, orgId: "00000000-0000-0000-0000-000000000001
 
 const listingPayload = {
   traceId: "trace-listing-1",
+  market: "IN" as const,
+  sector: "commercial_office" as const,
+  approverPhone: "+919800000000",
   ceilings: [
     { platform: "meta" as const, ceilingMinor: 30_000 },
     { platform: "google" as const, ceilingMinor: 20_000 },
@@ -209,9 +212,18 @@ function mockTenantDb(options: {
   const googleCanActivate = options.googleCanActivate ?? true;
   const metaCanActivate = options.metaCanActivate ?? true;
   const writesEnabled = options.writesEnabled ?? true;
+  let shareInserts = 0;
   withTenantTransaction.mockImplementation(async (_scope, fn) =>
     fn({
       query: vi.fn(async (sql: string, params?: unknown[]) => {
+        tenantQueries.push({ sql, params });
+        if (sql.includes("INSERT INTO adsagent.listings")) {
+          return { rows: [{ id: "listing-1" }] };
+        }
+        if (sql.includes("INSERT INTO adsagent.listing_shares")) {
+          shareInserts += 1;
+          return { rows: [{ id: `share-${shareInserts}` }] };
+        }
         if (sql.includes("adsagent.connections")) {
           const platform = params?.[1];
           if (platform === "google") {
@@ -228,7 +240,10 @@ function mockTenantDb(options: {
   );
 }
 
+const tenantQueries: { sql: string; params?: unknown[] }[] = [];
+
 beforeEach(() => {
+  tenantQueries.length = 0;
   vi.clearAllMocks();
   process.env.GOOGLE_ADS_CUSTOMER_ID = "1234567890";
   process.env.META_ACCESS_TOKEN = "meta-token";
@@ -502,6 +517,36 @@ describe("executeProposal", () => {
     expect(markProposalFailed).toHaveBeenCalledWith(ORG, "prop-1", expect.stringContaining("after_claim"));
     expect(createPausedUnifiedCampaign).not.toHaveBeenCalled();
     expect(result.status).toBe("failed");
+  });
+
+  it("stores the campaign id when the payload has no ad fields", async () => {
+    unifiedSandboxConfigured.mockReturnValue(true);
+    process.env.UNIFIED_META_ADS_CONNECTION_ID = "meta-sandbox";
+    createPausedUnifiedCampaign.mockResolvedValueOnce("meta-camp-1");
+    getProposalById.mockResolvedValue(
+      executingProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: {
+          traceId: "trace-listing-2",
+          market: "IN",
+          sector: "residential",
+          approverPhone: "+919800000000",
+          ceilings: [{ platform: "meta", ceilingMinor: 15_000 }],
+          shares: [{ platform: "meta", budgetMinor: 15_000 }],
+        },
+      }),
+    );
+
+    const result = await executeProposal(ORG, "prop-1");
+
+    expect(result.result).toMatchObject({ activated: false, traceId: "trace-listing-2" });
+    expect(createPausedUnifiedCampaign).toHaveBeenCalledTimes(1);
+    expect(
+      tenantQueries.some(
+        (query) => query.sql.includes("UPDATE adsagent.listing_shares") && query.params?.[1] === "meta-camp-1",
+      ),
+    ).toBe(true);
   });
 });
 

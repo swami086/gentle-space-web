@@ -9,11 +9,9 @@ import { assertListingCreatePayload, getProposalById, markProposalExecuted, mark
 import type { Scope } from "../db/scope-sql";
 import { withTenantTransaction } from "../db/tx";
 import { requireEnv } from "../env";
-import {
-  type GoogleShareCampaignInput,
-} from "../connectors/google-ads";
 import { listCurrent } from "../connections/store";
 import {
+  activateUnifiedCampaign,
   addUnifiedNegativeKeyword,
   createPausedUnifiedCampaign,
   pauseUnifiedCampaign,
@@ -60,21 +58,6 @@ export type ExecuteProposalResult = {
   result?: ListingExecuteResult;
 };
 
-type MetaShareCreative = {
-  name: string;
-  message: string;
-  imageHash: string;
-  link: string;
-};
-
-type ListingBuildConfig = {
-  campaignName: string;
-  endTimeIso: string;
-  pageId: string;
-  google: Omit<GoogleShareCampaignInput, "name" | "totalBudgetMinor">;
-  metaShares: MetaShareCreative[];
-};
-
 class ExecuteFault extends Error {
   constructor(readonly faultAt: ExecuteFaultPoint) {
     super(`execute fault injected at ${faultAt}`);
@@ -109,56 +92,7 @@ function assertNoEndDateUnifiedUpdate(payload: Record<string, unknown>): void {
   }
 }
 
-function readListingBuildConfig(
-  proposalId: string,
-  raw: Record<string, unknown>,
-): ListingBuildConfig {
-  const campaignName =
-    typeof raw.campaignName === "string" && raw.campaignName.trim() !== ""
-      ? raw.campaignName
-      : `${proposalId} listing`;
-  const endTimeIso = typeof raw.endTimeIso === "string" ? raw.endTimeIso : "";
-  const pageId = typeof raw.pageId === "string" ? raw.pageId : "";
-  if (!endTimeIso || !pageId) {
-    throw new Error("listing create payload requires endTimeIso and pageId");
-  }
-
-  const googleRaw = raw.google;
-  if (!googleRaw || typeof googleRaw !== "object") {
-    throw new Error("listing create payload requires google creative template");
-  }
-  const google = googleRaw as Record<string, unknown>;
-  const googleTemplate: Omit<GoogleShareCampaignInput, "name" | "totalBudgetMinor"> = {
-    geoTargetConstant: String(google.geoTargetConstant ?? ""),
-    languageConstant: String(google.languageConstant ?? ""),
-    adGroupName: String(google.adGroupName ?? ""),
-    keywords: (google.keywords as GoogleShareCampaignInput["keywords"]) ?? [],
-    negativeKeywords: (google.negativeKeywords as string[]) ?? [],
-    headlines: (google.headlines as string[]) ?? [],
-    descriptions: (google.descriptions as string[]) ?? [],
-    finalUrl: String(google.finalUrl ?? ""),
-  };
-
-  if (!Array.isArray(raw.metaShares)) {
-    throw new Error("listing create payload requires metaShares");
-  }
-  const metaShares = raw.metaShares.map((entry, index) => {
-    if (!entry || typeof entry !== "object") {
-      throw new Error(`listing create payload metaShares[${index}] must be an object`);
-    }
-    const row = entry as Record<string, unknown>;
-    return {
-      name: String(row.name ?? ""),
-      message: String(row.message ?? ""),
-      imageHash: String(row.imageHash ?? ""),
-      link: String(row.link ?? ""),
-    };
-  });
-
-  return { campaignName, endTimeIso, pageId, google: googleTemplate, metaShares };
-}
-
-type UnifiedConnectionRef = { connectionId: string; mode: UnifiedWriteMode };
+type UnifiedConnectionRef = { connectionId: string; mode: UnifiedWriteMode; canActivate: boolean };
 
 async function resolveUnifiedConnection(scope: Scope, platform: Platform): Promise<UnifiedConnectionRef> {
   if (scope.kind !== "org" || scope.orgId === PLATFORM_ORG_ID) {
@@ -167,6 +101,7 @@ async function resolveUnifiedConnection(scope: Scope, platform: Platform): Promi
         platform === "google" ? "UNIFIED_GOOGLE_ADS_CONNECTION_ID" : "UNIFIED_META_ADS_CONNECTION_ID",
       ),
       mode: "test",
+      canActivate: false,
     };
   }
 
@@ -181,58 +116,125 @@ async function resolveUnifiedConnection(scope: Scope, platform: Platform): Promi
   return {
     connectionId: row.externalAccountId,
     mode: row.environment === "live" ? "production" : "test",
+    canActivate: row.canActivate,
   };
+}
+
+async function persistListingRows(scope: Scope, listing: ListingCreatePayload): Promise<string[]> {
+  return withTenantTransaction(scope, async (client) => {
+    let listingId = listing.listingId;
+    if (!listingId) {
+      if (!listing.market || !listing.sector || !listing.approverPhone) {
+        throw new Error("listing create payload requires market, sector, and approverPhone");
+      }
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO adsagent.listings (org_id, approver_phone, market, sector, facts)
+         VALUES ($1::uuid, $2, $3, $4, $5::jsonb)
+         RETURNING id`,
+        [
+          scope.orgId,
+          listing.approverPhone,
+          listing.market,
+          listing.sector,
+          JSON.stringify({ goal: listing.goal ?? null }),
+        ],
+      );
+      listingId = inserted.rows[0]?.id;
+      if (!listingId) throw new Error("listing insert returned no row");
+    }
+    const shareIds: string[] = [];
+    for (const ceiling of listing.ceilings) {
+      await client.query(
+        `INSERT INTO adsagent.listing_ceilings (listing_id, platform, ceiling_minor)
+         VALUES ($1::uuid, $2, $3)
+         ON CONFLICT (listing_id, platform) DO NOTHING`,
+        [listingId, ceiling.platform, ceiling.ceilingMinor],
+      );
+    }
+    for (const share of listing.shares) {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO adsagent.listing_shares (listing_id, platform, budget_minor)
+         VALUES ($1::uuid, $2, $3)
+         RETURNING id`,
+        [listingId, share.platform, share.budgetMinor],
+      );
+      const shareId = inserted.rows[0]?.id;
+      if (!shareId) throw new Error("listing share insert returned no row");
+      shareIds.push(shareId);
+    }
+    return shareIds;
+  });
+}
+
+async function storeExternalCampaignIds(
+  scope: Scope,
+  shareIds: string[],
+  externalIds: string[],
+): Promise<void> {
+  if (shareIds.length !== externalIds.length) {
+    throw new Error("listing create share count does not match created campaigns");
+  }
+  await withTenantTransaction(scope, async (client) => {
+    for (let i = 0; i < shareIds.length; i += 1) {
+      await client.query(
+        `UPDATE adsagent.listing_shares SET external_campaign_id = $2 WHERE id = $1::uuid`,
+        [shareIds[i], externalIds[i]],
+      );
+    }
+  });
 }
 
 async function executeListingOnUnifiedSandbox(
   scope: Scope,
   proposalId: string,
   listing: ListingCreatePayload,
-): Promise<ListingExecuteResult> {
-  const googleConnection = await resolveUnifiedConnection(scope, "google");
-  const metaConnection = await resolveUnifiedConnection(scope, "meta");
+): Promise<{ result: ListingExecuteResult; externalIds: string[] }> {
+  const externalIds: string[] = [];
   const googleCampaignIds: string[] = [];
   const metaCampaignIds: string[] = [];
+  let activated = false;
   let googleIndex = 0;
   let metaIndex = 0;
   for (const share of listing.shares) {
-    if (share.platform === "google") {
-      googleIndex += 1;
-      googleCampaignIds.push(
-        await createPausedUnifiedCampaign(
-          {
-            connectionId: googleConnection.connectionId,
-            name: `${proposalId} google share ${googleIndex}`,
+    const connection = await resolveUnifiedConnection(scope, share.platform);
+    const campaignId = await createPausedUnifiedCampaign(
+      share.platform === "google"
+        ? {
+            connectionId: connection.connectionId,
+            name: `${proposalId} google share ${(googleIndex += 1)}`,
             budgetAmount: share.budgetMinor / 100,
             budgetPeriod: "TOTAL",
             advertisingChannelType: "SEARCH",
-          },
-          googleConnection.mode,
-        ),
-      );
-    } else {
-      metaIndex += 1;
-      metaCampaignIds.push(
-        await createPausedUnifiedCampaign(
-          {
-            connectionId: metaConnection.connectionId,
-            name: `${proposalId} meta share ${metaIndex}`,
+          }
+        : {
+            connectionId: connection.connectionId,
+            name: `${proposalId} meta share ${(metaIndex += 1)}`,
             budgetAmount: share.budgetMinor / 100,
             budgetPeriod: "LIFETIME",
             goal: "LEADS",
           },
-          metaConnection.mode,
-        ),
-      );
+      connection.mode,
+    );
+    externalIds.push(campaignId);
+    if (share.platform === "google") googleCampaignIds.push(campaignId);
+    else metaCampaignIds.push(campaignId);
+    if (connection.mode === "production" && connection.canActivate) {
+      await activateUnifiedCampaign(connection.connectionId, campaignId, {
+        canActivate: true,
+        mode: "production",
+      });
+      activated = true;
     }
   }
   return {
-    traceId: listing.traceId,
-    activated: false,
-    sandbox: { googleCampaignIds, metaCampaignIds },
+    result: {
+      traceId: listing.traceId,
+      activated,
+      sandbox: { googleCampaignIds, metaCampaignIds },
+    },
+    externalIds,
   };
 }
-
 
 async function executeListingCreateCampaign(
   scope: Scope,
@@ -241,13 +243,15 @@ async function executeListingCreateCampaign(
   faultAt?: ExecuteFaultPoint,
 ): Promise<ListingExecuteResult> {
   const listing = assertListingCreatePayload(rawPayload);
-  readListingBuildConfig(proposalId, rawPayload);
 
   if (faultAt === "after_claim") {
     throw new ExecuteFault("after_claim");
   }
 
-  return executeListingOnUnifiedSandbox(scope, proposalId, listing);
+  const shareIds = await persistListingRows(scope, listing);
+  const created = await executeListingOnUnifiedSandbox(scope, proposalId, listing);
+  await storeExternalCampaignIds(scope, shareIds, created.externalIds);
+  return created.result;
 }
 
 

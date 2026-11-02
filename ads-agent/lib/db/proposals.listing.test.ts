@@ -9,8 +9,7 @@ const matchingPayload = {
     { platform: "google" as const, ceilingMinor: 20_000 },
   ],
   shares: [
-    { platform: "meta" as const, budgetMinor: 20_000 },
-    { platform: "meta" as const, budgetMinor: 10_000 },
+    { platform: "meta" as const, budgetMinor: 30_000 },
     { platform: "google" as const, budgetMinor: 20_000 },
   ],
 };
@@ -27,6 +26,27 @@ describe("assertListingCreatePayload", () => {
         shares: [{ platform: "meta", budgetMinor: 5_000 }],
       }),
     ).toThrow(/share total for meta is 5000, ceiling is 30000/);
+  });
+
+  it("rejects a second share on the same platform", () => {
+    expect(() =>
+      assertListingCreatePayload({
+        ...matchingPayload,
+        shares: [
+          { platform: "meta", budgetMinor: 10_000 },
+          { platform: "meta", budgetMinor: 20_000 },
+        ],
+      }),
+    ).toThrow(/more than one meta share/);
+  });
+
+  it("rejects Google on a residential listing", () => {
+    expect(() =>
+      assertListingCreatePayload({
+        ...matchingPayload,
+        sector: "residential",
+      }),
+    ).toThrow(/residential listings are Meta only/);
   });
 
   it("rejects an empty traceId", () => {

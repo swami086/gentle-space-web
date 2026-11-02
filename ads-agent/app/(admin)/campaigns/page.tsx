@@ -64,7 +64,10 @@ export default async function CampaignsPage() {
   return (
     <div className="flex flex-col gap-4">
       <TabStrip tabs={MARKETING_TABS} />
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button asChild size="sm" variant="outline">
+          <Link href="/listings/new">New listing</Link>
+        </Button>
         <Button asChild size="sm">
           <Link href="/campaigns/new">
             <Plus />
