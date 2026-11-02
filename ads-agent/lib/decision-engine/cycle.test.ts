@@ -43,7 +43,28 @@ vi.mock("./rules", () => ({ evaluateRules }));
 vi.mock("./rationale", () => ({ draftRationale }));
 vi.mock("../db/audit-log", () => ({ writeAudit }));
 
+import type { ReallocateListingInput } from "../monitor/reallocate";
 import { runDecisionCycle } from "./cycle";
+
+const EMPTY_SHARE_MOVES = { failed: 0, moved: 0 };
+
+function reallocateMoveInput(
+  overrides: Partial<ReallocateListingInput> = {},
+): ReallocateListingInput {
+  return {
+    writesEnabled: true,
+    dayNumber: 3,
+    alreadyMovedToday: false,
+    ceilingChangedToday: false,
+    ceilingMinor: 30_000,
+    shares: [
+      { id: "a", budgetMinor: 10_000, spendMinor: 2_000, leads: 0 },
+      { id: "b", budgetMinor: 10_000, spendMinor: 3_000, leads: 2 },
+      { id: "c", budgetMinor: 10_000, spendMinor: 1_000, leads: 1 },
+    ],
+    ...overrides,
+  };
+}
 
 const ORG = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
 const PLATFORM = { kind: "platform" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
@@ -142,11 +163,14 @@ describe("runDecisionCycle", () => {
         rationale: "CPL has been too high for 3 days.",
       }),
     );
-    expect(result).toEqual({ proposalsCreated: 1 });
+    expect(result).toEqual({ proposalsCreated: 1, shareMoves: EMPTY_SHARE_MOVES });
   });
 
   it("returns proposalsCreated: 0 when no rule triggers", async () => {
-    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({
+      proposalsCreated: 0,
+      shareMoves: EMPTY_SHARE_MOVES,
+    });
     expect(createProposal).not.toHaveBeenCalled();
   });
 
@@ -202,7 +226,10 @@ describe("runDecisionCycle", () => {
   it("still records the Meta snapshot when fetchGoogleAdsPerformance rejects (MCP server unreachable)", async () => {
     fetchGoogleAdsPerformance.mockRejectedValue(new Error("google ads mcp: connect ECONNREFUSED"));
 
-    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({
+      proposalsCreated: 0,
+      shareMoves: EMPTY_SHARE_MOVES,
+    });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
       ORG,
@@ -217,7 +244,10 @@ describe("runDecisionCycle", () => {
   it("still records the Google Ads snapshot when fetchMetaPerformance rejects", async () => {
     fetchMetaPerformance.mockRejectedValue(new Error("meta: rate limited"));
 
-    await expect(runDecisionCycle(ORG)).resolves.toEqual({ proposalsCreated: 0 });
+    await expect(runDecisionCycle(ORG)).resolves.toEqual({
+      proposalsCreated: 0,
+      shareMoves: EMPTY_SHARE_MOVES,
+    });
 
     expect(recordPerformanceSnapshot).toHaveBeenCalledWith(
       ORG,
@@ -232,5 +262,47 @@ describe("runDecisionCycle", () => {
 
     const ruleInput = evaluateRules.mock.calls[0][0];
     expect(ruleInput.searchTerms).toEqual([]);
+  });
+
+  it("increments failed and not moved when applyMove throws", async () => {
+    const applyMove = vi.fn(() => {
+      throw new Error("platform write rejected");
+    });
+
+    const result = await runDecisionCycle(ORG, {
+      shareMoves: [reallocateMoveInput()],
+      applyMove,
+    });
+
+    expect(applyMove).toHaveBeenCalledOnce();
+    expect(result.shareMoves).toEqual({ failed: 1, moved: 0 });
+    expect(result.failedShareMoves).toEqual([
+      expect.objectContaining({
+        error: "platform write rejected",
+        move: expect.objectContaining({ action: "move" }),
+      }),
+    ]);
+    expect(writeAudit).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({
+        action: "cycle.share_move",
+        after: expect.objectContaining({
+          outcome: "failed",
+          error: "platform write rejected",
+        }),
+      }),
+    );
+  });
+
+  it("does not increment failed or moved when reallocateListing skips", async () => {
+    const applyMove = vi.fn();
+
+    const result = await runDecisionCycle(ORG, {
+      shareMoves: [reallocateMoveInput({ writesEnabled: false })],
+      applyMove,
+    });
+
+    expect(applyMove).not.toHaveBeenCalled();
+    expect(result.shareMoves).toEqual({ failed: 0, moved: 0 });
   });
 });

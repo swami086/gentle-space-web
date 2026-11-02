@@ -1,5 +1,6 @@
 import { verifyWhatsAppHubChallenge, verifyWhatsAppSignature } from "../../../../lib/inbound/whatsapp-verify";
 import { platformOrgScope } from "../../../../lib/inbound/platform-scope";
+import { routeInbound, type InboundRouteResult } from "../../../../lib/inbound/router";
 import { withTenantTransaction } from "../../../../lib/db/tx";
 import { insertInboundEvent } from "../../../../lib/db/inbound-events";
 
@@ -45,6 +46,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const events = extractWhatsAppMessageEvents(payload);
+  const routedActions: InboundRouteResult[] = [];
   if (events.length > 0) {
     const scope = platformOrgScope();
     await withTenantTransaction(scope, async (client) => {
@@ -54,10 +56,25 @@ export async function POST(req: Request): Promise<Response> {
           externalId: event.externalId,
           payload: event.payload,
         });
+        const text = extractWhatsAppMessageText(event.payload);
+        if (text !== null) {
+          const action = routeInbound({ orgId: scope.orgId, text });
+          console.log("inbound whatsapp route", {
+            orgId: scope.orgId,
+            externalId: event.externalId,
+            action,
+          });
+          if (action.action !== "ignore") {
+            routedActions.push(action);
+          }
+        }
       }
     });
   }
 
+  if (routedActions.length > 0) {
+    return Response.json({ ok: true, actions: routedActions });
+  }
   return Response.json({ ok: true });
 }
 
@@ -91,5 +108,12 @@ function extractWhatsAppMessageEvents(payload: unknown): WhatsAppMessageEvent[] 
   }
 
   return events;
+}
+
+function extractWhatsAppMessageText(payload: Record<string, unknown>): string | null {
+  const text = payload.text;
+  if (!text || typeof text !== "object") return null;
+  const body = (text as { body?: unknown }).body;
+  return typeof body === "string" ? body : null;
 }
 

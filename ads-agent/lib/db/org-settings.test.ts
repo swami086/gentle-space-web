@@ -6,7 +6,13 @@ vi.mock("./tx", () => ({
 }));
 
 import type { Scope } from "./scope-sql";
-import { ensureOrgSettings, getOrgSettings, setCronEnabled, touchLastRunAt } from "./org-settings";
+import {
+  ensureOrgSettings,
+  getOrgSettings,
+  setCronEnabled,
+  setWritesEnabled,
+  touchLastRunAt,
+} from "./org-settings";
 
 const ORG: Scope = { kind: "org", orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
 
@@ -29,6 +35,7 @@ describe("getOrgSettings", () => {
       lastRunAt: "2026-08-03T06:00:00.000Z",
       undoWindowSeconds: 60,
       approvalThresholdInr: null,
+      writesEnabled: true,
     });
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain("adsagent.org_cron_settings");
@@ -43,7 +50,22 @@ describe("getOrgSettings", () => {
       lastRunAt: null,
       undoWindowSeconds: 60,
       approvalThresholdInr: null,
+      writesEnabled: true,
     });
+  });
+
+  it("defaults writesEnabled to true when the row omits writes_enabled", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          cron_enabled: false,
+          last_run_at: null,
+          undo_window_seconds: 60,
+          approval_threshold_inr: null,
+        },
+      ],
+    });
+    await expect(getOrgSettings(ORG)).resolves.toMatchObject({ writesEnabled: true });
   });
 });
 
@@ -56,6 +78,17 @@ describe("setCronEnabled", () => {
     expect(sql).toContain("ON CONFLICT (org_id)");
     expect(sql).not.toContain("id = 1");
     expect(params).toEqual([ORG.orgId, true]);
+  });
+});
+
+describe("setWritesEnabled", () => {
+  it("upserts writes_enabled for the caller only", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await setWritesEnabled(ORG, false);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("writes_enabled");
+    expect(sql).toContain("ON CONFLICT (org_id)");
+    expect(params).toEqual([ORG.orgId, false]);
   });
 });
 

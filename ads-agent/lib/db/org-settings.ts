@@ -6,6 +6,7 @@ export type OrgSettings = {
   lastRunAt: string | null;
   undoWindowSeconds: number;
   approvalThresholdInr: number | null;
+  writesEnabled: boolean;
 };
 
 type OrgSettingsRow = {
@@ -13,6 +14,7 @@ type OrgSettingsRow = {
   last_run_at: Date | null;
   undo_window_seconds: number;
   approval_threshold_inr: string | null;
+  writes_enabled?: boolean;
 };
 
 const DEFAULTS: OrgSettings = {
@@ -20,13 +22,14 @@ const DEFAULTS: OrgSettings = {
   lastRunAt: null,
   undoWindowSeconds: 60,
   approvalThresholdInr: null,
+  writesEnabled: true,
 };
 
 export async function getOrgSettings(scope: Scope): Promise<OrgSettings> {
   const s = scopeClause(scope);
   return withTenantTransaction(scope, async (client) => {
     const { rows } = await client.query<OrgSettingsRow>(
-      `SELECT cron_enabled, last_run_at, undo_window_seconds, approval_threshold_inr
+      `SELECT cron_enabled, last_run_at, undo_window_seconds, approval_threshold_inr, writes_enabled
          FROM adsagent.org_cron_settings
         WHERE ${s.sql}`,
       [...s.params],
@@ -41,6 +44,7 @@ export async function getOrgSettings(scope: Scope): Promise<OrgSettings> {
       undoWindowSeconds: row.undo_window_seconds,
       approvalThresholdInr:
         row.approval_threshold_inr === null ? null : Number(row.approval_threshold_inr),
+      writesEnabled: row.writes_enabled ?? true,
     };
   });
 }
@@ -53,6 +57,19 @@ export async function setCronEnabled(scope: Scope, enabled: boolean): Promise<vo
        VALUES ($1::uuid, $2)
        ON CONFLICT (org_id) DO UPDATE
          SET cron_enabled = EXCLUDED.cron_enabled, updated_at = NOW()`,
+      [...s.params, enabled],
+    ),
+  );
+}
+
+export async function setWritesEnabled(scope: Scope, enabled: boolean): Promise<void> {
+  const s = scopeClause(scope);
+  await withTenantTransaction(scope, (client) =>
+    client.query(
+      `INSERT INTO adsagent.org_cron_settings (org_id, writes_enabled)
+       VALUES ($1::uuid, $2)
+       ON CONFLICT (org_id) DO UPDATE
+         SET writes_enabled = EXCLUDED.writes_enabled, updated_at = NOW()`,
       [...s.params, enabled],
     ),
   );

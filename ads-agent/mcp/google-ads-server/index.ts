@@ -10,12 +10,15 @@ import { z } from "zod";
 import {
   addGoogleNegativeKeyword,
   createFullGoogleCampaign,
+  createGoogleShareCampaign,
   fetchGoogleAdsPerformance,
   fetchGoogleSearchTerms,
   listAccessibleCustomers,
+  enableGoogleShareCampaign,
   pauseGoogleCampaign,
   proposeChange,
   updateGoogleCampaignBudget,
+  updateGoogleShareBudget,
 } from "./tools";
 import {
   type GoogleAdsMcpSurface,
@@ -97,6 +100,8 @@ function registerWriteTools(server: McpServer): void {
       inputSchema: z.object({
         name: z.string(),
         dailyBudgetInr: z.number(),
+        geoTargetConstant: z.string(),
+        languageConstant: z.string(),
         adGroupName: z.string(),
         keywords: z.array(z.object({ text: z.string(), matchType: z.enum(MATCH_TYPES) })),
         negativeKeywords: z.array(z.string()),
@@ -111,10 +116,57 @@ function registerWriteTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "create_share_campaign",
+    {
+      description:
+        "Atomically create a paused Google Ads Search share campaign with a total (not daily) budget, ad group, keywords, negatives, and one responsive search ad",
+      inputSchema: z.object({
+        name: z.string(),
+        totalBudgetMinor: z.number().int(),
+        geoTargetConstant: z.string(),
+        languageConstant: z.string(),
+        adGroupName: z.string(),
+        keywords: z.array(z.object({ text: z.string(), matchType: z.enum(MATCH_TYPES) })),
+        negativeKeywords: z.array(z.string()),
+        headlines: z.array(z.string()),
+        descriptions: z.array(z.string()),
+        finalUrl: z.string(),
+      }),
+    },
+    async (input) => ({
+      content: [{ type: "text", text: JSON.stringify({ campaignId: await createGoogleShareCampaign(input) }) }],
+    }),
+  );
+
+  server.registerTool(
+    "update_share_budget",
+    {
+      description: "Update a Google Ads share campaign's total budget (minor currency units, e.g. INR paise)",
+      inputSchema: z.object({ campaignResourceName: z.string(), totalBudgetMinor: z.number().int() }),
+    },
+    async ({ campaignResourceName, totalBudgetMinor }) => {
+      await updateGoogleShareBudget(campaignResourceName, totalBudgetMinor);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
+    },
+  );
+
+  server.registerTool(
     "pause_campaign",
     { description: "Pause a Google Ads campaign", inputSchema: z.object({ campaignResourceName: z.string() }) },
     async ({ campaignResourceName }) => {
       await pauseGoogleCampaign(campaignResourceName);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
+    },
+  );
+
+  server.registerTool(
+    "enable_share_campaign",
+    {
+      description: "Enable a paused Google Ads share campaign",
+      inputSchema: z.object({ campaignResourceName: z.string() }),
+    },
+    async ({ campaignResourceName }) => {
+      await enableGoogleShareCampaign(campaignResourceName);
       return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
     },
   );

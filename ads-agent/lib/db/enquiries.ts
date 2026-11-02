@@ -11,6 +11,20 @@ export function mintInboundReplyToken(): string {
   return randomBytes(16).toString("hex");
 }
 
+export function classifyInboundLead(input: {
+  formId: string | null;
+  googleAssetId: string | null;
+  isTest: boolean;
+}): { store: boolean; alertOwnerOnly: boolean } {
+  if (input.isTest) {
+    return { store: false, alertOwnerOnly: true };
+  }
+  if (input.formId === null && input.googleAssetId === null) {
+    return { store: false, alertOwnerOnly: false };
+  }
+  return { store: true, alertOwnerOnly: false };
+}
+
 export type Enquiry = {
   id: string;
   orgId: string;

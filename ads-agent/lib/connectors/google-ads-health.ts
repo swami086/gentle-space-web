@@ -44,3 +44,7 @@ export async function probeGoogleAdsReadMcp(opts?: { timeoutMs?: number }): Prom
     return { configured: true, reachable: false, error };
   }
 }
+
+export function listingSharesHealthy(reads: { shareId: string; readable: boolean }[]): boolean {
+  return reads.length > 0 && reads.every((read) => read.readable);
+}

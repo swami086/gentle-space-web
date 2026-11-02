@@ -132,3 +132,11 @@ export async function debitUsage(input: {
     client.release();
   }
 }
+
+export function listingUsageEntry(input: {
+  orgId: string;
+  kind: "message" | "platform_op";
+  units: number;
+}): { orgId: string; kind: "message" | "platform_op"; units: number } {
+  return { orgId: input.orgId, kind: input.kind, units: input.units };
+}

@@ -111,6 +111,8 @@ describe("createFullGoogleCampaign", () => {
     const resourceName = await createFullGoogleCampaign({
       name: "Whitefield Search",
       dailyBudgetInr: 500,
+      geoTargetConstant: "geoTargetConstants/2356",
+      languageConstant: "languageConstants/1000",
       adGroupName: "Whitefield Office Space",
       keywords: [{ text: "office space whitefield", matchType: "phrase" }],
       negativeKeywords: ["residential"],
@@ -124,11 +126,120 @@ describe("createFullGoogleCampaign", () => {
     expect(operations.map((op: { entity: string }) => op.entity)).toEqual([
       "campaign_budget",
       "campaign",
+      "campaign_criterion",
+      "campaign_criterion",
       "ad_group",
       "ad_group_criterion",
       "ad_group_criterion",
       "ad_group_ad",
     ]);
+    expect(operations[2]).toMatchObject({
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: "customers/1234567890/campaigns/-2",
+        location: { geo_target_constant: "geoTargetConstants/2356" },
+      },
+    });
+    expect(operations[3]).toMatchObject({
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: "customers/1234567890/campaigns/-2",
+        language: { language_constant: "languageConstants/1000" },
+      },
+    });
+  });
+
+  it("throws before mutateResources when geoTargetConstant is empty", async () => {
+    mutateResourcesMock.mockClear();
+    const { createFullGoogleCampaign } = await import("./tools");
+    await expect(
+      createFullGoogleCampaign({
+        name: "Whitefield Search",
+        dailyBudgetInr: 500,
+        geoTargetConstant: "",
+        languageConstant: "languageConstants/1000",
+        adGroupName: "Whitefield Office Space",
+        keywords: [{ text: "office space whitefield", matchType: "phrase" }],
+        negativeKeywords: [],
+        headlines: ["Office Space in Whitefield"],
+        descriptions: ["Skip the broker games."],
+        finalUrl: "https://www.gentlespacesolutions.com/spaces",
+      }),
+    ).rejects.toThrow("geoTargetConstant must be a geoTargetConstants/ resource name");
+    expect(mutateResourcesMock).not.toHaveBeenCalled();
+  });
+});
+
+const shareCampaignInput = {
+  name: "Whitefield Share",
+  totalBudgetMinor: 50_000,
+  geoTargetConstant: "geoTargetConstants/2356",
+  languageConstant: "languageConstants/1000",
+  adGroupName: "Whitefield Office Space",
+  keywords: [{ text: "office space whitefield", matchType: "phrase" as const }],
+  negativeKeywords: ["residential"],
+  headlines: ["Office Space in Whitefield", "Verified Listings Only", "Tour in 5 Days"],
+  descriptions: ["Skip the broker games.", "AI-matched, human-verified commercial space."],
+  finalUrl: "https://www.gentlespacesolutions.com/spaces",
+};
+
+describe("createGoogleShareCampaign", () => {
+  it("creates a paused campaign with total_amount_micros only and returns the numeric campaign id", async () => {
+    queryMock.mockResolvedValue([]);
+    mutateResourcesMock.mockResolvedValue({
+      mutate_operation_responses: [
+        { campaign_budget_result: { resource_name: "customers/1234567890/campaignBudgets/-1" } },
+        { campaign_result: { resource_name: "customers/1234567890/campaigns/999" } },
+        { campaign_criterion_result: { resource_name: "customers/1234567890/campaignCriteria/-2~-1" } },
+        { campaign_criterion_result: { resource_name: "customers/1234567890/campaignCriteria/-2~-2" } },
+        { ad_group_result: { resource_name: "customers/1234567890/adGroups/-3" } },
+        { ad_group_criterion_result: { resource_name: "customers/1234567890/adGroupCriteria/-3~-4" } },
+        { ad_group_criterion_result: { resource_name: "customers/1234567890/adGroupCriteria/-3~-5" } },
+        { ad_group_ad_result: { resource_name: "customers/1234567890/adGroupAds/-3~-6" } },
+      ],
+    });
+    const { createGoogleShareCampaign } = await import("./tools");
+    const campaignId = await createGoogleShareCampaign(shareCampaignInput);
+
+    expect(campaignId).toBe(999);
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("campaign.name = 'Whitefield Share'"));
+    const operations = mutateResourcesMock.mock.calls[0][0];
+    expect(operations[0].resource).toMatchObject({ total_amount_micros: 500_000_000 });
+    expect(operations[0].resource).not.toHaveProperty("amount_micros");
+    expect(operations[1].resource).toMatchObject({ status: 3 });
+  });
+
+  it("returns an existing campaign id without calling mutateResources when the name already exists", async () => {
+    queryMock.mockResolvedValue([{ campaign: { id: 4242 } }]);
+    mutateResourcesMock.mockClear();
+    const { createGoogleShareCampaign } = await import("./tools");
+    const campaignId = await createGoogleShareCampaign(shareCampaignInput);
+    expect(campaignId).toBe(4242);
+    expect(mutateResourcesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateGoogleShareBudget", () => {
+  it("resolves campaign_budget via GAQL and sets total_amount_micros only", async () => {
+    queryMock.mockResolvedValue([
+      { campaign: { campaign_budget: "customers/1234567890/campaignBudgets/42" } },
+    ]);
+    mutateResourcesMock.mockResolvedValue({ mutate_operation_responses: [{}] });
+    const { updateGoogleShareBudget } = await import("./tools");
+    await updateGoogleShareBudget("customers/1234567890/campaigns/999", 75_000);
+    expect(mutateResourcesMock).toHaveBeenCalledWith([
+      {
+        entity: "campaign_budget",
+        operation: "update",
+        resource: {
+          resource_name: "customers/1234567890/campaignBudgets/42",
+          total_amount_micros: 750_000_000,
+        },
+      },
+    ]);
+    expect(mutateResourcesMock.mock.calls[0][0][0].resource).not.toHaveProperty("amount_micros");
   });
 });
 
@@ -142,6 +253,21 @@ describe("pauseGoogleCampaign", () => {
         entity: "campaign",
         operation: "update",
         resource: { resource_name: "customers/1234567890/campaigns/999", status: 3 },
+      },
+    ]);
+  });
+});
+
+describe("enableGoogleShareCampaign", () => {
+  it("sends a campaign update operation with status ENABLED", async () => {
+    mutateResourcesMock.mockResolvedValue({ mutate_operation_responses: [{}] });
+    const { enableGoogleShareCampaign } = await import("./tools");
+    await enableGoogleShareCampaign("customers/1234567890/campaigns/999");
+    expect(mutateResourcesMock).toHaveBeenCalledWith([
+      {
+        entity: "campaign",
+        operation: "update",
+        resource: { resource_name: "customers/1234567890/campaigns/999", status: 2 },
       },
     ]);
   });

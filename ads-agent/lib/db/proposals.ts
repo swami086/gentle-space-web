@@ -1,5 +1,12 @@
 import type { PoolClient } from "pg";
-import type { NewProposal, Proposal, ProposalKind, ProposalStatus } from "../types";
+import type {
+  ListingCreatePayload,
+  NewProposal,
+  Platform,
+  Proposal,
+  ProposalKind,
+  ProposalStatus,
+} from "../types";
 
 export type ProposalListItem = Proposal & {
   currentDailyBudgetInr: number | null;
@@ -24,6 +31,96 @@ type ProposalRow = {
   undo_until: Date | null;
   batch_id: string | null;
 };
+
+function isPlatform(value: unknown): value is Platform {
+  return value === "meta" || value === "google";
+}
+
+function readPlatformBudgetRows(
+  value: unknown,
+  field: "ceilings" | "shares",
+  amountKey: "ceilingMinor" | "budgetMinor",
+): { platform: Platform; amount: number }[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`listing create payload ${field} must be an array`);
+  }
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`listing create payload ${field}[${index}] must be an object`);
+    }
+    const row = entry as Record<string, unknown>;
+    if (!isPlatform(row.platform)) {
+      throw new Error(`listing create payload ${field}[${index}].platform must be meta or google`);
+    }
+    const amount = row[amountKey];
+    if (typeof amount !== "number" || !Number.isFinite(amount)) {
+      throw new Error(`listing create payload ${field}[${index}].${amountKey} must be a finite number`);
+    }
+    return { platform: row.platform, amount };
+  });
+}
+
+export function assertListingCreatePayload(payload: unknown): ListingCreatePayload {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("listing create payload must be an object");
+  }
+  const raw = payload as Record<string, unknown>;
+  if (typeof raw.traceId !== "string" || raw.traceId.trim() === "") {
+    throw new Error("listing create payload traceId must be non-empty");
+  }
+
+  const ceilings = readPlatformBudgetRows(raw.ceilings, "ceilings", "ceilingMinor");
+  const shares = readPlatformBudgetRows(raw.shares, "shares", "budgetMinor");
+
+  const ceilingByPlatform = new Map<Platform, number>();
+  for (const { platform, amount } of ceilings) {
+    ceilingByPlatform.set(platform, amount);
+  }
+
+  const shareSumByPlatform = new Map<Platform, number>();
+  for (const { platform, amount } of shares) {
+    shareSumByPlatform.set(platform, (shareSumByPlatform.get(platform) ?? 0) + amount);
+  }
+
+  for (const [platform, shareTotal] of shareSumByPlatform) {
+    const ceiling = ceilingByPlatform.get(platform);
+    if (ceiling === undefined) {
+      throw new Error(`listing create payload missing ceiling for platform ${platform}`);
+    }
+    if (shareTotal !== ceiling) {
+      throw new Error(
+        `listing create payload share total for ${platform} is ${shareTotal}, ceiling is ${ceiling}`,
+      );
+    }
+  }
+
+  return {
+    traceId: raw.traceId,
+    ceilings: ceilings.map(({ platform, amount }) => ({ platform, ceilingMinor: amount })),
+    shares: shares.map(({ platform, amount }) => ({ platform, budgetMinor: amount })),
+  };
+}
+
+export function buildListingCreateProposal(input: {
+  ceilings: ListingCreatePayload["ceilings"];
+  shares: ListingCreatePayload["shares"];
+  traceId: string;
+  triggeredRule: string;
+  rationale?: string | null;
+}): NewProposal {
+  const payload = assertListingCreatePayload({
+    traceId: input.traceId,
+    ceilings: input.ceilings,
+    shares: input.shares,
+  });
+  return {
+    kind: "create_campaign",
+    campaignId: null,
+    triggeredRule: input.triggeredRule,
+    rationale: input.rationale ?? null,
+    payload,
+  };
+}
 
 function rowToProposal(row: ProposalRow): Proposal {
   return {
@@ -293,7 +390,8 @@ export async function claimDueScheduledProposals(
     const updated = await withTenantTransaction(scope, async (client) => {
       const { rows } = await client.query<{ id: string; org_id: string }>(
         `UPDATE adsagent.proposals
-            SET status = 'executing'
+            SET status = 'executing',
+                executing_until = now() + interval '5 minutes'
           WHERE org_id = $1::uuid
             AND id = $2::uuid
             AND status = 'scheduled'

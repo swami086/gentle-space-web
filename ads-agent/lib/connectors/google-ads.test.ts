@@ -6,10 +6,13 @@ vi.mock("../bifrost/google-ads-mcp-client", () => ({ callGoogleAdsTool }));
 import {
   addGoogleNegativeKeyword,
   createFullGoogleCampaign,
+  createGoogleShareCampaign,
   fetchGoogleAdsPerformance,
   fetchGoogleSearchTerms,
+  enableGoogleShareCampaign,
   pauseGoogleCampaign,
   updateGoogleCampaignBudget,
+  updateGoogleShareBudget,
 } from "./google-ads";
 
 beforeEach(() => {
@@ -41,6 +44,8 @@ describe("createFullGoogleCampaign", () => {
     const input = {
       name: "Whitefield Search",
       dailyBudgetInr: 500,
+      geoTargetConstant: "geoTargetConstants/2356",
+      languageConstant: "languageConstants/1000",
       adGroupName: "Whitefield Office Space",
       keywords: [{ text: "office space whitefield", matchType: "phrase" as const }],
       negativeKeywords: ["residential"],
@@ -55,6 +60,39 @@ describe("createFullGoogleCampaign", () => {
   });
 });
 
+describe("createGoogleShareCampaign", () => {
+  it("calls create_share_campaign with the input and returns the campaign id from the result", async () => {
+    const input = {
+      name: "Whitefield Share",
+      totalBudgetMinor: 50_000,
+      geoTargetConstant: "geoTargetConstants/2356",
+      languageConstant: "languageConstants/1000",
+      adGroupName: "Whitefield Office Space",
+      keywords: [{ text: "office space whitefield", matchType: "phrase" as const }],
+      negativeKeywords: ["residential"],
+      headlines: ["Office Space in Whitefield"],
+      descriptions: ["Skip the broker games."],
+      finalUrl: "https://www.gentlespacesolutions.com/spaces",
+    };
+    callGoogleAdsTool.mockResolvedValue({ campaignId: 999 });
+    const campaignId = await createGoogleShareCampaign(input);
+    expect(campaignId).toBe(999);
+    expect(callGoogleAdsTool).toHaveBeenCalledWith("create_share_campaign", input, { surface: "write" });
+  });
+});
+
+describe("updateGoogleShareBudget", () => {
+  it("calls update_share_budget with the campaign resource name and total budget minor units", async () => {
+    callGoogleAdsTool.mockResolvedValue({ ok: true });
+    await updateGoogleShareBudget("customers/1234567890/campaigns/999", 75_000);
+    expect(callGoogleAdsTool).toHaveBeenCalledWith(
+      "update_share_budget",
+      { campaignResourceName: "customers/1234567890/campaigns/999", totalBudgetMinor: 75_000 },
+      { surface: "write" },
+    );
+  });
+});
+
 describe("pauseGoogleCampaign", () => {
   it("calls pause_campaign with the campaign resource name", async () => {
     callGoogleAdsTool.mockResolvedValue({ ok: true });
@@ -62,6 +100,18 @@ describe("pauseGoogleCampaign", () => {
     expect(callGoogleAdsTool).toHaveBeenCalledWith("pause_campaign", {
       campaignResourceName: "customers/1234567890/campaigns/999",
     }, { surface: "write" });
+  });
+});
+
+describe("enableGoogleShareCampaign", () => {
+  it("calls enable_share_campaign with the campaign resource name", async () => {
+    callGoogleAdsTool.mockResolvedValue({ ok: true });
+    await enableGoogleShareCampaign("customers/1234567890/campaigns/999");
+    expect(callGoogleAdsTool).toHaveBeenCalledWith(
+      "enable_share_campaign",
+      { campaignResourceName: "customers/1234567890/campaigns/999" },
+      { surface: "write" },
+    );
   });
 });
 

@@ -27,6 +27,8 @@ export async function fetchGoogleSearchTerms(): Promise<GoogleSearchTermRow[]> {
 export type FullGoogleCampaignInput = {
   name: string;
   dailyBudgetInr: number;
+  geoTargetConstant: string;
+  languageConstant: string;
   adGroupName: string;
   keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
   negativeKeywords: string[];
@@ -42,8 +44,43 @@ export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): 
   return result.resourceName;
 }
 
+export type GoogleShareCampaignInput = {
+  name: string;
+  totalBudgetMinor: number;
+  geoTargetConstant: string;
+  languageConstant: string;
+  adGroupName: string;
+  keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
+  negativeKeywords: string[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+};
+
+export async function createGoogleShareCampaign(input: GoogleShareCampaignInput): Promise<number> {
+  const result = (await callGoogleAdsTool("create_share_campaign", input, {
+    surface: "write",
+  })) as { campaignId: number };
+  return result.campaignId;
+}
+
+export async function updateGoogleShareBudget(
+  campaignResourceName: string,
+  totalBudgetMinor: number,
+): Promise<void> {
+  await callGoogleAdsTool(
+    "update_share_budget",
+    { campaignResourceName, totalBudgetMinor },
+    { surface: "write" },
+  );
+}
+
 export async function pauseGoogleCampaign(campaignResourceName: string): Promise<void> {
   await callGoogleAdsTool(GOOGLE_ADS_MCP_TOOLS.pauseCampaign, { campaignResourceName }, { surface: "write" });
+}
+
+export async function enableGoogleShareCampaign(campaignResourceName: string): Promise<void> {
+  await callGoogleAdsTool("enable_share_campaign", { campaignResourceName }, { surface: "write" });
 }
 
 export async function updateGoogleCampaignBudget(

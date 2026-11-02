@@ -474,6 +474,27 @@
         "grade": "net",
         "at": 1789944102497
       }
+    },
+    "inline:a-consultant-can-preview-listing-facts-on-the-pa-a56236fa": {
+      "id": "inline:a-consultant-can-preview-listing-facts-on-the-pa-a56236fa",
+      "statement": "A consultant can preview listing facts on the page without saving them.",
+      "state": "proved",
+      "declaredAt": 1793501443891,
+      "binding": {
+        "kind": "text",
+        "contains": "Preview (not saved)"
+      },
+      "surface": {
+        "route": "/l/eyJsaXN0aW5nSWQiOiJwcmV2aWV3LWxpc3RpbmciLCJwaG9uZSI6Iis5MTk4MDAwMDAwMDAiLCJleHAiOjE3OTM1MDQ3NTF9.ce63840b4d4dd02bdc5cc6f72bd0c2be76f49241fb41c403bbad3283079bccf8",
+        "files": [
+          "app/l/[token]/page.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1793501444498",
+        "grade": "presence",
+        "at": 1793501444498
+      }
     }
   }
 }

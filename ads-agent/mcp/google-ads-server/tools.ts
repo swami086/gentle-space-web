@@ -99,6 +99,8 @@ function extractResourceName(result: unknown, index: number): string {
 export type FullGoogleCampaignInput = {
   name: string;
   dailyBudgetInr: number;
+  geoTargetConstant: string;
+  languageConstant: string;
   adGroupName: string;
   keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
   negativeKeywords: string[];
@@ -114,6 +116,19 @@ const MATCH_TYPE_MAP: Record<"broad" | "phrase" | "exact", number> = {
 };
 
 export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): Promise<string> {
+  if (
+    !input.geoTargetConstant ||
+    !input.geoTargetConstant.startsWith("geoTargetConstants/")
+  ) {
+    throw new Error("geoTargetConstant must be a geoTargetConstants/ resource name");
+  }
+  if (
+    !input.languageConstant ||
+    !input.languageConstant.startsWith("languageConstants/")
+  ) {
+    throw new Error("languageConstant must be a languageConstants/ resource name");
+  }
+
   const cus = customer();
   const customerId = String(requireEnv("GOOGLE_ADS_CUSTOMER_ID"));
   const budgetResourceName = ResourceNames.campaignBudget(customerId, "-1");
@@ -121,7 +136,12 @@ export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): 
   const adGroupResourceName = ResourceNames.adGroup(customerId, "-3");
 
   const operations: MutateOperation<
-    resources.ICampaignBudget | resources.ICampaign | resources.IAdGroup | resources.IAdGroupCriterion | resources.IAdGroupAd
+    | resources.ICampaignBudget
+    | resources.ICampaign
+    | resources.ICampaignCriterion
+    | resources.IAdGroup
+    | resources.IAdGroupCriterion
+    | resources.IAdGroupAd
   >[] = [
     {
       entity: "campaign_budget",
@@ -144,6 +164,22 @@ export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): 
         manual_cpc: { enhanced_cpc_enabled: false },
         campaign_budget: budgetResourceName,
         network_settings: { target_google_search: true, target_search_network: true },
+      },
+    },
+    {
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: campaignResourceName,
+        location: { geo_target_constant: input.geoTargetConstant },
+      },
+    },
+    {
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: campaignResourceName,
+        language: { language_constant: input.languageConstant },
       },
     },
     {
@@ -196,12 +232,226 @@ export async function createFullGoogleCampaign(input: FullGoogleCampaignInput): 
   return extractResourceName(result, 1);
 }
 
+export type GoogleShareCampaignInput = {
+  name: string;
+  totalBudgetMinor: number;
+  geoTargetConstant: string;
+  languageConstant: string;
+  adGroupName: string;
+  keywords: { text: string; matchType: "broad" | "phrase" | "exact" }[];
+  negativeKeywords: string[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+};
+
+function escapeGaqlLiteral(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function totalBudgetMicrosFromMinor(totalBudgetMinor: number): number {
+  return totalBudgetMinor * 10_000;
+}
+
+type AssertCampaignBudgetSupportsTotal = Extract<
+  keyof resources.ICampaignBudget,
+  "total_amount_micros"
+> extends never
+  ? "GoogleTotalBudgetRefused: google-ads-api ICampaignBudget lacks total_amount_micros"
+  : true;
+const campaignBudgetSupportsTotalMicros: AssertCampaignBudgetSupportsTotal = true;
+
+function campaignBudgetWithTotalMicros(
+  base: Omit<resources.ICampaignBudget, "amount_micros" | "total_amount_micros">,
+  total_amount_micros: number,
+): resources.ICampaignBudget {
+  if (campaignBudgetSupportsTotalMicros !== true) {
+    throw new Error(String(campaignBudgetSupportsTotalMicros));
+  }
+  return { ...base, total_amount_micros };
+}
+
+function campaignIdFromResourceName(resourceName: string): number {
+  const match = resourceName.match(/\/campaigns\/(\d+)$/);
+  if (!match) {
+    throw new Error(`google ads: invalid campaign resource name ${resourceName}`);
+  }
+  return Number(match[1]);
+}
+
+export async function createGoogleShareCampaign(input: GoogleShareCampaignInput): Promise<number> {
+  if (
+    !input.geoTargetConstant ||
+    !input.geoTargetConstant.startsWith("geoTargetConstants/")
+  ) {
+    throw new Error("geoTargetConstant must be a geoTargetConstants/ resource name");
+  }
+  if (
+    !input.languageConstant ||
+    !input.languageConstant.startsWith("languageConstants/")
+  ) {
+    throw new Error("languageConstant must be a languageConstants/ resource name");
+  }
+
+  const cus = customer();
+  const customerId = String(requireEnv("GOOGLE_ADS_CUSTOMER_ID"));
+  const escapedName = escapeGaqlLiteral(input.name);
+  const existingRows = await cus.query(`
+    SELECT campaign.id
+    FROM campaign
+    WHERE campaign.name = '${escapedName}'
+    LIMIT 1
+  `);
+  const existingId = existingRows[0]?.campaign?.id;
+  if (existingId != null && existingId !== "") {
+    return Number(existingId);
+  }
+
+  const budgetResourceName = ResourceNames.campaignBudget(customerId, "-1");
+  const campaignResourceName = ResourceNames.campaign(customerId, "-2");
+  const adGroupResourceName = ResourceNames.adGroup(customerId, "-3");
+
+  const operations: MutateOperation<
+    | resources.ICampaignBudget
+    | resources.ICampaign
+    | resources.ICampaignCriterion
+    | resources.IAdGroup
+    | resources.IAdGroupCriterion
+    | resources.IAdGroupAd
+  >[] = [
+    {
+      entity: "campaign_budget",
+      operation: "create",
+      resource: campaignBudgetWithTotalMicros(
+        {
+          resource_name: budgetResourceName,
+          name: `${input.name} Budget`,
+          delivery_method: enums.BudgetDeliveryMethod.STANDARD,
+        },
+        totalBudgetMicrosFromMinor(input.totalBudgetMinor),
+      ),
+    },
+    {
+      entity: "campaign",
+      operation: "create",
+      resource: {
+        resource_name: campaignResourceName,
+        name: input.name,
+        advertising_channel_type: enums.AdvertisingChannelType.SEARCH,
+        status: enums.CampaignStatus.PAUSED,
+        manual_cpc: { enhanced_cpc_enabled: false },
+        campaign_budget: budgetResourceName,
+        network_settings: { target_google_search: true, target_search_network: true },
+      },
+    },
+    {
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: campaignResourceName,
+        location: { geo_target_constant: input.geoTargetConstant },
+      },
+    },
+    {
+      entity: "campaign_criterion",
+      operation: "create",
+      resource: {
+        campaign: campaignResourceName,
+        language: { language_constant: input.languageConstant },
+      },
+    },
+    {
+      entity: "ad_group",
+      operation: "create",
+      resource: {
+        resource_name: adGroupResourceName,
+        name: input.adGroupName,
+        campaign: campaignResourceName,
+        status: enums.AdGroupStatus.ENABLED,
+        type: enums.AdGroupType.SEARCH_STANDARD,
+      },
+    },
+    ...input.keywords.map((keyword) => ({
+      entity: "ad_group_criterion" as const,
+      operation: "create" as const,
+      resource: {
+        ad_group: adGroupResourceName,
+        status: enums.AdGroupCriterionStatus.ENABLED,
+        keyword: { text: keyword.text, match_type: MATCH_TYPE_MAP[keyword.matchType] },
+      },
+    })),
+    ...input.negativeKeywords.map((text) => ({
+      entity: "ad_group_criterion" as const,
+      operation: "create" as const,
+      resource: {
+        ad_group: adGroupResourceName,
+        negative: true,
+        keyword: { text, match_type: enums.KeywordMatchType.BROAD },
+      },
+    })),
+    {
+      entity: "ad_group_ad",
+      operation: "create",
+      resource: {
+        ad_group: adGroupResourceName,
+        status: enums.AdGroupAdStatus.ENABLED,
+        ad: {
+          final_urls: [input.finalUrl],
+          responsive_search_ad: {
+            headlines: input.headlines.map((text) => ({ text })),
+            descriptions: input.descriptions.map((text) => ({ text })),
+          },
+        },
+      },
+    },
+  ];
+
+  const result = await cus.mutateResources(operations);
+  return campaignIdFromResourceName(extractResourceName(result, 1));
+}
+
+export async function updateGoogleShareBudget(
+  campaignResourceName: string,
+  totalBudgetMinor: number,
+): Promise<void> {
+  const cus = customer();
+  const rows = await cus.query(`
+    SELECT campaign.campaign_budget
+    FROM campaign
+    WHERE campaign.resource_name = '${campaignResourceName}'
+  `);
+  const budgetResourceName = rows[0]?.campaign?.campaign_budget;
+  if (!budgetResourceName) {
+    throw new Error(`google ads: no campaign_budget for ${campaignResourceName}`);
+  }
+  await cus.mutateResources([
+    {
+      entity: "campaign_budget",
+      operation: "update",
+      resource: campaignBudgetWithTotalMicros(
+        { resource_name: budgetResourceName },
+        totalBudgetMicrosFromMinor(totalBudgetMinor),
+      ),
+    },
+  ]);
+}
+
 export async function pauseGoogleCampaign(campaignResourceName: string): Promise<void> {
   await customer().mutateResources([
     {
       entity: "campaign",
       operation: "update",
       resource: { resource_name: campaignResourceName, status: enums.CampaignStatus.PAUSED },
+    },
+  ]);
+}
+
+export async function enableGoogleShareCampaign(campaignResourceName: string): Promise<void> {
+  await customer().mutateResources([
+    {
+      entity: "campaign",
+      operation: "update",
+      resource: { resource_name: campaignResourceName, status: enums.CampaignStatus.ENABLED },
     },
   ]);
 }
