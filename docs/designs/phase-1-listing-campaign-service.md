@@ -1,7 +1,7 @@
 # Phase 1: listing campaign service for lease agents in India and Australia
 
 * **Author:** swami086
-* **Status:** Proposed. Aligned on 2026-11-02 to the brief's amendment: Create is the approval for the first campaign. The same day's review cut the first code slice to web Create on the existing executor.
+* **Status:** Proposed. Aligned on 2026-11-02 to the brief's amendment: Create is the approval for the first campaign. The same day's review cut the first code slice to web Create on the existing executor. On 2026-11-02 the owner deferred the live two-week run and WhatsApp and SMS. The current proof is the Desk form, the proposal worker, and Unified.to sandbox on this Mac. `can_activate` stays false. Direct Google Ads, Meta Marketing, and WhatsApp calls stay out. Listing create stops before Unified when `writes_enabled` is false, and when a non-empty allowlist misses `external_account_id`. If storing `external_campaign_id` fails after Unified returns an id, that call pauses those campaigns with PUT `{ status: "PAUSED" }` and the proposal is marked failed. A dead process between the Unified response and the store is not swept: listing every sandbox campaign would pause campaigns this service did not create.
 * **Date:** 2026-10-30. Approval path revised 2026-11-02. Implementation plan revised 2026-11-02.
 * **Source:** [concepts_brief.md](../../concepts_brief.md). Where this document and the brief disagree, the brief wins.
 

@@ -537,6 +537,27 @@
         "grade": "presence",
         "at": 1793587108983
       }
+    },
+    "inline:a-commercial-office-create-on-the-desk-schedules-3485a78b": {
+      "id": "inline:a-commercial-office-create-on-the-desk-schedules-3485a78b",
+      "statement": "A commercial office Create on the Desk schedules paused Meta and Google campaigns in the sandbox",
+      "state": "proved",
+      "declaredAt": 1793588273340,
+      "binding": {
+        "kind": "text",
+        "contains": "Create is scheduled"
+      },
+      "surface": {
+        "route": "/listings/new",
+        "files": [
+          "app/(admin)/listings/new/ListingCreateForm.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1793588274622",
+        "grade": "presence",
+        "at": 1793588274622
+      }
     }
   }
 }

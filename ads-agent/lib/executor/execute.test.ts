@@ -208,10 +208,12 @@ function mockTenantDb(options: {
   googleCanActivate?: boolean;
   metaCanActivate?: boolean;
   writesEnabled?: boolean;
+  failShareUpdate?: boolean;
 } = {}) {
   const googleCanActivate = options.googleCanActivate ?? true;
   const metaCanActivate = options.metaCanActivate ?? true;
   const writesEnabled = options.writesEnabled ?? true;
+  const failShareUpdate = options.failShareUpdate ?? false;
   let shareInserts = 0;
   withTenantTransaction.mockImplementation(async (_scope, fn) =>
     fn({
@@ -233,6 +235,9 @@ function mockTenantDb(options: {
         }
         if (sql.includes("writes_enabled")) {
           return { rows: [{ writes_enabled: writesEnabled }] };
+        }
+        if (failShareUpdate && sql.includes("UPDATE adsagent.listing_shares")) {
+          throw new Error("share id store failed");
         }
         return { rows: [] };
       }),
@@ -547,6 +552,144 @@ describe("executeProposal", () => {
         (query) => query.sql.includes("UPDATE adsagent.listing_shares") && query.params?.[1] === "meta-camp-1",
       ),
     ).toBe(true);
+  });
+
+  it("does not call Unified when writes_enabled is false", async () => {
+    mockTenantDb({ writesEnabled: false });
+    process.env.UNIFIED_META_ADS_CONNECTION_ID = "meta-sandbox";
+    getProposalById.mockResolvedValue(
+      executingProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: {
+          traceId: "trace-listing-2",
+          market: "IN",
+          sector: "residential",
+          approverPhone: "+919800000000",
+          ceilings: [{ platform: "meta", ceilingMinor: 15_000 }],
+          shares: [{ platform: "meta", budgetMinor: 15_000 }],
+        },
+      }),
+    );
+
+    const result = await executeProposal(ORG, "prop-1");
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: expect.stringMatching(/writes_enabled is false/),
+    });
+    expect(createPausedUnifiedCampaign).not.toHaveBeenCalled();
+  });
+
+  it("does not call Unified when the connection id is outside the allowlist", async () => {
+    const customer = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+    listCurrent.mockResolvedValue([
+      {
+        id: "conn-1",
+        orgId: customer.orgId,
+        platform: "meta",
+        externalAccountId: "meta-sandbox",
+        environment: "test",
+        credentialsSealed: Buffer.from(""),
+        canWrite: true,
+        canActivate: false,
+        allowlist: ["other-connection"],
+        currency: "INR",
+        timeZone: "Asia/Kolkata",
+        status: "current",
+        createdAt: "2026-11-02T00:00:00.000Z",
+      },
+    ]);
+    getProposalById.mockResolvedValue(
+      executingProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: {
+          traceId: "trace-listing-2",
+          market: "IN",
+          sector: "residential",
+          approverPhone: "+919800000000",
+          ceilings: [{ platform: "meta", ceilingMinor: 15_000 }],
+          shares: [{ platform: "meta", budgetMinor: 15_000 }],
+        },
+      }),
+    );
+
+    const result = await executeProposal(customer, "prop-1");
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: expect.stringMatching(/outside the allowlist/),
+    });
+    expect(createPausedUnifiedCampaign).not.toHaveBeenCalled();
+  });
+
+  it("calls Unified when the connection allowlist is empty", async () => {
+    const customer = { kind: "org" as const, orgId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" };
+    createPausedUnifiedCampaign.mockResolvedValueOnce("meta-camp-1");
+    listCurrent.mockResolvedValue([
+      {
+        id: "conn-1",
+        orgId: customer.orgId,
+        platform: "meta",
+        externalAccountId: "meta-sandbox",
+        environment: "test",
+        credentialsSealed: Buffer.from(""),
+        canWrite: true,
+        canActivate: false,
+        allowlist: [],
+        currency: "INR",
+        timeZone: "Asia/Kolkata",
+        status: "current",
+        createdAt: "2026-11-02T00:00:00.000Z",
+      },
+    ]);
+    getProposalById.mockResolvedValue(
+      executingProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: {
+          traceId: "trace-listing-2",
+          market: "IN",
+          sector: "residential",
+          approverPhone: "+919800000000",
+          ceilings: [{ platform: "meta", ceilingMinor: 15_000 }],
+          shares: [{ platform: "meta", budgetMinor: 15_000 }],
+        },
+      }),
+    );
+
+    const result = await executeProposal(customer, "prop-1");
+
+    expect(result.status).toBe("executed");
+    expect(createPausedUnifiedCampaign).toHaveBeenCalledTimes(1);
+  });
+
+  it("pauses a created campaign when storing its id fails", async () => {
+    mockTenantDb({ failShareUpdate: true });
+    process.env.UNIFIED_META_ADS_CONNECTION_ID = "meta-sandbox";
+    pauseUnifiedCampaign.mockResolvedValue(undefined);
+    createPausedUnifiedCampaign.mockResolvedValueOnce("meta-camp-1");
+    getProposalById.mockResolvedValue(
+      executingProposal({
+        kind: "create_campaign",
+        campaignId: null,
+        payload: {
+          traceId: "trace-listing-2",
+          market: "IN",
+          sector: "residential",
+          approverPhone: "+919800000000",
+          ceilings: [{ platform: "meta", ceilingMinor: 15_000 }],
+          shares: [{ platform: "meta", budgetMinor: 15_000 }],
+        },
+      }),
+    );
+
+    const result = await executeProposal(ORG, "prop-1");
+
+    expect(result).toMatchObject({ status: "failed", error: "share id store failed" });
+    expect(pauseUnifiedCampaign).toHaveBeenCalledWith("meta-sandbox", "meta-camp-1", "test");
+    expect(markProposalExecuted).not.toHaveBeenCalled();
   });
 });
 

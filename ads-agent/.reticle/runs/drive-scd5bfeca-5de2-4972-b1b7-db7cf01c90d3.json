@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "runId": "drive-scd5bfeca-5de2-4972-b1b7-db7cf01c90d3",
-  "createdAt": 1793587111986,
-  "durationMs": 1590463,
+  "createdAt": 1793699154795,
+  "durationMs": 2738958,
   "profile": "dev",
   "project": {
     "name": "ads-agent-c06478e9",
@@ -18,7 +18,7 @@
   },
   "subject": {
     "surface": "desktop",
-    "instance": "jocthpvv",
+    "instance": "560n1bwp",
     "locator": "http://localhost:3030/listings/new"
   },
   "changedFiles": [],
@@ -34,6 +34,17 @@
       "declaredBeforeActing": true,
       "grade": "presence",
       "checkId": "c1"
+    },
+    {
+      "kind": "element",
+      "predicate": "text containing 'Create is scheduled'",
+      "status": "yes",
+      "evidence": {
+        "source": "app/(admin)/listings/new/ListingCreateForm.tsx:57"
+      },
+      "declaredBeforeActing": true,
+      "grade": "presence",
+      "checkId": "c2"
     }
   ],
   "risks": [],

@@ -113,6 +113,9 @@ async function resolveUnifiedConnection(scope: Scope, platform: Platform): Promi
   if (row.externalAccountId === "stage0-pending") {
     throw new Error(`${platform} connection is stage0-pending, not a Unified connection id`);
   }
+  if (row.allowlist.length > 0 && !row.allowlist.includes(row.externalAccountId)) {
+    throw new Error(`${platform} connection is outside the allowlist`);
+  }
   return {
     connectionId: row.externalAccountId,
     mode: row.environment === "live" ? "production" : "test",
@@ -184,17 +187,31 @@ async function storeExternalCampaignIds(
   });
 }
 
+type CreatedUnifiedCampaign = {
+  connectionId: string;
+  campaignId: string;
+  mode: UnifiedWriteMode;
+};
+
+async function pauseCreatedCampaigns(created: CreatedUnifiedCampaign[]): Promise<void> {
+  for (const item of created) {
+    await pauseUnifiedCampaign(item.connectionId, item.campaignId, item.mode);
+  }
+}
+
 async function executeListingOnUnifiedSandbox(
   scope: Scope,
   proposalId: string,
   listing: ListingCreatePayload,
-): Promise<{ result: ListingExecuteResult; externalIds: string[] }> {
+): Promise<{ result: ListingExecuteResult; externalIds: string[]; created: CreatedUnifiedCampaign[] }> {
   const externalIds: string[] = [];
+  const created: CreatedUnifiedCampaign[] = [];
   const googleCampaignIds: string[] = [];
   const metaCampaignIds: string[] = [];
   let activated = false;
   let googleIndex = 0;
   let metaIndex = 0;
+  try {
   for (const share of listing.shares) {
     const connection = await resolveUnifiedConnection(scope, share.platform);
     const campaignId = await createPausedUnifiedCampaign(
@@ -216,6 +233,11 @@ async function executeListingOnUnifiedSandbox(
       connection.mode,
     );
     externalIds.push(campaignId);
+    created.push({
+      connectionId: connection.connectionId,
+      campaignId,
+      mode: connection.mode,
+    });
     if (share.platform === "google") googleCampaignIds.push(campaignId);
     else metaCampaignIds.push(campaignId);
     if (connection.mode === "production" && connection.canActivate) {
@@ -233,7 +255,12 @@ async function executeListingOnUnifiedSandbox(
       sandbox: { googleCampaignIds, metaCampaignIds },
     },
     externalIds,
+    created,
   };
+  } catch (err) {
+    await pauseCreatedCampaigns(created);
+    throw err;
+  }
 }
 
 async function executeListingCreateCampaign(
@@ -248,9 +275,19 @@ async function executeListingCreateCampaign(
     throw new ExecuteFault("after_claim");
   }
 
+  if (!(await readWritesEnabled(scope))) {
+    throw new Error("listing create is disabled while writes_enabled is false");
+  }
+
   const shareIds = await persistListingRows(scope, listing);
-  const created = await executeListingOnUnifiedSandbox(scope, proposalId, listing);
-  await storeExternalCampaignIds(scope, shareIds, created.externalIds);
+  let created: Awaited<ReturnType<typeof executeListingOnUnifiedSandbox>> | undefined;
+  try {
+    created = await executeListingOnUnifiedSandbox(scope, proposalId, listing);
+    await storeExternalCampaignIds(scope, shareIds, created.externalIds);
+  } catch (err) {
+    if (created) await pauseCreatedCampaigns(created.created);
+    throw err;
+  }
   return created.result;
 }
 
